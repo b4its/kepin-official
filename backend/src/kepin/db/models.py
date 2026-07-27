@@ -261,6 +261,7 @@ class Branch(Base):
     __tablename__ = "branches"
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_branch_code_tenant"),
+        UniqueConstraint("tenant_id", "id", name="uq_branch_tenant_id"),
         Index("uq_branch_main_per_tenant", "tenant_id", "is_main", postgresql_where=text("is_main = true")),
     )
 
@@ -728,6 +729,7 @@ class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
         UniqueConstraint("tenant_id", "sku", name="uq_product_sku_tenant"),
+        UniqueConstraint("tenant_id", "id", name="uq_product_tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -753,6 +755,7 @@ class InventoryLocation(Base):
     __tablename__ = "inventory_locations"
     __table_args__ = (
         UniqueConstraint("tenant_id", "branch_id", "code", name="uq_inv_location_branch_code"),
+        UniqueConstraint("tenant_id", "id", name="uq_inv_location_tenant_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

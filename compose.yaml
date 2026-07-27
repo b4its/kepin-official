@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: kepin-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kepin
+      POSTGRES_PASSWORD: kepin
+      POSTGRES_DB: kepin
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kepin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    profiles: ["full"]
+    container_name: kepin-backend
+    restart: unless-stopped
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DATABASE_URL: postgresql+psycopg://kepin:kepin@db:5432/kepin
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://frontend:3000
+      AUTHORIZATION_ENABLED: "false"
+      SQL_ECHO: "false"
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    profiles: ["full"]
+    container_name: kepin-frontend
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "5173:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+    driver: local

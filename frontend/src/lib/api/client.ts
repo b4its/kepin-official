@@ -1,4 +1,8 @@
-const PUBLIC_API_URL = 'http://localhost:8000/api/v1';
+const PUBLIC_API_URL = (typeof process !== 'undefined'
+  ? (typeof process.env !== 'undefined'
+      ? process.env['PUBLIC_API_URL']
+      : undefined)
+  : undefined) ?? 'http://localhost:8000/api/v1';
 
 export type ApiError = {
   code: string;

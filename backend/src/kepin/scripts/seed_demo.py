@@ -560,6 +560,7 @@ async def main():
                 onboarding_status="completed", created_at=NOW, updated_at=NOW,
             )
             session.add(tenant)
+            await session.flush()
 
             org = OrganizationSetting(
                 tenant_id=tid, legal_name=td["legal_name"],
@@ -808,6 +809,7 @@ async def main():
                         ])
             session.add_all(transactions)
             session.add_all(journal_entries)
+            await session.flush()
             session.add_all(journal_lines)
 
             invoices = []
@@ -867,6 +869,7 @@ async def main():
                 ))
             session.add_all(invoices)
             session.add_all(invoice_lines)
+            await session.flush()
 
             payments = []
             allocations = []
@@ -890,6 +893,7 @@ async def main():
                         amount=inv.paid_amount,
                     ))
             session.add_all(payments)
+            await session.flush()
             session.add_all(allocations)
 
             purchase_orders = []
@@ -957,8 +961,10 @@ async def main():
                         unit_cost=unit_price,
                     ))
             session.add_all(purchase_orders)
+            await session.flush()
             session.add_all(po_lines)
             session.add_all(goods_receipts)
+            await session.flush()
             session.add_all(goods_receipt_lines)
 
             notifications = []
@@ -991,7 +997,6 @@ async def main():
                     module=module,
                     object_type=object_type,
                     object_id=str(random.randint(1, 9999)),
-                    created_at=timestamp,
                 ))
             session.add_all(audit_events)
 
@@ -1055,7 +1060,6 @@ async def main():
                 object_id=detail.get("slug") or detail.get("email") or str(random.randint(1, 100)),
                 before=None,
                 after=detail,
-                created_at=timestamp,
             ))
         session.add_all(platform_audits)
 

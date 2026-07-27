@@ -210,14 +210,14 @@ async def get_dashboard(
     recent_activity = []
     a_stmt = (
         select(PlatformAuditEvent)
-        .order_by(PlatformAuditEvent.created_at.desc())
+        .order_by(PlatformAuditEvent.timestamp.desc())
         .limit(20)
     )
     a_rows = (await session.execute(a_stmt)).scalars().all()
     for ev in a_rows:
         recent_activity.append({
             "id": str(ev.id),
-            "timestamp": ev.created_at.isoformat() if ev.created_at else None,
+            "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
             "action": ev.action,
             "tenantName": ev.actor_name or "",
             "actorName": ev.actor_name or "",
