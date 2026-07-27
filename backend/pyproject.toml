@@ -1,0 +1,31 @@
+[project]
+name = "kepin-backend"
+version = "1.0.0"
+description = "KePin (Keuangan Pintar) - Multi-tenant ERP SaaS Backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "sqlalchemy[asyncio]",
+    "psycopg[binary,pool]",
+    "alembic",
+    "orjson",
+    "structlog",
+    "python-multipart",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "double"
