@@ -5,12 +5,14 @@
   import DateRangeFilter from '$lib/components/filters/DateRangeFilter.svelte';
   import BarChart from '$lib/components/charts/BarChart.svelte';
   import PieChart from '$lib/components/charts/PieChart.svelte';
+  import ExportModal from '$lib/components/ui/ExportModal.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
   import type { Preset } from '$lib/utils/dateRange';
   import { Download } from '@lucide/svelte';
-  import Button from '$lib/components/ui/Button.svelte';
 
   let startDate = $state('');
   let endDate = $state('');
+  let showExport = $state(false);
 
   function onRangeChange(preset: Preset, start: string, end: string) {
     startDate = start;
@@ -46,11 +48,34 @@
     filtered.filter(t => t.type === 'expense').forEach(t => { map[t.accountId] = (map[t.accountId] || 0) + t.amount; });
     return Object.entries(map).map(([id, val]) => ({ label: $accounts.find(a => a.id === id)?.name || id, value: val }));
   });
+
+  // export: flat summary rows
+  const exportColumns = [
+    { key: 'label', label: 'Keterangan' },
+    { key: 'value', label: 'Nilai (Rp)' },
+  ];
+
+  const exportRows = $derived([
+    { label: 'Periode', value: `${startDate} s/d ${endDate}` },
+    { label: '─── LAPORAN LABA RUGI ───', value: '' },
+    { label: 'Total Pendapatan', value: `Rp ${totalIncome.toLocaleString('id-ID')}` },
+    { label: 'Total Beban', value: `Rp ${totalExpense.toLocaleString('id-ID')}` },
+    { label: 'Laba Bersih', value: `Rp ${(totalIncome - totalExpense).toLocaleString('id-ID')}` },
+    { label: '─── NERACA ───', value: '' },
+    { label: 'Total Aset', value: `Rp ${totalAssets.toLocaleString('id-ID')}` },
+    { label: 'Total Kewajiban', value: `Rp ${totalLiabilities.toLocaleString('id-ID')}` },
+    { label: 'Total Ekuitas', value: `Rp ${equity.toLocaleString('id-ID')}` },
+    { label: 'Saldo Kas', value: `Rp ${cashBalance.toLocaleString('id-ID')}` },
+    { label: '─── PENDAPATAN PER AKUN ───', value: '' },
+    ...incomeByAccount().map(i => ({ label: i.label, value: `Rp ${i.value.toLocaleString('id-ID')}` })),
+    { label: '─── BEBAN PER AKUN ───', value: '' },
+    ...expenseByAccount().map(e => ({ label: e.label, value: `Rp ${e.value.toLocaleString('id-ID')}` })),
+  ]);
 </script>
 
 <PageHeader title="Laporan Keuangan" description="Ringkasan keuangan periode ini">
   {#snippet actions()}
-    <Button variant="secondary"><Download class="w-4 h-4" /> Export</Button>
+    <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
   {/snippet}
 </PageHeader>
 
@@ -100,3 +125,13 @@
     {/if}
   </div>
 </div>
+
+<ExportModal
+  open={showExport}
+  onclose={() => showExport = false}
+  title="Laporan Keuangan"
+  subtitle={`Periode ${startDate} s/d ${endDate}`}
+  columns={exportColumns}
+  rows={exportRows}
+  filename="laporan-keuangan"
+/>

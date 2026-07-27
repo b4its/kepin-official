@@ -4,15 +4,29 @@
   import Button from '$lib/components/ui/Button.svelte';
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { products, createProduct, updateProduct, deleteProduct } from '$lib/stores/data';
+  import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
+  let showExport = $state(false);
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
   let form = $state({ sku: '', name: '', category: '', stock: 0, minStock: 0, price: 0, cost: 0, status: 'active' });
+
+  const exportColumns = [
+    { key: 'sku', label: 'SKU' },
+    { key: 'name', label: 'Nama Produk' },
+    { key: 'category', label: 'Kategori' },
+    { key: 'stock', label: 'Stok' },
+    { key: 'minStock', label: 'Min. Stok' },
+    { key: 'price', label: 'Harga Jual', render: (r: any) => `Rp ${Number(r.price).toLocaleString('id-ID')}` },
+    { key: 'cost', label: 'Harga Modal', render: (r: any) => `Rp ${Number(r.cost).toLocaleString('id-ID')}` },
+    { key: 'status', label: 'Status' },
+  ];
 
   function openCreate() {
     form = { sku: '', name: '', category: '', stock: 0, minStock: 0, price: 0, cost: 0, status: 'active' };
@@ -45,6 +59,7 @@
 
 <PageHeader title="Produk" description="Manajemen produk dan SKU" breadcrumbs={[{ label: 'Inventaris' }, { label: 'Produk' }]}>
   {#snippet actions()}
+    <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
     <Button onclick={openCreate}>+ Produk Baru</Button>
   {/snippet}
 </PageHeader>
@@ -123,4 +138,14 @@
   onclose={() => deleteIndex = null}
   onconfirm={confirmDelete}
   message="Hapus produk ini? Tindakan ini tidak dapat dibatalkan."
+/>
+
+<ExportModal
+  open={showExport}
+  onclose={() => showExport = false}
+  title="Daftar Produk"
+  subtitle="Data produk dan inventaris"
+  columns={exportColumns}
+  rows={$products}
+  filename="produk"
 />

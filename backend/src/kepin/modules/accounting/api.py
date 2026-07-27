@@ -8,12 +8,12 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str
-from kepin.db.models import Account, AccountBalance, JournalEntry, JournalLine, Transaction, BankAccount, BankTransaction, ReconciliationMatch
+from kepin.db.models import Account, AccountBalance, JournalEntry, JournalLine, Membership, Transaction, BankAccount, BankTransaction, ReconciliationMatch
 
 
 router = APIRouter(tags=["Accounting"])
@@ -204,6 +204,7 @@ async def _get_journal_lines(
 async def list_accounts(
     params: ListParams = Depends(),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     status: str | None = Query(None),
 ):
@@ -424,6 +425,7 @@ async def list_transactions(
     params: ListParams = Depends(),
     period: PeriodParams = Depends(),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     txn_status: str | None = Query(None, alias="status"),
     branch_id: str | None = Query(None),
@@ -774,6 +776,7 @@ async def list_journals(
     params: ListParams = Depends(),
     period: PeriodParams = Depends(),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     jnl_status: str | None = Query(None, alias="status"),
 ):

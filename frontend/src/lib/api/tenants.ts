@@ -46,3 +46,5 @@ export async function getProducts(slug: string) { return api(`/tenants/${slug}/p
 export async function getStockBalances(slug: string) { return api(`/tenants/${slug}/stock-balances`); }
 export async function getStockMovements(slug: string) { return api(`/tenants/${slug}/stock-movements`); }
 export async function getReports(slug: string, type: string, params?: string) { return api(`/tenants/${slug}/reports/${type}${params || ''}`); }
+export async function getSidebarSettings(slug: string) { return api(`/tenants/${slug}/sidebar-settings`); }
+export async function updateSidebarSettings(slug: string, enabledItems: Record<string, boolean>) { return api(`/tenants/${slug}/sidebar-settings`, { method: 'PUT', body: JSON.stringify({ enabledItems }) }); }

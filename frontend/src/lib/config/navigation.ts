@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Activity,
   Bell,
+  LayoutDashboard,
   type Icon,
 } from '@lucide/svelte';
 
@@ -31,69 +32,82 @@ export type Permission =
   | 'billing.manage';
 
 export type NavigationItem = {
+  /** Unique stable key used for sidebar customisation. */
+  key: string;
   label: string;
   href: string;
   icon: typeof Icon;
   permission?: Permission;
   badge?: string;
+  /** If true, this item is always shown (cannot be hidden by owner). */
+  pinned?: boolean;
 };
 
 export type NavigationGroup = {
   label: string;
+  /** Unique key for the group itself, used for collapse state persistence. */
+  key: string;
   items: NavigationItem[];
 };
 
 export const clientNavigation: NavigationGroup[] = [
   {
     label: 'Ringkasan',
+    key: 'group_ringkasan',
     items: [
-      { label: 'Dashboard', href: '', icon: Home },
+      { key: 'dashboard', label: 'Dashboard', href: '', icon: Home, pinned: true },
     ],
   },
   {
     label: 'Penjualan',
+    key: 'group_penjualan',
     items: [
-      { label: 'Invoice', href: '/sales/invoices', icon: Receipt },
-      { label: 'Pelanggan', href: '/sales/customers', icon: Users },
+      { key: 'sales_invoices', label: 'Invoice', href: '/sales/invoices', icon: Receipt },
+      { key: 'sales_customers', label: 'Pelanggan', href: '/sales/customers', icon: Users },
     ],
   },
   {
     label: 'Pembelian',
+    key: 'group_pembelian',
     items: [
-      { label: 'Pesanan', href: '/purchasing/orders', icon: ShoppingCart },
-      { label: 'Pemasok', href: '/purchasing/suppliers', icon: Building2 },
+      { key: 'purchasing_orders', label: 'Pesanan', href: '/purchasing/orders', icon: ShoppingCart },
+      { key: 'purchasing_suppliers', label: 'Pemasok', href: '/purchasing/suppliers', icon: Building2 },
     ],
   },
   {
     label: 'Inventaris',
+    key: 'group_inventaris',
     items: [
-      { label: 'Produk', href: '/inventory/products', icon: Package },
-      { label: 'Pergerakan Stok', href: '/inventory/movements', icon: Warehouse },
+      { key: 'inventory_products', label: 'Produk', href: '/inventory/products', icon: Package },
+      { key: 'inventory_movements', label: 'Pergerakan Stok', href: '/inventory/movements', icon: Warehouse },
     ],
   },
   {
     label: 'Akuntansi',
+    key: 'group_akuntansi',
     items: [
-      { label: 'Transaksi', href: '/transactions', icon: DollarSign },
-      { label: 'Jurnal', href: '/accounting/journals', icon: BookOpen },
-      { label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileText },
-      { label: 'Rekonsiliasi', href: '/accounting/reconciliation', icon: CreditCard },
+      { key: 'accounting_transactions', label: 'Transaksi', href: '/transactions', icon: DollarSign },
+      { key: 'accounting_journals', label: 'Jurnal', href: '/accounting/journals', icon: BookOpen },
+      { key: 'accounting_coa', label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileText },
+      { key: 'accounting_recon', label: 'Rekonsiliasi', href: '/accounting/reconciliation', icon: CreditCard },
     ],
   },
   {
     label: 'Laporan & Insight',
+    key: 'group_laporan',
     items: [
-      { label: 'Laporan', href: '/reports', icon: BarChart3 },
-      { label: 'Investor Report', href: '/reports/investor', icon: TrendingUp },
-      { label: 'AI Insight', href: '/insights', icon: Activity },
+      { key: 'reports_summary', label: 'Laporan', href: '/reports', icon: BarChart3 },
+      { key: 'reports_investor', label: 'Investor Report', href: '/reports/investor', icon: TrendingUp },
+      { key: 'reports_insights', label: 'AI Insight', href: '/insights', icon: Activity },
     ],
   },
   {
     label: 'Kontrol',
+    key: 'group_kontrol',
     items: [
-      { label: 'Audit Trail', href: '/audit', icon: Shield },
-      { label: 'Notifikasi', href: '/notifications', icon: Bell },
-      { label: 'Pengaturan', href: '/settings/organization', icon: Settings },
+      { key: 'audit_trail', label: 'Audit Trail', href: '/audit', icon: Shield },
+      { key: 'notifications', label: 'Notifikasi', href: '/notifications', icon: Bell },
+      { key: 'settings_org', label: 'Pengaturan', href: '/settings/organization', icon: Settings, pinned: true },
     ],
   },
 ];
@@ -101,20 +115,22 @@ export const clientNavigation: NavigationGroup[] = [
 export const adminNavigation: NavigationGroup[] = [
   {
     label: 'Platform',
+    key: 'group_platform',
     items: [
-      { label: 'Dashboard', href: '/admin', icon: Home },
-      { label: 'Tenant', href: '/admin/tenants', icon: Building2 },
-      { label: 'Pengguna', href: '/admin/users', icon: Users },
-      { label: 'Langganan', href: '/admin/subscriptions', icon: CreditCard },
-      { label: 'Notifikasi', href: '/admin/notifications', icon: Bell },
+      { key: 'admin_dashboard', label: 'Dashboard', href: '/admin', icon: Home },
+      { key: 'admin_tenants', label: 'Tenant', href: '/admin/tenants', icon: Building2 },
+      { key: 'admin_users', label: 'Pengguna', href: '/admin/users', icon: Users },
+      { key: 'admin_subscriptions', label: 'Langganan', href: '/admin/subscriptions', icon: CreditCard },
+      { key: 'admin_notifications', label: 'Notifikasi', href: '/admin/notifications', icon: Bell },
     ],
   },
   {
     label: 'Keamanan',
+    key: 'group_keamanan',
     items: [
-      { label: 'Keamanan', href: '/admin/security', icon: Shield },
-      { label: 'Insiden', href: '/admin/incidents', icon: AlertTriangle },
-      { label: 'Audit Platform', href: '/admin/audit', icon: Activity },
+      { key: 'admin_security', label: 'Keamanan', href: '/admin/security', icon: Shield },
+      { key: 'admin_incidents', label: 'Insiden', href: '/admin/incidents', icon: AlertTriangle },
+      { key: 'admin_audit', label: 'Audit Platform', href: '/admin/audit', icon: Activity },
     ],
   },
 ];

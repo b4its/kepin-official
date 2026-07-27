@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
@@ -19,6 +19,7 @@ from kepin.db.models import (
     InvoiceLine,
     CustomerPayment,
     CustomerPaymentAllocation,
+    Membership,
     Product,
 )
 
@@ -265,6 +266,7 @@ def _compute_line_totals(
 async def list_customers(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     params: ListParams = Depends(),
 ):
     conditions = [Customer.tenant_id == tenant.id]
@@ -381,7 +383,10 @@ async def delete_customer(
         raise NotFoundError(message="Customer tidak ditemukan")
 
     inv_cnt = await session.execute(
-        select(func.count(Invoice.id)).where(Invoice.customer_id == customer_id)
+        select(func.count(Invoice.id)).where(
+            Invoice.customer_id == customer_id,
+            Invoice.tenant_id == tenant.id,
+        )
     )
     if inv_cnt.scalar() or 0 > 0:
         raise ConflictError(message="Customer memiliki faktur")
@@ -397,6 +402,7 @@ async def delete_customer(
 async def list_invoices(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     params: ListParams = Depends(),
     status: str | None = Query(None),
     customer_id: str | None = Query(None, alias="customerId"),
@@ -681,6 +687,7 @@ async def get_invoice_pdf(
 async def list_customer_payments(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     params: ListParams = Depends(),
 ):
     conditions = [CustomerPayment.tenant_id == tenant.id]

@@ -45,12 +45,10 @@ class TenantResponse(ApiSchema):
     name: str
     slug: str
     status: str
-    plan_code: str | None = None
     timezone: str | None = None
     currency: str | None = None
     sector: str | None = None
     legal_name: str | None = None
-    onboarding_status: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -58,7 +56,6 @@ class TenantResponse(ApiSchema):
 class TenantCreate(ApiSchema):
     name: str
     slug: str
-    plan_code: str | None = None
     timezone: str | None = None
     currency: str | None = None
     sector: str | None = None
@@ -71,7 +68,6 @@ class TenantUpdate(ApiSchema):
     sector: str | None = None
     timezone: str | None = None
     currency: str | None = None
-    onboarding_status: str | None = None
 
 
 class UserResponse(ApiSchema):
@@ -174,7 +170,6 @@ async def get_dashboard(
         status_counts[status] = cnt
     metrics = {
         "activeTenants": status_counts.get("active", 0),
-        "trialTenants": status_counts.get("trial", 0),
         "suspendedTenants": status_counts.get("suspended", 0),
         "mrr": money_str(Decimal("0")),
     }
@@ -194,14 +189,12 @@ async def get_dashboard(
     for dt, cnt in t_rows:
         tenant_growth.append({"date": str(dt), "count": cnt})
 
-    # ── planDistribution: count tenants by plan ──
+    # ── statusDistribution: count tenants by status ──
     plan_distribution = []
     total_tenants = sum(c for c in status_counts.values()) or 1
-    p_stmt = select(Tenant.plan_code, func.count(Tenant.id)).group_by(Tenant.plan_code)
-    p_rows = (await session.execute(p_stmt)).all()
-    for plan_code, cnt in p_rows:
+    for st, cnt in status_counts.items():
         plan_distribution.append({
-            "plan": plan_code or "unknown",
+            "plan": st,
             "count": cnt,
             "percentage": round(cnt / total_tenants * 100, 1),
         })
@@ -279,24 +272,22 @@ async def create_tenant(
     now = datetime.now(timezone.utc)
     tenant = Tenant(
         id=new_uuid(),
+        owner_id="00000000-0000-0000-0000-000000000000",
         name=body.name,
         slug=body.slug,
-        plan_code=body.plan_code or "free",
+        join_code="",
         timezone=body.timezone or "Asia/Jakarta",
         currency=body.currency or "IDR",
         sector=body.sector,
         legal_name=body.legal_name or body.name,
         status="active",
-        onboarding_status="pending",
         created_at=now,
         updated_at=now,
     )
     session.add(tenant)
 
     org = OrganizationSetting(
-        id=new_uuid(),
         tenant_id=tenant.id,
-        tenant_name=tenant.name,
         legal_name=tenant.legal_name,
         timezone=tenant.timezone,
         currency=tenant.currency,
@@ -320,9 +311,13 @@ async def create_tenant(
     sub = Subscription(
         id=new_uuid(),
         tenant_id=tenant.id,
-        plan_code=tenant.plan_code,
+        plan_code="trial",
         status="active",
-        start_date=now.date(),
+        started_at=now,
+        current_period_start=now,
+        current_period_end=now,
+        amount=Decimal("0"),
+        currency=body.currency or "IDR",
         created_at=now,
         updated_at=now,
     )
@@ -641,13 +636,24 @@ async def list_audit_events(
 
     stmt = (
         select(PlatformAuditEvent)
-        .order_by(PlatformAuditEvent.created_at.desc())
+        .order_by(PlatformAuditEvent.timestamp.desc())
         .offset((params.page - 1) * params.page_size)
         .limit(params.page_size)
     )
     rows = (await session.execute(stmt)).scalars().all()
 
-    items = [PlatformAuditEventResponse.model_validate(e) for e in rows]
+    items = []
+    for ev in rows:
+        items.append({
+            "id": str(ev.id),
+            "tenant_id": str(ev.actor_id) if ev.actor_id else None,
+            "actor_name": ev.actor_name,
+            "action": ev.action,
+            "resource_type": ev.object_type,
+            "resource_id": ev.object_id,
+            "detail": ev.audit_meta if hasattr(ev, "audit_meta") else None,
+            "created_at": ev.timestamp,
+        })
     return make_paginated(items, params.page, params.page_size, total)
 
 

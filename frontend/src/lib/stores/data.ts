@@ -240,3 +240,35 @@ export async function loadAdminUsers() {
 // ── Also export tenantApi helper for pages that need direct API access ──
 // (already available as import { tenantApi } from '$lib/stores/data')
 export { tenantApi, adminApi, api };
+
+// ── Current role in the active tenant ──
+export const currentRole = writable<'tenant_owner' | 'employee' | null>(null);
+export function setCurrentRole(role: 'tenant_owner' | 'employee' | null) {
+  currentRole.set(role);
+}
+
+// ── Sidebar settings (key → enabled bool; absent = true) ──
+export const sidebarSettings = writable<Record<string, boolean>>({});
+
+export async function loadSidebarSettings(slug?: string) {
+  const s = slug || _slug;
+  if (!s) return;
+  try {
+    const res: any = await tenantApi.getSidebarSettings(s);
+    sidebarSettings.set(res.enabledItems || {});
+  } catch {
+    sidebarSettings.set({});
+  }
+}
+
+export async function saveSidebarSettings(items: Record<string, boolean>, slug?: string) {
+  const s = slug || _slug;
+  if (!s) return;
+  await tenantApi.updateSidebarSettings(s, items);
+  sidebarSettings.set(items);
+}
+
+/** Returns true if the nav item key is enabled (default true when not configured). */
+export function isNavEnabled(settings: Record<string, boolean>, key: string): boolean {
+  return settings[key] !== false;
+}

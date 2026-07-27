@@ -8,12 +8,13 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str, to_quantity, ZERO
 from kepin.db.models import (
+    Membership,
     Supplier,
     PurchaseOrder,
     PurchaseOrderLine,
@@ -131,6 +132,7 @@ class POReceiveRequest(ApiSchema):
 async def list_suppliers(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     params: ListParams = Depends(),
 ):
     conditions = [Supplier.tenant_id == tenant.id]
@@ -241,7 +243,10 @@ async def delete_supplier(
         raise NotFoundError(message="Supplier tidak ditemukan")
 
     po_cnt = await session.execute(
-        select(func.count(PurchaseOrder.id)).where(PurchaseOrder.supplier_id == supplier_id)
+        select(func.count(PurchaseOrder.id)).where(
+            PurchaseOrder.supplier_id == supplier_id,
+            PurchaseOrder.tenant_id == tenant.id,
+        )
     )
     if po_cnt.scalar() or 0 > 0:
         raise ConflictError(message="Supplier memiliki purchase order")
@@ -295,6 +300,7 @@ async def _build_po_lines(
 async def list_purchase_orders(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     params: ListParams = Depends(),
     status: str | None = Query(None),
     period: PeriodParams = Depends(),
@@ -326,7 +332,8 @@ async def list_purchase_orders(
     items = []
     for po in rows:
         line_stmt = select(PurchaseOrderLine).where(
-            PurchaseOrderLine.purchase_order_id == po.id
+            PurchaseOrderLine.purchase_order_id == po.id,
+            PurchaseOrderLine.tenant_id == tenant.id,
         ).order_by(PurchaseOrderLine.line_number)
         po_lines = (await session.execute(line_stmt)).scalars().all()
 

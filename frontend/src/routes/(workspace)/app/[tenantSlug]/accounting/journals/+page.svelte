@@ -3,15 +3,26 @@
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { journalEntries } from '$lib/stores/data';
+  import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
+  let showExport = $state(false);
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
   let form = $state({ date: '', ref: '', desc: '', status: 'draft', total: 0 });
+
+  const exportColumns = [
+    { key: 'date', label: 'Tanggal' },
+    { key: 'reference', label: 'Referensi' },
+    { key: 'description', label: 'Deskripsi' },
+    { key: 'status', label: 'Status' },
+    { key: 'createdAt', label: 'Dibuat' },
+  ];
 
   function openCreate() {
     form = { date: '', ref: '', desc: '', status: 'draft', total: 0 };
@@ -31,7 +42,7 @@
       if (editingIndex !== null) {
         return list.map((j, i) => i === editingIndex ? { ...j, ...form } : j);
       } else {
-        return [...list, { id: 'JNL-'+Date.now(), date: form.date, description: form.desc, reference: form.ref, status: form.status, lines: [], createdBy: 'Budi Santoso', createdAt: new Date().toISOString() }];
+        return [...list, { id: 'JNL-' + Date.now(), date: form.date, description: form.desc, reference: form.ref, status: form.status, lines: [], createdBy: 'User', createdAt: new Date().toISOString() }];
       }
     });
     showModal = false;
@@ -47,6 +58,7 @@
 
 <PageHeader title="Jurnal" description="Jurnal akuntansi" breadcrumbs={[{ label: 'Akuntansi' }, { label: 'Jurnal' }]}>
   {#snippet actions()}
+    <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
     <Button onclick={openCreate}>+ Jurnal Baru</Button>
   {/snippet}
 </PageHeader>
@@ -110,4 +122,14 @@
   onclose={() => deleteIndex = null}
   onconfirm={confirmDelete}
   message="Hapus jurnal ini? Tindakan ini tidak dapat dibatalkan."
+/>
+
+<ExportModal
+  open={showExport}
+  onclose={() => showExport = false}
+  title="Jurnal Akuntansi"
+  subtitle="Daftar entri jurnal"
+  columns={exportColumns}
+  rows={$journalEntries}
+  filename="jurnal"
 />

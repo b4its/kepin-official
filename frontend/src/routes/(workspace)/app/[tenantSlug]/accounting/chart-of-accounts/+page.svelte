@@ -3,15 +3,26 @@
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { accounts } from '$lib/stores/data';
+  import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
+  let showExport = $state(false);
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
   let form = $state({ code: '', name: '', type: 'Asset', balance: 0, status: 'active' });
+
+  const exportColumns = [
+    { key: 'code', label: 'Kode' },
+    { key: 'name', label: 'Nama Akun' },
+    { key: 'type', label: 'Tipe' },
+    { key: 'balance', label: 'Saldo', render: (r: any) => `Rp ${Math.abs(Number(r.balance)).toLocaleString('id-ID')}` },
+    { key: 'status', label: 'Status' },
+  ];
 
   function openCreate() {
     form = { code: '', name: '', type: 'Asset', balance: 0, status: 'active' };
@@ -27,13 +38,11 @@
 
   function save() {
     accounts.update(list => {
-      let updated: any[];
       if (editingIndex !== null) {
-        updated = list.map((a, i) => i === editingIndex ? { ...a, ...form } : a);
+        return list.map((a, i) => i === editingIndex ? { ...a, ...form } : a);
       } else {
-        updated = [...list, { id: 'ACC-'+String(Date.now()).slice(-6), code: form.code, name: form.name, type: form.type.toLowerCase(), balance: form.balance, isSystem: false, status: form.status }];
+        return [...list, { id: 'ACC-' + String(Date.now()).slice(-6), code: form.code, name: form.name, type: form.type.toLowerCase(), balance: form.balance, isSystem: false, status: form.status }];
       }
-      return updated;
     });
     showModal = false;
   }
@@ -48,6 +57,7 @@
 
 <PageHeader title="Chart of Accounts" description="Daftar akun akuntansi" breadcrumbs={[{ label: 'Akuntansi' }, { label: 'Chart of Accounts' }]}>
   {#snippet actions()}
+    <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
     <Button onclick={openCreate}>+ Akun Baru</Button>
   {/snippet}
 </PageHeader>
@@ -94,7 +104,7 @@
     </div>
     <div>
       <label class="label-text">Saldo Awal (Rp)</label>
-        <CurrencyInput value={form.balance} onchange={(v) => form.balance = v} class="input-field mt-1" />
+      <CurrencyInput value={form.balance} onchange={(v) => form.balance = v} class="input-field mt-1" />
     </div>
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
@@ -108,4 +118,14 @@
   onclose={() => deleteIndex = null}
   onconfirm={confirmDelete}
   message="Hapus akun ini? Tindakan ini tidak dapat dibatalkan."
+/>
+
+<ExportModal
+  open={showExport}
+  onclose={() => showExport = false}
+  title="Chart of Accounts"
+  subtitle="Daftar akun akuntansi"
+  columns={exportColumns}
+  rows={$accounts}
+  filename="chart-of-accounts"
 />

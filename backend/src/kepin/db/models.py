@@ -38,19 +38,27 @@ class Tenant(Base):
     __tablename__ = "tenants"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     slug: Mapped[str] = mapped_column(String(80), unique=True)
+    join_code: Mapped[str] = mapped_column(String(32), unique=True)
     name: Mapped[str] = mapped_column(String(160))
     legal_name: Mapped[str] = mapped_column(String(200), default="")
     sector: Mapped[str] = mapped_column(String(80), default="")
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Jakarta")
     currency: Mapped[str] = mapped_column(String(3), default="IDR")
-    plan_code: Mapped[str] = mapped_column(String(40), default="trial")
+    plan_code: Mapped[str] = mapped_column(
+        String(24),
+        CheckConstraint(
+            "plan_code IN ('free', 'basic', 'premium', 'platinum')",
+            name="tenant_plan_code",
+        ),
+        default="free",
+    )
     status: Mapped[str] = mapped_column(
         String(24),
-        CheckConstraint("status IN ('active', 'trial', 'suspended')", name="ck_tenant_status"),
-        default="trial",
+        CheckConstraint("status IN ('active', 'suspended')", name="ck_tenant_status"),
+        default="active",
     )
-    onboarding_status: Mapped[str] = mapped_column(String(24), default="pending")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=datetime.now
     )
@@ -65,6 +73,7 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True)
     name: Mapped[str] = mapped_column(String(160))
+    password_hash: Mapped[str] = mapped_column(String(255))
     phone: Mapped[str] = mapped_column(String(32), default="")
     avatar_url: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(24), default="active")
@@ -81,13 +90,13 @@ class Membership(Base):
     __tablename__ = "memberships"
     __table_args__ = (
         UniqueConstraint("tenant_id", "user_id", name="uq_membership_tenant_user"),
+        CheckConstraint("role_name IN ('tenant_owner', 'employee')", name="membership_role"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"))
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
-    role_name: Mapped[str] = mapped_column(String(40))
-    permissions: Mapped[dict] = mapped_column(JSONB, default={})
+    role_name: Mapped[str] = mapped_column(String(24))
     status: Mapped[str] = mapped_column(String(24), default="active")
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -207,6 +216,22 @@ class OutboxEvent(Base):
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class TenantSidebarSetting(Base):
+    """Stores which nav items are enabled/disabled per tenant.
+    enabled_items is a dict of {nav_key: bool}. Keys not present default to True.
+    """
+    __tablename__ = "tenant_sidebar_settings"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("tenants.id"), primary_key=True
+    )
+    enabled_items: Mapped[dict] = mapped_column(JSONB, default={})
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=datetime.now, default=datetime.now
+    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
 
 
 # ---------------------------------------------------------------------------

@@ -4,15 +4,28 @@
   import Button from '$lib/components/ui/Button.svelte';
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { invoices, createInvoice, updateInvoice, deleteInvoice } from '$lib/stores/data';
+  import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
+  let showExport = $state(false);
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
   let form = $state({ number: '', customerName: '', date: '', dueDate: '', total: 0, paidAmount: 0, status: 'draft' });
+
+  const exportColumns = [
+    { key: 'number', label: 'No. Invoice' },
+    { key: 'customerName', label: 'Pelanggan' },
+    { key: 'date', label: 'Tanggal' },
+    { key: 'dueDate', label: 'Jatuh Tempo' },
+    { key: 'total', label: 'Total', render: (r: any) => `Rp ${Number(r.total).toLocaleString('id-ID')}` },
+    { key: 'paidAmount', label: 'Dibayar', render: (r: any) => `Rp ${Number(r.paidAmount).toLocaleString('id-ID')}` },
+    { key: 'status', label: 'Status' },
+  ];
 
   function openCreate() {
     form = { number: '', customerName: '', date: '', dueDate: '', total: 0, paidAmount: 0, status: 'draft' };
@@ -46,6 +59,7 @@
 
 <PageHeader title="Invoice" description="Manajemen faktur penjualan" breadcrumbs={[{ label: 'Penjualan' }, { label: 'Invoice' }]}>
   {#snippet actions()}
+    <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
     <Button onclick={openCreate}>+ Invoice Baru</Button>
   {/snippet}
 </PageHeader>
@@ -132,4 +146,14 @@
   onclose={() => deleteIndex = null}
   onconfirm={confirmDelete}
   message="Hapus invoice ini? Tindakan ini tidak dapat dibatalkan."
+/>
+
+<ExportModal
+  open={showExport}
+  onclose={() => showExport = false}
+  title="Daftar Invoice"
+  subtitle="Data faktur penjualan"
+  columns={exportColumns}
+  rows={$invoices}
+  filename="invoice"
 />

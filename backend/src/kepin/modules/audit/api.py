@@ -8,10 +8,11 @@ from kepin.api.dependencies import (
     TenantContext,
     get_session,
     get_tenant_context,
+    get_tenant_membership,
 )
 from kepin.api.errors import NotFoundError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
-from kepin.db.models import TenantAuditEvent
+from kepin.db.models import Membership, TenantAuditEvent
 
 router = APIRouter(prefix="/audit-events", tags=["Audit"])
 
@@ -31,6 +32,7 @@ class AuditEventResponse(ApiSchema):
 @router.get("", response_model=PaginatedResponse[AuditEventResponse])
 async def list_audit_events(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100, alias="pageSize"),

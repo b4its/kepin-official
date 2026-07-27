@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     database_pool_timeout: int = 10
     database_statement_timeout_ms: int = 10000
 
+    secret_key: str = "kepin-dev-secret-key-change-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440
+
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     authorization_enabled: bool = False
     sql_echo: bool = False

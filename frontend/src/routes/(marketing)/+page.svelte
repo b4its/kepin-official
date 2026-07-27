@@ -535,12 +535,12 @@
       Bergabung dengan ribuan UMKM yang sudah menggunakan KePin untuk transparansi, keamanan, dan pertumbuhan bisnis.
     </p>
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
-      <a href="/auth/register" class="btn-primary btn-lg text-center bg-white text-[var(--color-ink)] hover:bg-gray-100">
+    <a href="/auth/register" class="btn-primary btn-lg text-center bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-[var(--color-ink)] dark:hover:bg-gray-100">
         Coba Gratis 14 Hari
-      </a>
-      <a href="/auth/register?plan=platinum" class="btn-ghost btn-lg text-center text-white border-2 border-white hover:bg-white/10">
+    </a>
+    <a href="/auth/register?plan=platinum" class="btn-ghost btn-lg text-center border-2 text-slate-900 border-slate-900 hover:bg-slate-900/10 hover:text-slate-900 dark:text-white dark:border-white dark:hover:bg-white/10 dark:hover:text-white">
         Jadwalkan Demo
-      </a>
+    </a>
     </div>
     <p class="mt-4 text-sm text-gray-500">Tanpa kartu kredit. Dukungan setup gratis.</p>
   </div>

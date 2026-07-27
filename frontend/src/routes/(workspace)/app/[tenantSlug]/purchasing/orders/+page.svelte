@@ -3,15 +3,26 @@
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { invoices, createInvoice, updateInvoice, deleteInvoice } from '$lib/stores/data';
+  import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
+  let showExport = $state(false);
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
   let form = $state({ number: '', customerName: '', date: '', items: 0, total: 0, status: 'pending' });
+
+  const exportColumns = [
+    { key: 'number', label: 'No. PO' },
+    { key: 'customerName', label: 'Pemasok' },
+    { key: 'date', label: 'Tanggal' },
+    { key: 'total', label: 'Total', render: (r: any) => `Rp ${Number(r.total).toLocaleString('id-ID')}` },
+    { key: 'status', label: 'Status' },
+  ];
 
   function openCreate() {
     form = { number: '', customerName: '', date: '', items: 0, total: 0, status: 'pending' };
@@ -46,6 +57,7 @@
 
 <PageHeader title="Pesanan Pembelian" description="Purchase order" breadcrumbs={[{ label: 'Pembelian' }, { label: 'Pesanan' }]}>
   {#snippet actions()}
+    <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
     <Button onclick={openCreate}>+ PO Baru</Button>
   {/snippet}
 </PageHeader>
@@ -102,7 +114,7 @@
     </div>
     <div>
       <label class="label-text">Total (Rp)</label>
-        <CurrencyInput value={form.total} onchange={(v) => form.total = v} class="input-field mt-1" required />
+      <CurrencyInput value={form.total} onchange={(v) => form.total = v} class="input-field mt-1" required />
     </div>
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
@@ -116,4 +128,14 @@
   onclose={() => deleteIndex = null}
   onconfirm={confirmDelete}
   message="Hapus purchase order ini? Tindakan ini tidak dapat dibatalkan."
+/>
+
+<ExportModal
+  open={showExport}
+  onclose={() => showExport = false}
+  title="Purchase Order"
+  subtitle="Daftar pesanan pembelian"
+  columns={exportColumns}
+  rows={$invoices}
+  filename="purchase-order"
 />

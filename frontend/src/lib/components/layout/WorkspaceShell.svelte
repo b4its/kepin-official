@@ -7,6 +7,7 @@
   type Props = {
     currentPath: string;
     tenantName: string;
+    tenantSlug: string;
     onNavigate: (href: string) => void;
     children: Snippet;
     topBarChildren?: Snippet;
@@ -15,6 +16,7 @@
   let {
     currentPath,
     tenantName = 'Workspace',
+    tenantSlug,
     onNavigate,
     children,
     topBarChildren,
@@ -42,6 +44,7 @@
     <WorkspaceSidebarContent
       {currentPath}
       {tenantName}
+      {tenantSlug}
       {onNavigate}
       collapsed={sidebarCollapsed}
       ontogglecollapsed={() => sidebarCollapsed = !sidebarCollapsed}
@@ -50,7 +53,7 @@
 
   {#if sidebarOpen}
     <Sidebar open={sidebarOpen} onclose={() => sidebarOpen = false} title={tenantName}>
-      <WorkspaceSidebarContent {currentPath} {tenantName} {onNavigate} />
+      <WorkspaceSidebarContent {currentPath} {tenantName} {tenantSlug} {onNavigate} />
     </Sidebar>
   {/if}
 

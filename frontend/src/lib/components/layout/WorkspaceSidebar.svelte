@@ -1,31 +1,27 @@
 <script lang="ts">
   import { clientNavigation } from '$lib/config/navigation';
+  import { sidebarSettings, isNavEnabled, currentRole } from '$lib/stores/data';
   import { cn } from '$lib/utils/cn';
-  import { ChevronLeft, ChevronRight, ChevronDown } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, ChevronDown, LayoutGrid } from '@lucide/svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
 
   type Props = {
     currentPath: string;
     tenantName: string;
+    tenantSlug: string;
     onNavigate: (href: string) => void;
     collapsed?: boolean;
     ontogglecollapsed?: () => void;
   };
 
-  let { currentPath, tenantName, onNavigate, collapsed = false, ontogglecollapsed }: Props = $props();
+  let { currentPath, tenantName, tenantSlug, onNavigate, collapsed = false, ontogglecollapsed }: Props = $props();
 
-  let groupsExpanded = $state<Record<string, boolean>>({
-    'Ringkasan': true,
-    'Penjualan': true,
-    'Pembelian': true,
-    'Inventaris': true,
-    'Akuntansi': true,
-    'Laporan & Insight': true,
-    'Kontrol': true,
-  });
+  let groupsExpanded = $state<Record<string, boolean>>(
+    Object.fromEntries(clientNavigation.map(g => [g.key, true]))
+  );
 
-  function toggleGroup(label: string) {
-    groupsExpanded = { ...groupsExpanded, [label]: !groupsExpanded[label] };
+  function toggleGroup(key: string) {
+    groupsExpanded = { ...groupsExpanded, [key]: !groupsExpanded[key] };
   }
 
   function isActive(href: string) {
@@ -34,11 +30,23 @@
       ? relativePath === '' || relativePath === '/'
       : relativePath === href || (href === '/notifications' && relativePath.startsWith('/notifications/'));
   }
+
+  // Visible nav filtered by sidebar settings (pinned items always shown)
+  const visibleNav = $derived(
+    clientNavigation.map(group => ({
+      ...group,
+      items: group.items.filter(item =>
+        item.pinned || isNavEnabled($sidebarSettings, item.key)
+      ),
+    })).filter(group => group.items.length > 0)
+  );
+
+  const isOwner = $derived($currentRole === 'tenant_owner');
 </script>
 
 <div class="flex flex-col h-full">
   <div class="p-4 flex-1 overflow-y-auto">
-    <a href="/app/toko-maju" class="flex items-center gap-2 mb-6">
+    <a href="/app/{tenantSlug}" class="flex items-center gap-2 mb-6">
       <Logo height={24} />
       {#if !collapsed}
         <div class="min-w-0">
@@ -49,21 +57,21 @@
     </a>
 
     <div class="space-y-1">
-      {#each clientNavigation as group}
+      {#each visibleNav as group}
         {#if !collapsed}
           <button
-            onclick={() => toggleGroup(group.label)}
+            onclick={() => toggleGroup(group.key)}
             class="flex items-center justify-between w-full px-3 py-1.5 text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider hover:text-[hsl(var(--foreground))] transition-colors rounded"
           >
             <span>{group.label}</span>
             <ChevronDown
-              class={"w-3.5 h-3.5 transition-transform duration-200 " + (groupsExpanded[group.label] ? 'rotate-180' : '')}
+              class={"w-3.5 h-3.5 transition-transform duration-200 " + (groupsExpanded[group.key] ? 'rotate-180' : '')}
             />
           </button>
         {:else}
           <div class="h-4" />
         {/if}
-        {#if groupsExpanded[group.label]}
+        {#if groupsExpanded[group.key]}
           {#each group.items as item}
             <button
               onclick={() => onNavigate(item.href)}
@@ -88,6 +96,36 @@
           {/each}
         {/if}
       {/each}
+
+      <!-- Kustomisasi Sidebar — hanya owner -->
+      {#if isOwner}
+        <div class="mt-2">
+          {#if !collapsed}
+            <div class="px-3 py-1.5 text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
+              Owner
+            </div>
+          {:else}
+            <div class="h-4" />
+          {/if}
+          <button
+            onclick={() => onNavigate('/settings/sidebar')}
+            class={cn(
+              'flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md transition-colors',
+              collapsed ? 'justify-center px-2' : '',
+              isActive('/settings/sidebar')
+                ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] font-semibold shadow-sm'
+                : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]'
+            )}
+            aria-current={isActive('/settings/sidebar') ? 'page' : undefined}
+            title={collapsed ? 'Kustomisasi Sidebar' : undefined}
+          >
+            <LayoutGrid class="w-4 h-4 shrink-0" />
+            {#if !collapsed}
+              <span class="truncate">Kustomisasi Sidebar</span>
+            {/if}
+          </button>
+        </div>
+      {/if}
     </div>
   </div>
 

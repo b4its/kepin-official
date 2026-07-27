@@ -14,6 +14,8 @@ dependencies = [
     "orjson",
     "structlog",
     "python-multipart",
+    "bcrypt",
+    "python-jose[cryptography]",
 ]
 
 [project.optional-dependencies]

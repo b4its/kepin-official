@@ -13,6 +13,7 @@ from kepin.api.dependencies import (
     TenantContext,
     get_session,
     get_tenant_context,
+    get_tenant_membership,
 )
 from kepin.api.errors import NotFoundError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
@@ -24,6 +25,7 @@ from kepin.db.models import (
     Invoice,
     JournalEntry,
     JournalLine,
+    Membership,
     Product,
     StockBalance,
     Transaction,
@@ -54,6 +56,7 @@ def _build_metadata(ctx: TenantContext, start: date, end: date) -> ReportMetadat
 @router.get("/summary")
 async def get_summary(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     params: PeriodParams = Depends(),
 ):
@@ -148,6 +151,7 @@ async def get_summary(
 @router.get("/profit-loss")
 async def get_profit_loss(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     params: PeriodParams = Depends(),
 ):
@@ -209,6 +213,7 @@ async def get_profit_loss(
 @router.get("/balance-sheet")
 async def get_balance_sheet(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     params: PeriodParams = Depends(),
 ):
@@ -267,6 +272,7 @@ async def get_balance_sheet(
 @router.get("/cash-flow")
 async def get_cash_flow(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     params: PeriodParams = Depends(),
 ):
@@ -342,6 +348,7 @@ async def get_cash_flow(
 @router.get("/general-ledger")
 async def get_general_ledger(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     params: PeriodParams = Depends(),
     page: int = Query(1, ge=1),
@@ -408,6 +415,7 @@ async def get_general_ledger(
 @router.get("/receivable-aging")
 async def get_receivable_aging(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     today = date.today()
@@ -482,6 +490,7 @@ async def get_receivable_aging(
 @router.get("/investor")
 async def get_investor_report(
     ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     today = date.today()

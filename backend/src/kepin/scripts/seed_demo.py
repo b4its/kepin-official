@@ -62,7 +62,7 @@ TENANTS_DATA = [
         "name": "Toko Maju Jaya",
         "legal_name": "CV Toko Maju Jaya",
         "sector": "retail",
-        "plan_code": "pro",
+        "plan_code": "platinum",
         "status": "active",
         "members": [
             {"user_id": UID_BUDI, "role": "owner"},
@@ -74,7 +74,7 @@ TENANTS_DATA = [
         "name": "Bengkel Maju Motor",
         "legal_name": "Bengkel Maju Motor",
         "sector": "automotive",
-        "plan_code": "trial",
+        "plan_code": "basic",
         "status": "active",
         "members": [],
     },
@@ -83,7 +83,7 @@ TENANTS_DATA = [
         "name": "Warung Segar",
         "legal_name": "Warung Segar",
         "sector": "food",
-        "plan_code": "pro",
+        "plan_code": "premium",
         "status": "active",
         "members": [
             {"user_id": UID_SITI, "role": "accountant"},
@@ -94,7 +94,7 @@ TENANTS_DATA = [
         "name": "Fashion Baru",
         "legal_name": "Fashion Baru",
         "sector": "fashion",
-        "plan_code": "trial",
+        "plan_code": "free",
         "status": "suspended",
         "members": [],
     },
@@ -528,23 +528,31 @@ async def main():
         rng = random.Random()
 
         plans = [
-            Plan(code="trial", name="Trial", billing_period="monthly", price=Decimal("0"), active=True),
-            Plan(code="pro", name="Pro", billing_period="monthly", price=Decimal("150000"), active=True),
-            Plan(code="enterprise", name="Enterprise", billing_period="yearly", price=Decimal("12000000"), active=True),
+            Plan(code="free",     name="Free",     billing_period="monthly", price=Decimal("0"),      active=True),
+            Plan(code="basic",    name="Basic",    billing_period="monthly", price=Decimal("99000"),  active=True),
+            Plan(code="premium",  name="Premium",  billing_period="monthly", price=Decimal("299000"), active=True),
+            Plan(code="platinum", name="Platinum", billing_period="monthly", price=Decimal("799000"), active=True),
         ]
         session.add_all(plans)
+        await session.flush()
 
+        from kepin.core.auth import hash_password
         users = [
             User(id=UID_ADMIN, name="Admin KePin", email="admin@kepin.io",
+                 password_hash=hash_password("admin123"),
                  status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
             User(id=UID_BUDI, name="Budi Santoso", email="budi@tokomaju.com",
+                 password_hash=hash_password("budi123"),
                  status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
             User(id=UID_ANI, name="Ani Lestari", email="ani@tokomaju.com",
+                 password_hash=hash_password("ani123"),
                  status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
             User(id=UID_SITI, name="Siti Nurhaliza", email="siti@warungsegar.com",
+                 password_hash=hash_password("siti123"),
                  status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
         ]
         session.add_all(users)
+        await session.flush()
 
         all_tenants = []
 
@@ -553,12 +561,18 @@ async def main():
             td["id"] = tid
             all_tenants.append(td)
 
+            import secrets
+            join_code = secrets.token_hex(8)
             tenant = Tenant(
-                id=tid, slug=td["slug"], name=td["name"], legal_name=td["legal_name"],
+                id=tid,
+                owner_id=td["members"][0]["user_id"] if td["members"] else UID_ADMIN,
+                slug=td["slug"], join_code=join_code,
+                name=td["name"], legal_name=td["legal_name"],
                 sector=td["sector"], timezone=WIB, currency=IDR,
-                plan_code=td["plan_code"], status=td["status"],
-                onboarding_status="completed", created_at=NOW, updated_at=NOW,
+                plan_code=td["plan_code"],
+                status=td["status"], created_at=NOW, updated_at=NOW,
             )
+            td["join_code"] = join_code
             session.add(tenant)
             await session.flush()
 
@@ -579,7 +593,8 @@ async def main():
             )
             session.add(branch)
 
-            plan_price = Decimal("150000") if td["plan_code"] == "pro" else Decimal("0")
+            _plan_prices = {"free": Decimal("0"), "basic": Decimal("99000"), "premium": Decimal("299000"), "platinum": Decimal("799000")}
+            plan_price = _plan_prices.get(td["plan_code"], Decimal("0"))
             sub = Subscription(
                 id=str(uuid4()), tenant_id=tid, plan_code=td["plan_code"],
                 status="active" if td["status"] == "active" else "suspended",
@@ -624,9 +639,10 @@ async def main():
             session.add_all(more_events)
 
             for m in td["members"]:
+                role = "tenant_owner" if m["role"] == "owner" else "employee"
                 membership = Membership(
                     id=str(uuid4()), tenant_id=tid, user_id=m["user_id"],
-                    role_name=m["role"], status="active",
+                    role_name=role, status="active",
                     joined_at=NOW - timedelta(days=30),
                     created_at=NOW, updated_at=NOW,
                 )
@@ -1107,6 +1123,11 @@ async def main():
         print("  Password: siti123")
         print("  Name: Siti Nurhaliza")
         print("  Role: Akuntan")
+        print()
+        print()
+        print("KODE BERGABUNG ORGANISASI:")
+        for td in TENANTS_DATA:
+            print(f"  {td['name']}: ID={td.get('id', '?')[:8]}..., Kode={td.get('join_code', '?')}")
         print()
         print("-" * 50)
         total = sum(

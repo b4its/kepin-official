@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
@@ -19,6 +19,7 @@ from kepin.db.models import (
     OrganizationSetting,
     Branch,
     Membership,
+    TenantSidebarSetting,
     User,
     Subscription,
 )
@@ -134,6 +135,7 @@ class BillingResponse(ApiSchema):
 @router.get("/organization", response_model=OrganizationSettingResponse, summary="Pengaturan Organisasi", description="Mengembalikan pengaturan organisasi tenant")
 async def get_organization(
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     org = (
@@ -150,6 +152,7 @@ async def get_organization(
 async def update_organization(
     body: OrganizationSettingUpdate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     org = (
@@ -173,6 +176,7 @@ async def update_organization(
 @router.get("/branches", response_model=list[BranchResponse], summary="Daftar Cabang", description="Mengembalikan daftar cabang tenant")
 async def list_branches(
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     rows = (
@@ -292,6 +296,7 @@ async def delete_branch(
 @router.get("/members", response_model=list[MemberResponse], summary="Daftar Anggota", description="Mengembalikan daftar anggota tenant")
 async def list_members(
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     stmt = (
@@ -300,13 +305,13 @@ async def list_members(
             Membership.user_id,
             User.name,
             User.email,
-            Membership.role,
+            Membership.role_name,
             Membership.status,
-            Membership.created_at,
+            Membership.joined_at,
         )
         .join(User, User.id == Membership.user_id)
         .where(Membership.tenant_id == tenant.id)
-        .order_by(Membership.created_at)
+        .order_by(Membership.joined_at)
     )
     rows = (await session.execute(stmt)).all()
     return [
@@ -327,6 +332,7 @@ async def list_members(
 async def add_member(
     body: MemberCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     user = (
@@ -359,12 +365,14 @@ async def add_member(
         raise ConflictError(message="User sudah menjadi anggota tenant ini")
 
     now = datetime.now(timezone.utc)
+    role = "tenant_owner" if body.role == "owner" else "employee"
     membership = Membership(
         id=new_uuid(),
         tenant_id=tenant.id,
         user_id=user.id,
-        role=body.role,
+        role_name=role,
         status="active",
+        joined_at=now,
         created_at=now,
         updated_at=now,
     )
@@ -377,9 +385,9 @@ async def add_member(
         user_id=str(user.id),
         user_name=user.name,
         user_email=user.email,
-        role_name=membership.role,
+        role_name=membership.role_name,
         status=membership.status,
-        joined_at=membership.created_at,
+        joined_at=membership.joined_at,
     )
 
 
@@ -388,6 +396,7 @@ async def update_member_role(
     body: MemberUpdate,
     membership_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     membership = (
@@ -401,7 +410,8 @@ async def update_member_role(
     if not membership:
         raise NotFoundError(message="Anggota tidak ditemukan")
 
-    membership.role = body.role
+    role = "tenant_owner" if body.role == "owner" else "employee"
+    membership.role_name = role
     membership.updated_at = datetime.now(timezone.utc)
 
     await session.commit()
@@ -416,9 +426,9 @@ async def update_member_role(
         user_id=str(membership.user_id) if user else "",
         user_name=user.name if user else None,
         user_email=user.email if user else None,
-        role_name=membership.role,
+        role_name=membership.role_name,
         status=membership.status,
-        joined_at=membership.created_at,
+        joined_at=membership.joined_at,
     )
 
 
@@ -426,6 +436,7 @@ async def update_member_role(
 async def remove_member(
     membership_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     membership = (
@@ -445,11 +456,8 @@ async def remove_member(
 @router.get("/roles", response_model=list[RoleResponse], summary="Daftar Peran", description="Mengembalikan daftar peran yang tersedia")
 async def list_roles():
     return [
-        {"id": "owner", "name": "Pemilik"},
-        {"id": "manager", "name": "Manajer"},
-        {"id": "accountant", "name": "Akuntan"},
-        {"id": "staff", "name": "Staf"},
-        {"id": "viewer", "name": "Viewer"},
+        {"id": "tenant_owner", "name": "Pemilik"},
+        {"id": "employee", "name": "Karyawan"},
     ]
 
 
@@ -464,6 +472,7 @@ async def list_integrations(
 @router.get("/billing", response_model=BillingResponse, summary="Informasi Tagihan", description="Mengembalikan informasi langganan dan tagihan tenant")
 async def get_billing(
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     sub = (
@@ -490,7 +499,62 @@ async def get_billing(
         tenant_id=tenant.id,
         plan_code=sub.plan_code,
         status=sub.status,
-        start_date=sub.start_date,
-        end_date=sub.end_date,
+        start_date=sub.current_period_start.date() if sub.current_period_start else None,
+        end_date=sub.current_period_end.date() if sub.current_period_end else None,
         features=[],
     )
+
+
+# ── Sidebar Settings ──────────────────────────────────────────────────────
+
+
+@router.get("/sidebar-settings", summary="Pengaturan Sidebar", description="Mengembalikan pengaturan visibilitas item sidebar untuk tenant")
+async def get_sidebar_settings(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    row = (
+        await session.execute(
+            select(TenantSidebarSetting).where(TenantSidebarSetting.tenant_id == tenant.id)
+        )
+    ).scalar_one_or_none()
+    enabled_items = row.enabled_items if row else {}
+    return {"tenantId": str(tenant.id), "enabledItems": enabled_items}
+
+
+@router.put("/sidebar-settings", summary="Simpan Pengaturan Sidebar", description="Menyimpan pengaturan visibilitas item sidebar (hanya tenant_owner)")
+async def update_sidebar_settings(
+    body: dict,
+    tenant: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    if membership.role_name != "tenant_owner":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Hanya tenant_owner yang dapat mengubah pengaturan sidebar")
+
+    enabled_items: dict = body.get("enabledItems", {})
+    now = datetime.now(timezone.utc)
+
+    row = (
+        await session.execute(
+            select(TenantSidebarSetting).where(TenantSidebarSetting.tenant_id == tenant.id)
+        )
+    ).scalar_one_or_none()
+
+    if row:
+        row.enabled_items = enabled_items
+        row.updated_at = now
+        row.updated_by = membership.user_id
+    else:
+        row = TenantSidebarSetting(
+            tenant_id=tenant.id,
+            enabled_items=enabled_items,
+            updated_at=now,
+            updated_by=membership.user_id,
+        )
+        session.add(row)
+
+    await session.commit()
+    return {"tenantId": str(tenant.id), "enabledItems": enabled_items, "message": "Pengaturan sidebar berhasil disimpan"}

@@ -8,12 +8,13 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str, to_quantity, ZERO
 from kepin.db.models import (
+    Membership,
     Product,
     InventoryLocation,
     StockBalance,
@@ -113,6 +114,23 @@ class StockAdjustmentCreate(ApiSchema):
     reason: str = ""
 
 
+def _product_schema(p: Product) -> ProductSchema:
+    return ProductSchema(
+        id=str(p.id),
+        sku=p.sku,
+        name=p.name,
+        category=p.category or "",
+        unit=p.unit or "",
+        sale_price=money_str(p.sale_price),
+        cost_price=money_str(p.cost_price),
+        minimum_stock=money_str(p.minimum_stock),
+        status=p.status,
+        version=p.version or 1,
+        created_at=p.created_at,
+        updated_at=p.updated_at,
+    )
+
+
 # ── Products ─────────────────────────────────────────────────────────
 
 
@@ -120,6 +138,7 @@ class StockAdjustmentCreate(ApiSchema):
 async def list_products(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     params: ListParams = Depends(),
 ):
     conditions = [Product.tenant_id == tenant.id]
@@ -141,7 +160,7 @@ async def list_products(
     )
     rows = (await session.execute(stmt)).scalars().all()
 
-    items = [ProductSchema.model_validate(p) for p in rows]
+    items = [_product_schema(p) for p in rows]
     return make_paginated(items, params.page, params.page_size, total)
 
 
@@ -175,7 +194,7 @@ async def create_product(
     session.add(product)
     await session.commit()
     await session.refresh(product)
-    return ProductSchema.model_validate(product)
+    return _product_schema(product)
 
 
 @router.get("/products/{product_id}", response_model=ProductSchema)
@@ -190,7 +209,7 @@ async def get_product(
     product = p.scalar_one_or_none()
     if not product:
         raise NotFoundError(message="Produk tidak ditemukan")
-    return ProductSchema.model_validate(product)
+    return _product_schema(product)
 
 
 @router.patch("/products/{product_id}", response_model=ProductSchema)
@@ -219,7 +238,7 @@ async def update_product(
 
     await session.commit()
     await session.refresh(product)
-    return ProductSchema.model_validate(product)
+    return _product_schema(product)
 
 
 @router.delete("/products/{product_id}", status_code=204)
@@ -236,7 +255,10 @@ async def delete_product(
         raise NotFoundError(message="Produk tidak ditemukan")
 
     cnt = await session.execute(
-        select(func.count(StockMovement.id)).where(StockMovement.product_id == product_id)
+        select(func.count(StockMovement.id)).where(
+            StockMovement.product_id == product_id,
+            StockMovement.tenant_id == tenant.id,
+        )
     )
     if cnt.scalar() or 0 > 0:
         raise ConflictError(message="Produk memiliki riwayat pergerakan stok")
@@ -251,6 +273,7 @@ async def delete_product(
 @router.get("/stock-balances", response_model=list[StockBalanceSchema])
 async def list_stock_balances(
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     stmt = (
@@ -292,6 +315,7 @@ async def list_stock_balances(
 @router.get("/stock-movements", response_model=PaginatedResponse[StockMovementSchema])
 async def list_stock_movements(
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     params: ListParams = Depends(),
 ):
@@ -305,11 +329,17 @@ async def list_stock_movements(
     stmt = (
         select(
             StockMovement,
-            Product.name,
-            InventoryLocation.name,
+            Product.name.label("product_name"),
+            InventoryLocation.name.label("location_name"),
         )
-        .join(Product, StockMovement.product_id == Product.id)
-        .join(InventoryLocation, StockMovement.location_id == InventoryLocation.id)
+        .join(Product, and_(
+            StockMovement.product_id == Product.id,
+            Product.tenant_id == tenant.id,
+        ))
+        .join(InventoryLocation, and_(
+            StockMovement.location_id == InventoryLocation.id,
+            InventoryLocation.tenant_id == tenant.id,
+        ))
         .where(where)
         .order_by(StockMovement.created_at.desc())
         .offset((params.page - 1) * params.page_size)
@@ -324,9 +354,9 @@ async def list_stock_movements(
             movement_date=m.movement_date,
             type=m.type,
             product_id=str(m.product_id),
-        product_name=p.name,
+            product_name=product_name,
             location_id=str(m.location_id),
-            location_name=ln,
+            location_name=location_name,
             quantity=money_str(m.quantity),
             before_stock=money_str(m.before_stock),
             after_stock=money_str(m.after_stock),
@@ -336,7 +366,7 @@ async def list_stock_movements(
             reference_id=str(m.reference_id) if m.reference_id else None,
             created_at=m.created_at,
         )
-        for m, pn, ln in rows
+        for m, product_name, location_name in rows
     ]
     return make_paginated(items, params.page, params.page_size, total)
 
@@ -444,7 +474,7 @@ async def create_stock_receipt(
         movement_date=mov.movement_date,
         type=mov.type,
         product_id=str(mov.product_id),
-        product_name=pn,
+        product_name=p.name,
         location_id=str(mov.location_id),
         location_name=location.name,
         quantity=money_str(mov.quantity),
