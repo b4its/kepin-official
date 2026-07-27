@@ -1,28 +1,33 @@
 <script lang="ts">
   import { Eye, EyeOff, Lock, Mail } from '@lucide/svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Logo from '$lib/components/ui/Logo.svelte';
+  import { login } from '$lib/stores/auth';
 
   let email = $state('');
   let password = $state('');
   let showPassword = $state(false);
   let loading = $state(false);
+  let error = $state('');
 
-  async function handleLogin(e: Event) {
+  function handleLogin(e: Event) {
     e.preventDefault();
+    error = '';
     loading = true;
-    await new Promise(r => setTimeout(r, 1000));
+    const result = login(email, password);
     loading = false;
-    window.location.href = '/app/toko-maju';
+    if (result.success) {
+      window.location.href = '/app/toko-maju';
+    } else {
+      error = result.error || 'Login gagal';
+    }
   }
 </script>
 
 <div class="card p-6 sm:p-8">
   <div class="text-center mb-6">
     <a href="/" class="inline-flex items-center gap-2 mb-4">
-      <div class="w-8 h-8 bg-[var(--color-kepin-red)] flex items-center justify-center rounded">
-        <span class="text-white font-bold text-sm">K</span>
-      </div>
-      <span class="font-bold text-lg">KePin</span>
+      <Logo height={32} />
     </a>
     <h1 class="text-2xl font-bold">Masuk</h1>
     <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">Masuk ke workspace KePin Anda</p>
@@ -77,6 +82,10 @@
       </label>
       <a href="/auth/forgot-password" class="text-[hsl(var(--primary))] hover:underline">Lupa password?</a>
     </div>
+
+    {#if error}
+      <p class="text-sm text-[var(--color-kepin-danger)] bg-[var(--color-kepin-danger)]/10 px-3 py-2 rounded">{error}</p>
+    {/if}
 
     <Button type="submit" class="w-full" {loading}>
       Masuk

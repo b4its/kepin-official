@@ -14,7 +14,7 @@
 
 <PageHeader title="Billing" description="Langganan dan tagihan" breadcrumbs={[{ label: 'Pengaturan' }, { label: 'Billing' }]} />
 
-<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6 max-w-lg">
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 max-w-lg">
   <MetricCard label="Paket" value={0} format="number" />
   <MetricCard label="Tagihan Bulan Ini" value={499000} format="currency" />
   <MetricCard label="Pengguna Terpakai" value={3} format="number" unit="/5" />

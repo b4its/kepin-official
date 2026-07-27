@@ -17,6 +17,7 @@ import {
   UserCog,
   AlertTriangle,
   Activity,
+  Bell,
   type Icon,
 } from '@lucide/svelte';
 
@@ -91,6 +92,7 @@ export const clientNavigation: NavigationGroup[] = [
     label: 'Kontrol',
     items: [
       { label: 'Audit Trail', href: '/audit', icon: Shield },
+      { label: 'Notifikasi', href: '/notifications', icon: Bell },
       { label: 'Pengaturan', href: '/settings/organization', icon: Settings },
     ],
   },
@@ -104,6 +106,7 @@ export const adminNavigation: NavigationGroup[] = [
       { label: 'Tenant', href: '/admin/tenants', icon: Building2 },
       { label: 'Pengguna', href: '/admin/users', icon: Users },
       { label: 'Langganan', href: '/admin/subscriptions', icon: CreditCard },
+      { label: 'Notifikasi', href: '/admin/notifications', icon: Bell },
     ],
   },
   {

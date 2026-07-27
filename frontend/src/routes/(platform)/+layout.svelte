@@ -1,11 +1,11 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import AdminShell from '$lib/components/layout/AdminShell.svelte';
 
   let { children } = $props();
-  let path = $state('/admin');
+  const path = $derived($page.url.pathname);
 
   function navigate(href: string) {
-    path = href;
     window.location.href = href;
   }
 </script>

@@ -1,6 +1,7 @@
 <script lang="ts" generics="T">
   import { cn } from '$lib/utils/cn';
-  import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import type { Snippet } from 'svelte';
+  import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Search, X } from '@lucide/svelte';
   import Button from '$lib/components/ui/Button.svelte';
 
   type Column = {
@@ -26,6 +27,9 @@
     sortDir?: 'asc' | 'desc';
     class?: string;
     rowLink?: (item: T) => string;
+    rowActions?: Snippet<[item: T, index: number]>;
+    searchable?: boolean;
+    searchFields?: string[];
   };
 
   let {
@@ -34,7 +38,7 @@
     loading = false,
     emptyMessage = 'Tidak ada data',
     page = 1,
-    pageSize = 10,
+    pageSize = 5,
     total = 0,
     onpagechange,
     onsort,
@@ -42,13 +46,64 @@
     sortDir = 'asc',
     class: className = '',
     rowLink,
+    rowActions,
+    searchable = false,
+    searchFields,
   }: Props = $props();
 
-  let totalPages = $derived(Math.max(1, Math.ceil(total / pageSize)));
+  let searchTerm = $state('');
+  let currentPage = $state(page);
+
+  let filteredData = $derived(
+    searchTerm
+      ? data.filter(item => {
+          const q = searchTerm.toLowerCase();
+          const keys = searchFields ?? columns.map(c => c.key);
+          return keys.some(key => {
+            const val = item[key as keyof typeof item];
+            return val != null && String(val).toLowerCase().includes(q);
+          });
+        })
+      : data
+  );
+
+  let displayTotal = $derived(searchTerm ? filteredData.length : data.length);
+  let displayTotalPages = $derived(Math.max(1, Math.ceil(displayTotal / pageSize)));
+
+  let paginatedData = $derived(
+    filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  );
+
+  $effect(() => {
+    searchTerm;
+    currentPage = 1;
+  });
+
+  function goToPage(p: number) {
+    currentPage = p;
+    onpagechange?.(p);
+  }
 </script>
 
-<div class={cn('overflow-x-auto rounded-lg border border-[hsl(var(--border))]', className)}>
-  <table class="w-full caption-bottom text-sm">
+<div class={cn('rounded-lg border border-[hsl(var(--border))]', className)}>
+  {#if searchable}
+    <div class="flex items-center gap-2 px-3 py-2 border-b border-[hsl(var(--border))]">
+      <Search class="w-4 h-4 shrink-0 text-[hsl(var(--muted-foreground))]" />
+      <input
+        type="search"
+        bind:value={searchTerm}
+        placeholder="Cari..."
+        class="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-[hsl(var(--muted-foreground))]"
+      />
+      {#if searchTerm}
+        <button onclick={() => searchTerm = ''} class="shrink-0 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+          <X class="w-4 h-4" />
+        </button>
+      {/if}
+    </div>
+  {/if}
+  <div class="overflow-x-auto">
+  <table class="w-full min-w-[640px] caption-bottom text-sm">
     <thead class="bg-[hsl(var(--muted))]">
       <tr>
         {#each columns as col}
@@ -78,6 +133,9 @@
             {/if}
           </th>
         {/each}
+        {#if rowActions}
+          <th class="h-10 px-3 text-left align-middle font-medium text-[hsl(var(--muted-foreground))] whitespace-nowrap w-20"></th>
+        {/if}
       </tr>
     </thead>
     <tbody>
@@ -91,14 +149,14 @@
             {/each}
           </tr>
         {/each}
-      {:else if data.length === 0}
+      {:else if filteredData.length === 0}
         <tr class="border-t border-[hsl(var(--border))]">
-          <td colspan={columns.length} class="h-32 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            {emptyMessage}
+          <td colspan={columns.length + (rowActions ? 1 : 0)} class="h-32 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            {searchTerm ? 'Tidak ada hasil pencarian' : emptyMessage}
           </td>
         </tr>
       {:else}
-        {#each data as item, i}
+        {#each paginatedData as item, i}
           <tr
             class={cn(
               'border-t border-[hsl(var(--border))] transition-colors',
@@ -115,37 +173,43 @@
                 )}
               >
                 {#if col.render}
-                {@html col.render(item)}
-              {:else}
-                {String(item[col.key as keyof typeof item] ?? '-')}
-              {/if}
+                  {@html col.render(item)}
+                {:else}
+                  {String(item[col.key as keyof typeof item] ?? '-')}
+                {/if}
               </td>
             {/each}
+            {#if rowActions}
+              <td class="p-3 text-right whitespace-nowrap">
+                {@render rowActions(item, i)}
+              </td>
+            {/if}
           </tr>
         {/each}
       {/if}
     </tbody>
   </table>
-  {#if total > pageSize}
-    <div class="flex items-center justify-between px-3 py-2 border-t border-[hsl(var(--border))]">
+  </div>
+  {#if displayTotal > pageSize}
+    <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-[hsl(var(--border))]">
       <p class="text-xs text-[hsl(var(--muted-foreground))]">
-        {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} dari {total}
+        {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, displayTotal)} dari {displayTotal}
       </p>
       <div class="flex items-center gap-1">
         <Button
           variant="ghost"
           size="sm"
-          disabled={page <= 1}
-          onclick={() => onpagechange?.(page - 1)}
+          disabled={currentPage <= 1}
+          onclick={() => goToPage(currentPage - 1)}
         >
           <ChevronLeft class="w-4 h-4" />
         </Button>
-        <span class="text-xs text-[hsl(var(--muted-foreground))] px-2">{page}</span>
+        <span class="text-xs text-[hsl(var(--muted-foreground))] px-2">{currentPage}</span>
         <Button
           variant="ghost"
           size="sm"
-          disabled={page >= totalPages}
-          onclick={() => onpagechange?.(page + 1)}
+          disabled={currentPage >= displayTotalPages}
+          onclick={() => goToPage(currentPage + 1)}
         >
           <ChevronRight class="w-4 h-4" />
         </Button>

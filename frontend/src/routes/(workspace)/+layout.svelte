@@ -1,14 +1,14 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import WorkspaceShell from '$lib/components/layout/WorkspaceShell.svelte';
 
   let { children } = $props();
-  let path = $state('/app/toko-maju');
   let tenantName = $state('Toko Maju Jaya');
+  const path = $derived($page.url.pathname);
+  const tenantSlug = $derived($page.params.tenantSlug || 'toko-maju');
 
   function navigate(href: string) {
-    const slug = 'toko-maju';
-    path = `/app/${slug}${href}`;
-    window.location.href = path;
+    window.location.href = `/app/${tenantSlug}${href}`;
   }
 </script>
 

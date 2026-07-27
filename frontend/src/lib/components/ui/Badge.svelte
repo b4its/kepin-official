@@ -17,7 +17,7 @@
     success: 'bg-[var(--color-kepin-green)] text-white',
     info: 'bg-[hsl(var(--primary))] text-white',
     warning: 'bg-[var(--color-kepin-yellow)] text-[var(--color-ink)]',
-    danger: 'bg-[var(--color-kepin-red)] text-white',
+    danger: 'bg-[var(--color-kepin-danger)] text-white',
     neutral: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
   };
 </script>

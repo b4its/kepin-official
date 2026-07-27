@@ -1,16 +1,14 @@
 <script lang="ts">
   import ThemeMenu from '$lib/components/layout/ThemeMenu.svelte';
+  import Logo from '$lib/components/ui/Logo.svelte';
 </script>
 
-<footer class="bg-[var(--color-ink)] text-white mt-auto">
+<footer class="bg-[#171714] text-white mt-auto">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
       <div class="col-span-2 md:col-span-1">
         <a href="/" class="flex items-center gap-2 mb-4">
-          <div class="w-8 h-8 bg-[var(--color-kepin-red)] flex items-center justify-center">
-            <span class="text-white font-bold text-sm">K</span>
-          </div>
-          <span class="font-bold text-lg">KePin</span>
+          <Logo height={28} />
         </a>
         <p class="text-sm text-gray-400 leading-relaxed">
           Keuangan Pintar untuk UMKM Indonesia. Transparan, aman, dan terpercaya.

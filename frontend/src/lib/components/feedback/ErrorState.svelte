@@ -21,7 +21,7 @@
 </script>
 
 <div class={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}>
-  <AlertTriangle class="w-12 h-12 text-[var(--color-kepin-red)] mb-4" />
+  <AlertTriangle class="w-12 h-12 text-[var(--color-kepin-danger)] mb-4" />
   <h3 class="text-base font-medium text-[hsl(var(--foreground))]">{title}</h3>
   <p class="mt-1 text-sm text-[hsl(var(--muted-foreground))] max-w-sm">{description}</p>
   {#if requestId}

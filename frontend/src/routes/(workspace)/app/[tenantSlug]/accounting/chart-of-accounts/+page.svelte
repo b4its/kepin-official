@@ -2,22 +2,53 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
+  import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+  import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
+  import { accounts } from '$lib/stores/data';
 
-  const accounts = [
-    { code: '1-1000', name: 'Kas', type: 'Asset', balance: 15000000, status: 'active' },
-    { code: '1-1100', name: 'Bank BCA', type: 'Asset', balance: 45300000, status: 'active' },
-    { code: '1-2000', name: 'Piutang Usaha', type: 'Asset', balance: 8500000, status: 'active' },
-    { code: '1-3000', name: 'Persediaan', type: 'Asset', balance: 12000000, status: 'active' },
-    { code: '2-1000', name: 'Utang Usaha', type: 'Liability', balance: -5000000, status: 'active' },
-    { code: '3-1000', name: 'Modal', type: 'Equity', balance: -50000000, status: 'active' },
-    { code: '4-1000', name: 'Penjualan', type: 'Income', balance: -45200000, status: 'active' },
-    { code: '5-1000', name: 'Beban Gaji', type: 'Expense', balance: 15000000, status: 'active' },
-  ];
+  let showModal = $state(false);
+  let editingIndex = $state<number | null>(null);
+  let deleteIndex = $state<number | null>(null);
+
+  let form = $state({ code: '', name: '', type: 'Asset', balance: 0, status: 'active' });
+
+  function openCreate() {
+    form = { code: '', name: '', type: 'Asset', balance: 0, status: 'active' };
+    editingIndex = null;
+    showModal = true;
+  }
+
+  function openEdit(i: number) {
+    form = { ...$accounts[i] };
+    editingIndex = i;
+    showModal = true;
+  }
+
+  function save() {
+    accounts.update(list => {
+      let updated: any[];
+      if (editingIndex !== null) {
+        updated = list.map((a, i) => i === editingIndex ? { ...a, ...form } : a);
+      } else {
+        updated = [...list, { id: 'ACC-'+String(Date.now()).slice(-6), code: form.code, name: form.name, type: form.type.toLowerCase(), balance: form.balance, isSystem: false, status: form.status }];
+      }
+      return updated;
+    });
+    showModal = false;
+  }
+
+  function confirmDelete() {
+    if (deleteIndex !== null) {
+      accounts.update(list => list.filter((_, i) => i !== deleteIndex));
+      deleteIndex = null;
+    }
+  }
 </script>
 
 <PageHeader title="Chart of Accounts" description="Daftar akun akuntansi" breadcrumbs={[{ label: 'Akuntansi' }, { label: 'Chart of Accounts' }]}>
   {#snippet actions()}
-    <Button variant="secondary">+ Akun Baru</Button>
+    <Button onclick={openCreate}>+ Akun Baru</Button>
   {/snippet}
 </PageHeader>
 
@@ -29,6 +60,52 @@
     { key: 'balance', label: 'Saldo', align: 'right', render: (item: any) => `Rp ${Math.abs(item.balance).toLocaleString('id-ID')}` },
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
-  data={accounts}
+  data={$accounts}
   total={24}
+  searchable={true}
+>
+  {#snippet rowActions(item: any, i: number)}
+    <button onclick={() => openEdit(i)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
+    <button onclick={() => deleteIndex = i} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
+  {/snippet}
+</DataTable>
+
+<Modal title={editingIndex !== null ? 'Edit Akun' : 'Akun Baru'} open={showModal} onclose={() => showModal = false}>
+  <form onsubmit={save} class="space-y-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label-text">Kode</label>
+        <input type="text" bind:value={form.code} class="input-field mt-1" required />
+      </div>
+      <div>
+        <label class="label-text">Tipe</label>
+        <select bind:value={form.type} class="input-field mt-1">
+          <option value="Asset">Asset</option>
+          <option value="Liability">Liability</option>
+          <option value="Equity">Equity</option>
+          <option value="Income">Income</option>
+          <option value="Expense">Expense</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="label-text">Nama Akun</label>
+      <input type="text" bind:value={form.name} class="input-field mt-1" required />
+    </div>
+    <div>
+      <label class="label-text">Saldo Awal (Rp)</label>
+        <CurrencyInput value={form.balance} onchange={(v) => form.balance = v} class="input-field mt-1" />
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
+      <Button type="submit">Simpan</Button>
+    </div>
+  </form>
+</Modal>
+
+<ConfirmDialog
+  open={deleteIndex !== null}
+  onclose={() => deleteIndex = null}
+  onconfirm={confirmDelete}
+  message="Hapus akun ini? Tindakan ini tidak dapat dibatalkan."
 />

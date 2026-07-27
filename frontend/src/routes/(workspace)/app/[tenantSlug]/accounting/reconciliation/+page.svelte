@@ -22,4 +22,5 @@
   ]}
   data={reconciliations}
   total={12}
+  searchable={true}
 />

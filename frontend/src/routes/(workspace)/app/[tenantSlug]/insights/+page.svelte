@@ -1,7 +1,37 @@
 <script lang="ts">
+  import { transactions } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
+  import MetricCard from '$lib/components/data-display/MetricCard.svelte';
+  import DateRangeFilter from '$lib/components/filters/DateRangeFilter.svelte';
+  import BarChart from '$lib/components/charts/BarChart.svelte';
+  import type { Preset } from '$lib/utils/dateRange';
   import { Activity, TrendingUp, AlertTriangle, Lightbulb } from '@lucide/svelte';
   import Button from '$lib/components/ui/Button.svelte';
+
+  let startDate = $state('');
+  let endDate = $state('');
+
+  function onRangeChange(preset: Preset, start: string, end: string) {
+    startDate = start;
+    endDate = end;
+  }
+
+  $effect(() => {
+    const now = new Date();
+    const end = now.toISOString().slice(0, 10);
+    const start = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+    if (!startDate) { startDate = start; endDate = end; }
+  });
+
+  const filtered = $derived(
+    $transactions.filter(t => t.date >= startDate && t.date <= endDate)
+  );
+
+  const monthlyIncome = $derived(() => {
+    const months = ['Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul'];
+    const data = [32000000, 35000000, 38000000, 41000000, 45000000, 45200000];
+    return { labels: months, data };
+  });
 
   const insights = [
     {
@@ -35,9 +65,30 @@
       cta: 'Analisis Harga',
     },
   ];
+
+  const totalIncome = $derived(filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
+  const totalExpense = $derived(filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
 </script>
 
 <PageHeader title="AI Insight" description="Rekomendasi dan prediksi bisnis berbasis AI" breadcrumbs={[{ label: 'AI Insight' }]} />
+
+<div class="mb-6">
+  <DateRangeFilter onChange={onRangeChange} />
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+  <MetricCard label="Pendapatan Periode Ini" value={totalIncome} format="currency" />
+  <MetricCard label="Beban Periode Ini" value={totalExpense} format="currency" />
+  <MetricCard label="Transaksi" value={filtered.length} format="number" />
+</div>
+
+<div class="card p-5 mb-6">
+  <h3 class="font-semibold mb-4">Tren Pendapatan (6 Bulan)</h3>
+  <BarChart labels={monthlyIncome().labels} datasets={[
+    { label: 'Pendapatan', data: monthlyIncome().data, color: '#059669' },
+  ]} height={200} yFormat="currency" />
+  <p class="text-xs text-[hsl(var(--muted-foreground))] mt-2">Prediksi bulan depan: <strong class="text-[var(--color-kepin-green)]">Rp 48-56 Juta</strong> (naik 6-15%)</p>
+</div>
 
 <div class="space-y-4">
   {#each insights as insight}

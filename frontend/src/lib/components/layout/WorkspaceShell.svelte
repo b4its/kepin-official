@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Building2 } from '@lucide/svelte';
   import Sidebar from '$lib/components/layout/Sidebar.svelte';
   import WorkspaceSidebarContent from '$lib/components/layout/WorkspaceSidebar.svelte';
   import TopBar from '$lib/components/layout/TopBar.svelte';
@@ -22,12 +21,31 @@
   }: Props = $props();
 
   let sidebarOpen = $state(false);
+  let sidebarCollapsed = $state(false);
   let branchOpen = $state(false);
+
+  function handleToggleSidebar() {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      sidebarCollapsed = !sidebarCollapsed;
+    } else {
+      sidebarOpen = !sidebarOpen;
+    }
+  }
 </script>
 
 <div class="flex h-screen overflow-hidden bg-[hsl(var(--background))]">
-  <div class="hidden lg:block w-64 shrink-0 border-r border-[hsl(var(--border))]">
-    <WorkspaceSidebarContent {currentPath} {tenantName} {onNavigate} />
+  <div
+    class="hidden lg:block shrink-0 border-r border-[hsl(var(--border))] transition-all duration-200"
+    class:w-16={sidebarCollapsed}
+    class:w-64={!sidebarCollapsed}
+  >
+    <WorkspaceSidebarContent
+      {currentPath}
+      {tenantName}
+      {onNavigate}
+      collapsed={sidebarCollapsed}
+      ontogglecollapsed={() => sidebarCollapsed = !sidebarCollapsed}
+    />
   </div>
 
   {#if sidebarOpen}
@@ -37,7 +55,7 @@
   {/if}
 
   <div class="flex flex-col flex-1 min-w-0">
-    <TopBar title={tenantName} {sidebarOpen} ontogglesidebar={() => sidebarOpen = !sidebarOpen}>
+    <TopBar title={tenantName} sidebarOpen={sidebarOpen} ontogglesidebar={handleToggleSidebar}>
       {#if topBarChildren}
         {@render topBarChildren()}
       {/if}
@@ -50,8 +68,8 @@
       </div>
     {/if}
 
-    <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-      <div class="max-w-7xl mx-auto">
+    <main class="flex-1 min-w-0 overflow-x-hidden overflow-y-auto p-3 sm:p-6 lg:p-8">
+      <div class="w-full max-w-7xl mx-auto">
         {@render children()}
       </div>
     </main>

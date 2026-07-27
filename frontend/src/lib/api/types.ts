@@ -166,6 +166,15 @@ export type StockMovement = {
   createdAt: string;
 };
 
+export type Notification = {
+  id: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  type: 'info' | 'warning' | 'success' | 'error';
+  link?: string;
+};
+
 export type AuditEvent = {
   id: string;
   timestamp: string;

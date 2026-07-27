@@ -2,17 +2,50 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
+  import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+  import { suppliers, createSupplier, updateSupplier, deleteSupplier } from '$lib/stores/data';
 
-  const suppliers = [
-    { name: 'PT Supplier ABC', email: 'abc@supplier.com', phone: '021-3456789', address: 'Jakarta', totalPo: 15, totalAmount: 52000000 },
-    { name: 'CV Bahan Baku', email: 'bahan@supplier.com', phone: '021-9876543', address: 'Bandung', totalPo: 8, totalAmount: 18500000 },
-    { name: 'UD Sumber Rejeki', email: 'rejeki@supplier.com', phone: '031-4567890', address: 'Surabaya', totalPo: 5, totalAmount: 9500000 },
-  ];
+  let showModal = $state(false);
+  let editingIndex = $state<number | null>(null);
+  let deleteIndex = $state<number | null>(null);
+
+  let form = $state({ name: '', email: '', phone: '', address: '', totalPo: 0, totalAmount: 0 });
+
+  function openCreate() {
+    form = { name: '', email: '', phone: '', address: '', totalPo: 0, totalAmount: 0 };
+    editingIndex = null;
+    showModal = true;
+  }
+
+  function openEdit(i: number) {
+    const item = $suppliers[i];
+    form = { name: item.name, email: item.email, phone: item.phone, address: item.address, totalPo: 0, totalAmount: 0 };
+    editingIndex = i;
+    showModal = true;
+  }
+
+  function save() {
+    const data = { name: form.name, email: form.email, phone: form.phone, address: form.address };
+    if (editingIndex !== null) {
+      updateSupplier($suppliers[editingIndex].id, data);
+    } else {
+      createSupplier(data);
+    }
+    showModal = false;
+  }
+
+  function confirmDelete() {
+    if (deleteIndex !== null) {
+      deleteSupplier($suppliers[deleteIndex].id);
+      deleteIndex = null;
+    }
+  }
 </script>
 
 <PageHeader title="Pemasok" description="Daftar pemasok" breadcrumbs={[{ label: 'Pembelian' }, { label: 'Pemasok' }]}>
   {#snippet actions()}
-    <Button variant="secondary">+ Pemasok Baru</Button>
+    <Button onclick={openCreate}>+ Pemasok Baru</Button>
   {/snippet}
 </PageHeader>
 
@@ -22,9 +55,48 @@
     { key: 'email', label: 'Email' },
     { key: 'phone', label: 'Telepon' },
     { key: 'address', label: 'Kota' },
-    { key: 'totalPo', label: 'PO', align: 'right' },
-    { key: 'totalAmount', label: 'Total', align: 'right', render: (item: any) => `Rp ${item.totalAmount.toLocaleString('id-ID')}` },
+    { key: 'createdAt', label: 'Bergabung' },
   ]}
-  data={suppliers}
+  data={$suppliers}
   total={12}
+  searchable={true}
+>
+  {#snippet rowActions(item: any, i: number)}
+    <button onclick={() => openEdit(i)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
+    <button onclick={() => deleteIndex = i} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
+  {/snippet}
+</DataTable>
+
+<Modal title={editingIndex !== null ? 'Edit Pemasok' : 'Pemasok Baru'} open={showModal} onclose={() => showModal = false}>
+  <form onsubmit={save} class="space-y-4">
+    <div>
+      <label class="label-text">Nama</label>
+      <input type="text" bind:value={form.name} class="input-field mt-1" required />
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label-text">Email</label>
+        <input type="email" bind:value={form.email} class="input-field mt-1" required />
+      </div>
+      <div>
+        <label class="label-text">Telepon</label>
+        <input type="text" bind:value={form.phone} class="input-field mt-1" required />
+      </div>
+    </div>
+    <div>
+      <label class="label-text">Kota</label>
+      <input type="text" bind:value={form.address} class="input-field mt-1" required />
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
+      <Button type="submit">Simpan</Button>
+    </div>
+  </form>
+</Modal>
+
+<ConfirmDialog
+  open={deleteIndex !== null}
+  onclose={() => deleteIndex = null}
+  onconfirm={confirmDelete}
+  message="Hapus pemasok ini? Tindakan ini tidak dapat dibatalkan."
 />

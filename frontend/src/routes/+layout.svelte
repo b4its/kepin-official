@@ -1,12 +1,12 @@
 <script lang="ts">
   import '../app.css';
-  import favicon from '$lib/assets/favicon.svg';
 
   let { children } = $props();
 </script>
 
 <svelte:head>
-  <link rel="icon" href={favicon} />
+  <link rel="icon" href="/media/logo/kepin-light.png" />
+  <link rel="apple-touch-icon" href="/media/logo/kepin-light.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />

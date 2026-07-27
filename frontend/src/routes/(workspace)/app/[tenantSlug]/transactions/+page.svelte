@@ -4,23 +4,54 @@
   import StatusBadge from '$lib/components/data-display/StatusBadge.svelte';
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
+  import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+  import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
+  import { transactions, createTransaction, updateTransaction, deleteTransaction } from '$lib/stores/data';
 
-  const transactions = [
-    { date: '25 Jul 2026', desc: 'Penjualan Tunai', account: 'Kas', type: 'income', amount: 2500000, status: 'posted' },
-    { date: '24 Jul 2026', desc: 'Pembelian Stok Barang', account: 'Persediaan', type: 'expense', amount: -1800000, status: 'posted' },
-    { date: '24 Jul 2026', desc: 'Pembayaran Listrik', account: 'Beban Listrik', type: 'expense', amount: -450000, status: 'posted' },
-    { date: '23 Jul 2026', desc: 'Penjualan Online', account: 'Bank BCA', type: 'income', amount: 3200000, status: 'posted' },
-    { date: '22 Jul 2026', desc: 'Gaji Karyawan', account: 'Beban Gaji', type: 'expense', amount: -5000000, status: 'draft' },
-  ];
+  let showModal = $state(false);
+  let editingIndex = $state<number | null>(null);
+  let deleteIndex = $state<number | null>(null);
+
+  let form = $state({ date: '', description: '', accountId: '', type: 'income', amount: 0, status: 'draft' });
+
+  function openCreate() {
+    form = { date: '', description: '', accountId: '', type: 'income', amount: 0, status: 'draft' };
+    editingIndex = null;
+    showModal = true;
+  }
+
+  function openEdit(i: number) {
+    const item = $transactions[i];
+    form = { date: item.date, description: item.description, accountId: item.accountId, type: item.type, amount: item.amount, status: item.status };
+    editingIndex = i;
+    showModal = true;
+  }
+
+  function save() {
+    if (editingIndex !== null) {
+      updateTransaction($transactions[editingIndex].id, { ...form });
+    } else {
+      createTransaction({ ...form });
+    }
+    showModal = false;
+  }
+
+  function confirmDelete() {
+    if (deleteIndex !== null) {
+      deleteTransaction($transactions[deleteIndex].id);
+      deleteIndex = null;
+    }
+  }
 </script>
 
 <PageHeader title="Transaksi" description="Catatan transaksi keuangan">
   {#snippet actions()}
-    <Button>+ Transaksi Baru</Button>
+    <Button onclick={openCreate}>+ Transaksi Baru</Button>
   {/snippet}
 </PageHeader>
 
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
   <MetricCard label="Total Pemasukan" value={5700000} format="currency" />
   <MetricCard label="Total Pengeluaran" value={-7250000} format="currency" />
   <MetricCard label="Rata-rata Harian" value={850000} format="currency" />
@@ -30,14 +61,61 @@
 <DataTable
   columns={[
     { key: 'date', label: 'Tanggal', sortable: true },
-    { key: 'desc', label: 'Deskripsi', sortable: true },
-    { key: 'account', label: 'Akun' },
-    { key: 'type', label: 'Tipe' },
+    { key: 'description', label: 'Deskripsi', sortable: true },
+    { key: 'accountId', label: 'Akun' },
+    { key: 'type', label: 'Tipe', render: (item: any) => item.type === 'income' ? 'Pemasukan' : 'Pengeluaran' },
     { key: 'amount', label: 'Jumlah', align: 'right', render: (item: any) => item.amount > 0 ? `Rp ${item.amount.toLocaleString('id-ID')}` : `(Rp ${Math.abs(item.amount).toLocaleString('id-ID')})` },
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
-  data={transactions}
+  data={$transactions}
   total={128}
   page={1}
-  pageSize={10}
+  pageSize={5}
+  searchable={true}
+>
+  {#snippet rowActions(item: any, i: number)}
+    <button onclick={() => openEdit(i)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
+    <button onclick={() => deleteIndex = i} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
+  {/snippet}
+</DataTable>
+
+<Modal title={editingIndex !== null ? 'Edit Transaksi' : 'Transaksi Baru'} open={showModal} onclose={() => showModal = false}>
+  <form onsubmit={save} class="space-y-4">
+    <div>
+      <label class="label-text">Tanggal</label>
+      <input type="date" bind:value={form.date} class="input-field mt-1" required />
+    </div>
+    <div>
+      <label class="label-text">Deskripsi</label>
+      <input type="text" bind:value={form.description} class="input-field mt-1" required />
+    </div>
+    <div>
+      <label class="label-text">Akun</label>
+      <input type="text" bind:value={form.accountId} class="input-field mt-1" required />
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label-text">Tipe</label>
+        <select bind:value={form.type} class="input-field mt-1">
+          <option value="income">Pemasukan</option>
+          <option value="expense">Pengeluaran</option>
+        </select>
+      </div>
+      <div>
+        <label class="label-text">Jumlah (Rp)</label>
+        <CurrencyInput value={form.amount} onchange={(v) => form.amount = v} class="input-field mt-1" required />
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
+      <Button type="submit">Simpan</Button>
+    </div>
+  </form>
+</Modal>
+
+<ConfirmDialog
+  open={deleteIndex !== null}
+  onclose={() => deleteIndex = null}
+  onconfirm={confirmDelete}
+  message="Hapus transaksi ini? Tindakan ini tidak dapat dibatalkan."
 />

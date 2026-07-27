@@ -1,20 +1,22 @@
 <script lang="ts">
   import { Shield, Lock, Layers, FileText, Server, Key } from '@lucide/svelte';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
+
+  const securityItems = [
+    { icon: Shield, title: 'Sertifikasi ISO 27001', desc: 'Sistem manajemen keamanan informasi bersertifikasi internasional.' },
+    { icon: Lock, title: 'Enkripsi End-to-End', desc: 'Data dienkripsi dengan TLS 1.3 saat transit dan AES-256 saat penyimpanan.' },
+    { icon: Layers, title: 'Isolasi Tenant', desc: 'Setiap organisasi memiliki workspace terpisah dengan akses yang dikontrol ketat.' },
+    { icon: FileText, title: 'Audit Trail Immutable', desc: 'Setiap perubahan tercatat secara permanen dan tidak dapat diubah oleh siapapun.' },
+    { icon: Key, title: 'Multi-Factor Auth', desc: 'Lapisan keamanan tambahan dengan MFA untuk akun dengan akses sensitif.' },
+    { icon: Server, title: 'Infrastruktur Aman', desc: 'Hosting di pusat data tier-4 dengan redundansi penuh dan pemantauan 24/7.' },
+  ];
 </script>
 
 <PageHeader title="Keamanan" breadcrumbs={[{ label: 'Beranda', href: '/' }, { label: 'Keamanan' }]} description="Komitmen kami terhadap keamanan dan privasi data Anda." />
 
 <div class="space-y-8 max-w-3xl">
   <div class="grid sm:grid-cols-2 gap-4">
-    {#each [
-      { icon: Shield, title: 'Sertifikasi ISO 27001', desc: 'Sistem manajemen keamanan informasi bersertifikasi internasional.' },
-      { icon: Lock, title: 'Enkripsi End-to-End', desc: 'Data dienkripsi dengan TLS 1.3 saat transit dan AES-256 saat penyimpanan.' },
-      { icon: Layers, title: 'Isolasi Tenant', desc: 'Setiap organisasi memiliki workspace terpisah dengan akses yang dikontrol ketat.' },
-      { icon: FileText, title: 'Audit Trail Immutable', desc: 'Setiap perubahan tercatat secara permanen dan tidak dapat diubah oleh siapapun.' },
-      { icon: Key, title: 'Multi-Factor Auth', desc: 'Lapisan keamanan tambahan dengan MFA untuk akun dengan akses sensitif.' },
-      { icon: Server, title: 'Infrastruktur Aman', desc: 'Hosting di pusat data tier-4 dengan redundansi penuh dan pemantauan 24/7.' },
-    ] as {icon: any; title: string; desc: string}[] as item}
+    {#each securityItems as item}
       <div class="card p-5">
         <item.icon class="w-6 h-6 text-[var(--color-kepin-red)] mb-3" />
         <h3 class="font-bold mb-1">{item.title}</h3>

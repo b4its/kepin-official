@@ -1,6 +1,7 @@
 <script lang="ts">
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import { Shield, CheckCircle, XCircle } from '@lucide/svelte';
+  import { adminTenants } from '$lib/stores/data';
 
   const checks = [
     { name: 'Audit Trail', status: 'active', desc: 'Semua tenant mencatat audit event' },

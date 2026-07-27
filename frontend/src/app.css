@@ -1,15 +1,18 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-canvas: #f4f0e6;
   --color-surface: #fffcf5;
   --color-ink: #171714;
   --color-muted: #68675f;
   --color-line: #d8d2c4;
-  --color-kepin-red: #d9362b;
+  --color-kepin-red: #059669;
   --color-kepin-blue: #1559c7;
   --color-kepin-yellow: #f2c230;
   --color-kepin-green: #247a4b;
+  --color-kepin-danger: #dc2626;
   --color-kepin-white: #ffffff;
 
   --font-display: "Space Grotesk", Arial, sans-serif;
@@ -28,7 +31,7 @@
   --card-foreground: 224 18% 12%;
   --popover: 0 0% 100%;
   --popover-foreground: 224 18% 12%;
-  --primary: 216 81% 43%;
+  --primary: 152 76% 40%;
   --primary-foreground: 0 0% 100%;
   --secondary: 220 14% 96%;
   --secondary-foreground: 224 18% 12%;
@@ -40,7 +43,7 @@
   --destructive-foreground: 0 0% 100%;
   --border: 220 13% 88%;
   --input: 220 13% 88%;
-  --ring: 216 81% 43%;
+  --ring: 152 76% 40%;
   --radius: 0.5rem;
 }
 
@@ -51,7 +54,7 @@
   --card-foreground: 210 20% 96%;
   --popover: 224 18% 13%;
   --popover-foreground: 210 20% 96%;
-  --primary: 211 100% 67%;
+  --primary: 152 80% 60%;
   --primary-foreground: 224 20% 9%;
   --secondary: 222 15% 18%;
   --secondary-foreground: 210 20% 96%;
@@ -63,8 +66,13 @@
   --destructive-foreground: 224 20% 9%;
   --border: 222 14% 25%;
   --input: 222 14% 25%;
-  --ring: 211 100% 67%;
+  --ring: 152 80% 60%;
   --radius: 0.5rem;
+  --color-canvas: #1a1d23;
+  --color-surface: #22262e;
+  --color-ink: #e8eaed;
+  --color-muted: #9aa0a6;
+  --color-line: #3c4043;
 }
 
 * {
@@ -81,6 +89,7 @@ body {
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 html.dark {

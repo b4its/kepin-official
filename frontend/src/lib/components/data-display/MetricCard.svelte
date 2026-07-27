@@ -72,8 +72,8 @@
             +{change.toFixed(1)}%
           </span>
         {:else if isPositive === false}
-          <TrendingDown class="w-3 h-3 text-[var(--color-kepin-red)]" />
-          <span class="text-xs text-[var(--color-kepin-red)]">
+          <TrendingDown class="w-3 h-3 text-[var(--color-kepin-danger)]" />
+          <span class="text-xs text-[var(--color-kepin-danger)]">
             {change.toFixed(1)}%
           </span>
         {:else}

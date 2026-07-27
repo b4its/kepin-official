@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Menu, X } from '@lucide/svelte';
   import ThemeMenu from '$lib/components/layout/ThemeMenu.svelte';
+  import Logo from '$lib/components/ui/Logo.svelte';
   import { landingAnchors } from '$lib/config/navigation';
 
   let mobileOpen = $state(false);
@@ -25,10 +26,7 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between h-16 sm:h-20">
       <a href="/" class="flex items-center gap-2">
-        <div class="w-8 h-8 bg-[var(--color-kepin-red)] flex items-center justify-center">
-          <span class="text-white font-bold text-sm">K</span>
-        </div>
-        <span class="font-bold text-lg tracking-tight text-[var(--color-ink)]">KePin</span>
+        <Logo height={28} />
       </a>
 
       <nav class="hidden lg:flex items-center gap-1">

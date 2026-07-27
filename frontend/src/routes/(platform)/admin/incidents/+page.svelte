@@ -2,6 +2,7 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import StatusBadge from '$lib/components/data-display/StatusBadge.svelte';
+  import { adminTenants } from '$lib/stores/data';
 
   const incidents = [
     { id: 'INC-001', severity: 'high', title: 'Failed login attempts >100 from single IP', status: 'resolved', date: '2026-07-25' },
@@ -21,4 +22,5 @@
     { key: 'date', label: 'Tanggal' },
   ]}
   data={incidents}
+  searchable={true}
 />

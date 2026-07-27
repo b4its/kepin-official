@@ -1,29 +1,35 @@
 <script lang="ts">
   import { Mail, User, Lock, Building2 } from '@lucide/svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Logo from '$lib/components/ui/Logo.svelte';
+  import { register } from '$lib/stores/auth';
 
   let name = $state('');
   let email = $state('');
   let company = $state('');
   let password = $state('');
   let loading = $state(false);
+  let error = $state('');
+  let success = $state(false);
 
-  async function handleRegister(e: Event) {
+  function handleRegister(e: Event) {
     e.preventDefault();
+    error = '';
     loading = true;
-    await new Promise(r => setTimeout(r, 1500));
+    const result = register(name, email, password);
     loading = false;
-    window.location.href = '/auth/login';
+    if (result.success) {
+      success = true;
+    } else {
+      error = result.error || 'Registrasi gagal';
+    }
   }
 </script>
 
 <div class="card p-6 sm:p-8">
   <div class="text-center mb-6">
     <a href="/" class="inline-flex items-center gap-2 mb-4">
-      <div class="w-8 h-8 bg-[var(--color-kepin-red)] flex items-center justify-center rounded">
-        <span class="text-white font-bold text-sm">K</span>
-      </div>
-      <span class="font-bold text-lg">KePin</span>
+      <Logo height={32} />
     </a>
     <h1 class="text-2xl font-bold">Daftar Gratis</h1>
     <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">Mulai trial 14 hari tanpa kartu kredit</p>
@@ -58,6 +64,14 @@
         <input id="reg-password" type="password" bind:value={password} placeholder="Min. 8 karakter" required minlength={8} class="input-field pl-10" />
       </div>
     </div>
+
+    {#if error}
+      <p class="text-sm text-[var(--color-kepin-danger)] bg-[var(--color-kepin-danger)]/10 px-3 py-2 rounded">{error}</p>
+    {/if}
+
+    {#if success}
+      <p class="text-sm text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded">Pendaftaran berhasil! <a href="/auth/login" class="underline font-medium">Masuk sekarang</a></p>
+    {/if}
 
     <Button type="submit" class="w-full" {loading}>
       Buat Akun & Mulai Trial

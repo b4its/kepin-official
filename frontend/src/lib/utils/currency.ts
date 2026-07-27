@@ -1,3 +1,5 @@
+const numberFormatter = new Intl.NumberFormat('id-ID');
+
 const idrFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
   currency: 'IDR',
@@ -13,7 +15,7 @@ const idrCompactFormatter = new Intl.NumberFormat('id-ID', {
 
 export function formatIDR(value: number | null | undefined): string {
   if (value === null || value === undefined) return '-';
-  return idrFormatter.format(value);
+  return `Rp ${numberFormatter.format(value)}`;
 }
 
 export function formatIDRCompact(value: number | null | undefined): string {
@@ -23,7 +25,7 @@ export function formatIDRCompact(value: number | null | undefined): string {
 
 export function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return '-';
-  return new Intl.NumberFormat('id-ID').format(value);
+  return numberFormatter.format(value);
 }
 
 export function formatPercent(value: number | null | undefined): string {

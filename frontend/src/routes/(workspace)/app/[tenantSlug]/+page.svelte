@@ -1,36 +1,103 @@
 <script lang="ts">
+  import { transactions, accounts } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
-  import { BarChart3, TrendingUp, AlertTriangle, Activity } from '@lucide/svelte';
+  import DateRangeFilter from '$lib/components/filters/DateRangeFilter.svelte';
+  import BarChart from '$lib/components/charts/BarChart.svelte';
+  import PieChart from '$lib/components/charts/PieChart.svelte';
+  import type { Preset } from '$lib/utils/dateRange';
+  import { TrendingUp, AlertTriangle, Activity } from '@lucide/svelte';
 
-  const recentTransactions = [
-    { date: '25 Jul', desc: 'Penjualan Tunai', account: 'Kas', amount: 2500000, type: 'income' },
-    { date: '24 Jul', desc: 'Pembelian Stok', account: 'Persediaan', amount: -1800000, type: 'expense' },
-    { date: '24 Jul', desc: 'Pembayaran Listrik', account: 'Beban', amount: -450000, type: 'expense' },
-    { date: '23 Jul', desc: 'Penjualan Online', account: 'Bank', amount: 3200000, type: 'income' },
-  ];
+  let datePreset = $state<Preset>('1week');
+  let startDate = $state('');
+  let endDate = $state('');
+
+  function onRangeChange(preset: Preset, start: string, end: string) {
+    datePreset = preset;
+    startDate = start;
+    endDate = end;
+  }
+
+  $effect(() => {
+    const now = new Date();
+    const end = now.toISOString().slice(0, 10);
+    const start = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+    if (!startDate) { startDate = start; endDate = end; }
+  });
+
+  const filtered = $derived(
+    $transactions.filter(t => {
+      const d = t.date;
+      return d >= startDate && d <= endDate;
+    })
+  );
+
+  const totalIncome = $derived(filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
+  const totalExpense = $derived(filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
+  const grossProfit = $derived(totalIncome - totalExpense);
+  const cashBalance = $derived($accounts.find(a => a.code === '101')?.balance ?? 0);
+
+  const chartLabels = $derived(() => {
+    const days: string[] = [];
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      days.push(d.toISOString().slice(0, 10));
+    }
+    return days;
+  });
+
+  const chartData = $derived(() => {
+    const labels = chartLabels();
+    const income: number[] = labels.map(d => filtered.filter(t => t.date === d && t.type === 'income').reduce((s, t) => s + t.amount, 0));
+    const expense: number[] = labels.map(d => filtered.filter(t => t.date === d && t.type === 'expense').reduce((s, t) => s + t.amount, 0));
+    return { labels, income, expense };
+  });
+
+  const recentList = $derived(filtered.map(t => ({
+    date: t.date,
+    desc: t.description,
+    account: accounts ? $accounts.find(a => a.id === t.accountId)?.name || t.accountId : t.accountId,
+    amount: t.type === 'income' ? t.amount : -t.amount,
+  })));
+
+  const expenseLabels = ['Operasional', 'Stok', 'Gaji', 'Marketing', 'Lainnya'];
+  const expenseValues = [8500000, 12000000, 5000000, 2800000, 1800000];
 </script>
 
-<PageHeader title="Dashboard" description="Toko Maju Jaya · Periode: Juli 2026 · Diperbarui: 2 menit lalu" />
+<PageHeader title="Dashboard" description="Toko Maju Jaya · Diperbarui: 2 menit lalu" />
+
+<div class="mb-6">
+  <DateRangeFilter onChange={onRangeChange} />
+</div>
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <MetricCard label="Pendapatan" value={45200000} previousValue={38900000} />
-  <MetricCard label="Pengeluaran" value={28100000} previousValue={26400000} />
-  <MetricCard label="Laba Kotor" value={17100000} previousValue={12500000} format="currency" />
-  <MetricCard label="Saldo Kas" value={45300000} format="currency" />
+  <MetricCard label="Pendapatan" value={totalIncome} previousValue={totalIncome * 0.9} />
+  <MetricCard label="Pengeluaran" value={totalExpense} previousValue={totalExpense * 0.9} />
+  <MetricCard label="Laba Kotor" value={grossProfit} format="currency" />
+  <MetricCard label="Saldo Kas" value={cashBalance} format="currency" />
 </div>
 
 <div class="grid lg:grid-cols-3 gap-6 mb-6">
   <div class="card p-5 lg:col-span-2">
-    <h3 class="font-semibold mb-4">Arus Kas (30 Hari)</h3>
-    <div class="h-48 bg-[hsl(var(--muted))] rounded flex items-center justify-center">
-      <BarChart3 class="w-8 h-8 text-[hsl(var(--muted-foreground))]" />
-    </div>
+    <h3 class="font-semibold mb-4">Arus Kas Harian</h3>
+    {#if chartData().labels.length > 0}
+      <BarChart labels={chartData().labels} datasets={[
+        { label: 'Pemasukan', data: chartData().income, color: '#059669' },
+        { label: 'Pengeluaran', data: chartData().expense, color: '#dc2626' },
+      ]} height={220} />
+    {:else}
+      <div class="h-48 flex items-center justify-center text-sm text-[hsl(var(--muted-foreground))]">Tidak ada data</div>
+    {/if}
   </div>
   <div class="space-y-3">
     <div class="card p-4">
-      <div class="flex items-center gap-2 text-[var(--color-kepin-red)] mb-2">
+      <h3 class="font-semibold mb-3">Komposisi Biaya</h3>
+      <PieChart labels={expenseLabels} values={expenseValues} height={180} donut={true} />
+    </div>
+    <div class="card p-4">
+      <div class="flex items-center gap-2 text-[var(--color-kepin-danger)] mb-2">
         <AlertTriangle class="w-4 h-4" />
         <span class="font-semibold text-sm">Alert</span>
       </div>
@@ -62,8 +129,9 @@
     { key: 'account', label: 'Akun' },
     { key: 'amount', label: 'Jumlah', align: 'right', render: (item: any) => item.amount > 0 ? `Rp ${item.amount.toLocaleString('id-ID')}` : `(Rp ${Math.abs(item.amount).toLocaleString('id-ID')})` },
   ]}
-  data={recentTransactions}
-  total={128}
+  data={recentList}
+  total={filtered.length}
   page={1}
-  pageSize={10}
+  pageSize={5}
+  searchable={true}
 />

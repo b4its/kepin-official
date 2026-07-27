@@ -157,7 +157,7 @@
 </section>
 
 <!-- Trust Strip -->
-<section class="py-8 sm:py-12 bg-[var(--color-ink)]">
+<section class="py-8 sm:py-12 bg-[#171714]">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex flex-wrap items-center justify-center gap-8 sm:gap-12 text-center">
       <div>
@@ -250,8 +250,8 @@
       </div>
       <ArrowRight class="w-6 h-6 text-[var(--color-muted)] hidden sm:block" />
       <div class="flex flex-col items-center">
-        <div class="w-14 h-14 bg-[var(--color-ink)] flex items-center justify-center rounded-full">
-          <BookOpen class="w-6 h-6 text-white" />
+        <div class="w-14 h-14 bg-[hsl(var(--foreground))] flex items-center justify-center rounded-full">
+          <BookOpen class="w-6 h-6 text-[hsl(var(--background))]" />
         </div>
         <p class="mt-2 font-semibold text-sm">Jurnal</p>
       </div>
@@ -307,8 +307,8 @@
         <p class="text-sm text-[var(--color-muted)]">Penjualan, pembelian, pemasok, pelanggan, produk, dan stok dalam satu platform.</p>
       </div>
       <div class="card-hover p-6 border-2 border-[var(--color-ink)]">
-        <div class="w-10 h-10 bg-[var(--color-ink)] flex items-center justify-center mb-3">
-          <Shield class="w-5 h-5 text-white" />
+        <div class="w-10 h-10 bg-[hsl(var(--foreground))] flex items-center justify-center mb-3">
+          <Shield class="w-5 h-5 text-[hsl(var(--background))]" />
         </div>
         <h3 class="font-bold text-lg mb-1">Audit Trail</h3>
         <p class="text-sm text-[var(--color-muted)]">Setiap perubahan tercatat: siapa, apa, kapan, tenant, dan nilai sebelum-sesudah.</p>
@@ -370,8 +370,8 @@
             <div class="bg-[var(--color-kepin-red)] p-4">
               <p class="text-white font-bold text-lg">ISO 27001</p>
             </div>
-            <div class="bg-[var(--color-ink)] p-4">
-              <p class="text-white font-bold text-lg">Enkripsi</p>
+            <div class="bg-[hsl(var(--foreground))] p-4">
+              <p class="text-[hsl(var(--background))] font-bold text-lg">Enkripsi</p>
             </div>
             <div class="bg-[var(--color-kepin-blue)] p-4">
               <p class="text-white font-bold text-lg">MFA</p>
@@ -526,7 +526,7 @@
 </section>
 
 <!-- Final CTA -->
-<section class="py-16 sm:py-24 bg-[var(--color-ink)]">
+<section class="py-16 sm:py-24 bg-[#171714]">
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
     <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-white mb-4">
       Siap Mengelola Bisnis dengan Lebih Percaya Diri?
