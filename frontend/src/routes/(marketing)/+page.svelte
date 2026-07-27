@@ -526,24 +526,28 @@
 </section>
 
 <!-- Final CTA -->
-<section class="py-16 sm:py-24 bg-[#171714]">
+<section class="py-16 sm:py-24 bg-white dark:bg-[#171714]">
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-white mb-4">
+    <h2 class="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-slate-900 dark:text-white mb-4">
       Siap Mengelola Bisnis dengan Lebih Percaya Diri?
     </h2>
-    <p class="text-gray-400 text-lg max-w-2xl mx-auto mb-8">
+    
+    <p class="text-gray-600 dark:text-gray-400 text-lg max-w-2xl mx-auto mb-8">
       Bergabung dengan ribuan UMKM yang sudah menggunakan KePin untuk transparansi, keamanan, dan pertumbuhan bisnis.
     </p>
+    
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
-    <a href="/auth/register" class="btn-primary btn-lg text-center bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-[var(--color-ink)] dark:hover:bg-gray-100">
-        Coba Gratis 14 Hari
-    </a>
-    <a href="/auth/register?plan=platinum" class="btn-ghost btn-lg text-center border-2 text-slate-900 border-slate-900 hover:bg-slate-900/10 hover:text-slate-900 dark:text-white dark:border-white dark:hover:bg-white/10 dark:hover:text-white">
-        Jadwalkan Demo
-    </a>
+      <!-- Primary Button -->
+<a href="/auth/register" class="btn-primary btn-lg text-center bg-white text-slate-900 hover:bg-gray-200 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800 transition-colors">
+  Coba Gratis 14 Hari
+</a>
+
+<a href="/auth/register?plan=platinum" class="btn-ghost btn-lg text-center border-2 border-white bg-slate-900 text-white hover:bg-white hover:text-slate-900 dark:bg-white dark:border-slate-900 dark:text-slate-900 dark:hover:bg-slate-900 dark:hover:text-white transition-colors">
+  Jadwalkan Demo
+</a>
     </div>
+    
     <p class="mt-4 text-sm text-gray-500">Tanpa kartu kredit. Dukungan setup gratis.</p>
   </div>
 </section>
-
 

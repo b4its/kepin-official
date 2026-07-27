@@ -1,1 +1,12 @@
+backend/wheels/
+__pycache__/
+*.pyc
+.env
+guideline/backend/
+guideline/frontend/
+guideline/frontene.md
 guideline
+guideline/
+node_modules/
+build/
+.svelte-kit/

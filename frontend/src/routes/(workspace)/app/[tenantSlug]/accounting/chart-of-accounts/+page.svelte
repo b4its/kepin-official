@@ -7,6 +7,7 @@
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { accounts } from '$lib/stores/data';
+  import type { Account } from '$lib/api/types';
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -39,9 +40,9 @@
   function save() {
     accounts.update(list => {
       if (editingIndex !== null) {
-        return list.map((a, i) => i === editingIndex ? { ...a, ...form } : a);
+        return list.map((a, i) => i === editingIndex ? { ...a, code: form.code, name: form.name, type: form.type.toLowerCase() as Account['type'], balance: form.balance, status: form.status as Account['status'] } : a);
       } else {
-        return [...list, { id: 'ACC-' + String(Date.now()).slice(-6), code: form.code, name: form.name, type: form.type.toLowerCase(), balance: form.balance, isSystem: false, status: form.status }];
+        return [...list, { id: 'ACC-' + String(Date.now()).slice(-6), code: form.code, name: form.name, type: form.type.toLowerCase() as Account['type'], balance: form.balance, isSystem: false, status: form.status as Account['status'] }];
       }
     });
     showModal = false;

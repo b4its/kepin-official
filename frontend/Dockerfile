@@ -1,5 +1,8 @@
 FROM node:22-alpine
 
+ARG PUBLIC_API_URL=http://localhost:8000/api/v1
+ENV PUBLIC_API_URL=$PUBLIC_API_URL
+
 WORKDIR /app
 
 RUN npm install -g pnpm
@@ -9,8 +12,6 @@ RUN pnpm install --ignore-scripts
 
 COPY . .
 RUN pnpm build
-
-RUN ls -la
 
 EXPOSE 3000
 
