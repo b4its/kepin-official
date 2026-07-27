@@ -127,7 +127,7 @@ class POReceiveRequest(ApiSchema):
 # ── Suppliers ─────────────────────────────────────────────────────────
 
 
-@router.get("/suppliers", response_model=PaginatedResponse[SupplierSchema])
+@router.get("/suppliers", response_model=PaginatedResponse[SupplierSchema], summary="Daftar Pemasok", description="Mengembalikan daftar pemasok dengan pagination")
 async def list_suppliers(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -156,7 +156,7 @@ async def list_suppliers(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/suppliers", response_model=SupplierSchema, status_code=201)
+@router.post("/suppliers", response_model=SupplierSchema, status_code=201, summary="Buat Pemasok", description="Menambahkan pemasok baru")
 async def create_supplier(
     body: SupplierCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -188,7 +188,7 @@ async def create_supplier(
     return SupplierSchema.model_validate(supplier)
 
 
-@router.get("/suppliers/{supplier_id}", response_model=SupplierSchema)
+@router.get("/suppliers/{supplier_id}", response_model=SupplierSchema, summary="Detail Pemasok", description="Mengembalikan detail pemasok")
 async def get_supplier(
     supplier_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -203,7 +203,7 @@ async def get_supplier(
     return SupplierSchema.model_validate(supplier)
 
 
-@router.patch("/suppliers/{supplier_id}", response_model=SupplierSchema)
+@router.patch("/suppliers/{supplier_id}", response_model=SupplierSchema, summary="Update Pemasok", description="Memperbarui data pemasok")
 async def update_supplier(
     body: SupplierUpdate,
     supplier_id: str = Path(...),
@@ -227,7 +227,7 @@ async def update_supplier(
     return SupplierSchema.model_validate(supplier)
 
 
-@router.delete("/suppliers/{supplier_id}", status_code=204)
+@router.delete("/suppliers/{supplier_id}", status_code=204, summary="Hapus Pemasok", description="Menghapus pemasok")
 async def delete_supplier(
     supplier_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -291,7 +291,7 @@ async def _build_po_lines(
     return lines, subtotal
 
 
-@router.get("/purchase-orders", response_model=PaginatedResponse[POSchema])
+@router.get("/purchase-orders", response_model=PaginatedResponse[POSchema], summary="Daftar PO", description="Mengembalikan daftar purchase order")
 async def list_purchase_orders(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -356,7 +356,7 @@ async def list_purchase_orders(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/purchase-orders", response_model=POSchema, status_code=201)
+@router.post("/purchase-orders", response_model=POSchema, status_code=201, summary="Buat PO", description="Membuat purchase order baru dengan line items")
 async def create_purchase_order(
     body: POCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -432,7 +432,7 @@ async def create_purchase_order(
     )
 
 
-@router.get("/purchase-orders/{po_id}", response_model=POSchema)
+@router.get("/purchase-orders/{po_id}", response_model=POSchema, summary="Detail PO", description="Mengembalikan detail purchase order")
 async def get_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -475,7 +475,7 @@ async def get_purchase_order(
     )
 
 
-@router.patch("/purchase-orders/{po_id}", response_model=POSchema)
+@router.patch("/purchase-orders/{po_id}", response_model=POSchema, summary="Update PO", description="Memperbarui PO draft")
 async def update_purchase_order(
     body: POUpdate,
     po_id: str = Path(...),
@@ -545,7 +545,7 @@ async def update_purchase_order(
     )
 
 
-@router.delete("/purchase-orders/{po_id}", status_code=204)
+@router.delete("/purchase-orders/{po_id}", status_code=204, summary="Hapus PO", description="Menghapus PO draft")
 async def delete_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -569,7 +569,7 @@ async def delete_purchase_order(
     await session.commit()
 
 
-@router.post("/purchase-orders/{po_id}/send", response_model=POSchema)
+@router.post("/purchase-orders/{po_id}/send", response_model=POSchema, summary="Kirim PO", description="Mengirim PO ke pemasok")
 async def send_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -619,7 +619,7 @@ async def send_purchase_order(
     )
 
 
-@router.post("/purchase-orders/{po_id}/receive", response_model=POSchema)
+@router.post("/purchase-orders/{po_id}/receive", response_model=POSchema, summary="Terima Barang", description="Menerima barang (membuat goods receipt dan update stok)")
 async def receive_purchase_order(
     body: POReceiveRequest,
     po_id: str = Path(...),
@@ -809,7 +809,7 @@ async def receive_purchase_order(
     )
 
 
-@router.post("/purchase-orders/{po_id}/cancel", response_model=POSchema)
+@router.post("/purchase-orders/{po_id}/cancel", response_model=POSchema, summary="Batal PO", description="Membatalkan PO")
 async def cancel_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),

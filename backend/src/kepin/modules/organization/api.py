@@ -131,7 +131,7 @@ class BillingResponse(ApiSchema):
 # ── Endpoints ────────────────────────────────────────────────────────
 
 
-@router.get("/organization", response_model=OrganizationSettingResponse)
+@router.get("/organization", response_model=OrganizationSettingResponse, summary="Pengaturan Organisasi", description="Mengembalikan pengaturan organisasi tenant")
 async def get_organization(
     tenant: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),
@@ -146,7 +146,7 @@ async def get_organization(
     return OrganizationSettingResponse.model_validate(org)
 
 
-@router.patch("/organization", response_model=OrganizationSettingResponse)
+@router.patch("/organization", response_model=OrganizationSettingResponse, summary="Update Pengaturan", description="Memperbarui pengaturan organisasi tenant")
 async def update_organization(
     body: OrganizationSettingUpdate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -170,7 +170,7 @@ async def update_organization(
     return OrganizationSettingResponse.model_validate(org)
 
 
-@router.get("/branches", response_model=list[BranchResponse])
+@router.get("/branches", response_model=list[BranchResponse], summary="Daftar Cabang", description="Mengembalikan daftar cabang tenant")
 async def list_branches(
     tenant: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),
@@ -185,7 +185,7 @@ async def list_branches(
     return [BranchResponse.model_validate(b) for b in rows]
 
 
-@router.post("/branches", response_model=BranchResponse, status_code=201)
+@router.post("/branches", response_model=BranchResponse, status_code=201, summary="Buat Cabang", description="Menambahkan cabang baru")
 async def create_branch(
     body: BranchCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -220,7 +220,7 @@ async def create_branch(
     return BranchResponse.model_validate(branch)
 
 
-@router.get("/branches/{branch_id}", response_model=BranchResponse)
+@router.get("/branches/{branch_id}", response_model=BranchResponse, summary="Detail Cabang", description="Mengembalikan detail cabang")
 async def get_branch(
     branch_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -239,7 +239,7 @@ async def get_branch(
     return BranchResponse.model_validate(branch)
 
 
-@router.patch("/branches/{branch_id}", response_model=BranchResponse)
+@router.patch("/branches/{branch_id}", response_model=BranchResponse, summary="Update Cabang", description="Memperbarui data cabang")
 async def update_branch(
     body: BranchUpdate,
     branch_id: str = Path(...),
@@ -267,7 +267,7 @@ async def update_branch(
     return BranchResponse.model_validate(branch)
 
 
-@router.delete("/branches/{branch_id}", status_code=204)
+@router.delete("/branches/{branch_id}", status_code=204, summary="Hapus Cabang", description="Menghapus cabang")
 async def delete_branch(
     branch_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -289,7 +289,7 @@ async def delete_branch(
     await session.commit()
 
 
-@router.get("/members", response_model=list[MemberResponse])
+@router.get("/members", response_model=list[MemberResponse], summary="Daftar Anggota", description="Mengembalikan daftar anggota tenant")
 async def list_members(
     tenant: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),
@@ -323,7 +323,7 @@ async def list_members(
     ]
 
 
-@router.post("/members", response_model=MemberResponse, status_code=201)
+@router.post("/members", response_model=MemberResponse, status_code=201, summary="Tambah Anggota", description="Menambahkan anggota baru ke tenant")
 async def add_member(
     body: MemberCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -383,7 +383,7 @@ async def add_member(
     )
 
 
-@router.patch("/members/{membership_id}", response_model=MemberResponse)
+@router.patch("/members/{membership_id}", response_model=MemberResponse, summary="Update Anggota", description="Memperbarui peran anggota")
 async def update_member_role(
     body: MemberUpdate,
     membership_id: str = Path(...),
@@ -422,7 +422,7 @@ async def update_member_role(
     )
 
 
-@router.delete("/members/{membership_id}", status_code=204)
+@router.delete("/members/{membership_id}", status_code=204, summary="Hapus Anggota", description="Menghapus anggota dari tenant")
 async def remove_member(
     membership_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -442,7 +442,7 @@ async def remove_member(
     await session.commit()
 
 
-@router.get("/roles", response_model=list[RoleResponse])
+@router.get("/roles", response_model=list[RoleResponse], summary="Daftar Peran", description="Mengembalikan daftar peran yang tersedia")
 async def list_roles():
     return [
         {"id": "owner", "name": "Pemilik"},
@@ -453,7 +453,7 @@ async def list_roles():
     ]
 
 
-@router.get("/integrations", response_model=list[IntegrationResponse])
+@router.get("/integrations", response_model=list[IntegrationResponse], summary="Daftar Integrasi", description="Mengembalikan daftar integrasi tenant")
 async def list_integrations(
     tenant: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),
@@ -461,7 +461,7 @@ async def list_integrations(
     return []
 
 
-@router.get("/billing", response_model=BillingResponse)
+@router.get("/billing", response_model=BillingResponse, summary="Informasi Tagihan", description="Mengembalikan informasi langganan dan tagihan tenant")
 async def get_billing(
     tenant: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),

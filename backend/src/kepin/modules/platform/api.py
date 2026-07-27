@@ -159,7 +159,7 @@ class HealthSummaryResponse(ApiSchema):
 # ── Endpoints ────────────────────────────────────────────────────────
 
 
-@router.get("/dashboard", response_model=DashboardResponse)
+@router.get("/dashboard", response_model=DashboardResponse, summary="Dashboard Platform", description="Mengembalikan metrik dashboard platform seperti jumlah tenant aktif, trial, suspended, MRR, pertumbuhan tenant, distribusi paket, dan aktivitas terbaru.")
 async def get_dashboard(
     session: AsyncSession = Depends(get_session),
     params: PeriodParams = Depends(),
@@ -236,7 +236,7 @@ async def get_dashboard(
     )
 
 
-@router.get("/tenants", response_model=PaginatedResponse[TenantResponse])
+@router.get("/tenants", response_model=PaginatedResponse[TenantResponse], summary="Daftar Tenant", description="Mengembalikan daftar tenant dengan pagination, pencarian, dan filter status")
 async def list_tenants(
     session: AsyncSession = Depends(get_session),
     params: ListParams = Depends(),
@@ -267,7 +267,7 @@ async def list_tenants(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/tenants", response_model=TenantResponse, status_code=201)
+@router.post("/tenants", response_model=TenantResponse, status_code=201, summary="Buat Tenant", description="Membuat tenant baru beserta pengaturan organisasi, cabang utama, dan langganan")
 async def create_tenant(
     body: TenantCreate,
     session: AsyncSession = Depends(get_session),
@@ -333,7 +333,7 @@ async def create_tenant(
     return TenantResponse.model_validate(tenant)
 
 
-@router.get("/tenants/{tenant_id}", response_model=TenantResponse)
+@router.get("/tenants/{tenant_id}", response_model=TenantResponse, summary="Detail Tenant", description="Mengembalikan detail tenant berdasarkan ID")
 async def get_tenant(
     tenant_id: str = Path(...),
     session: AsyncSession = Depends(get_session),
@@ -344,7 +344,7 @@ async def get_tenant(
     return TenantResponse.model_validate(t)
 
 
-@router.patch("/tenants/{tenant_id}", response_model=TenantResponse)
+@router.patch("/tenants/{tenant_id}", response_model=TenantResponse, summary="Update Tenant", description="Memperbarui data tenant")
 async def update_tenant(
     body: TenantUpdate,
     tenant_id: str = Path(...),
@@ -364,7 +364,7 @@ async def update_tenant(
     return TenantResponse.model_validate(t)
 
 
-@router.delete("/tenants/{tenant_id}", status_code=204)
+@router.delete("/tenants/{tenant_id}", status_code=204, summary="Hapus Tenant", description="Menghapus tenant dari sistem")
 async def delete_tenant(
     tenant_id: str = Path(...),
     session: AsyncSession = Depends(get_session),
@@ -376,7 +376,7 @@ async def delete_tenant(
     await session.commit()
 
 
-@router.post("/tenants/{tenant_id}/suspend", response_model=TenantResponse)
+@router.post("/tenants/{tenant_id}/suspend", response_model=TenantResponse, summary="Suspend Tenant", description="Menonaktifkan tenant sementara")
 async def suspend_tenant(
     tenant_id: str = Path(...),
     session: AsyncSession = Depends(get_session),
@@ -391,7 +391,7 @@ async def suspend_tenant(
     return TenantResponse.model_validate(t)
 
 
-@router.post("/tenants/{tenant_id}/reactivate", response_model=TenantResponse)
+@router.post("/tenants/{tenant_id}/reactivate", response_model=TenantResponse, summary="Aktifkan Tenant", description="Mengaktifkan kembali tenant yang di-suspend")
 async def reactivate_tenant(
     tenant_id: str = Path(...),
     session: AsyncSession = Depends(get_session),
@@ -406,7 +406,7 @@ async def reactivate_tenant(
     return TenantResponse.model_validate(t)
 
 
-@router.get("/users", response_model=PaginatedResponse[UserResponse])
+@router.get("/users", response_model=PaginatedResponse[UserResponse], summary="Daftar User", description="Mengembalikan daftar user dengan pagination")
 async def list_users(
     session: AsyncSession = Depends(get_session),
     params: ListParams = Depends(),
@@ -434,7 +434,7 @@ async def list_users(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/users", response_model=UserResponse, status_code=201)
+@router.post("/users", response_model=UserResponse, status_code=201, summary="Buat User", description="Membuat user baru")
 async def create_user(
     body: UserCreate,
     session: AsyncSession = Depends(get_session),
@@ -459,7 +459,7 @@ async def create_user(
     return UserResponse.model_validate(user)
 
 
-@router.get("/users/{user_id}", response_model=UserResponse)
+@router.get("/users/{user_id}", response_model=UserResponse, summary="Detail User", description="Mengembalikan detail user")
 async def get_user(
     user_id: str = Path(...),
     session: AsyncSession = Depends(get_session),
@@ -470,7 +470,7 @@ async def get_user(
     return UserResponse.model_validate(u)
 
 
-@router.patch("/users/{user_id}", response_model=UserResponse)
+@router.patch("/users/{user_id}", response_model=UserResponse, summary="Update User", description="Memperbarui data user")
 async def update_user(
     body: UserUpdate,
     user_id: str = Path(...),
@@ -490,7 +490,7 @@ async def update_user(
     return UserResponse.model_validate(u)
 
 
-@router.delete("/users/{user_id}", status_code=204)
+@router.delete("/users/{user_id}", status_code=204, summary="Hapus User", description="Menghapus user dari sistem")
 async def delete_user(
     user_id: str = Path(...),
     session: AsyncSession = Depends(get_session),
@@ -502,7 +502,7 @@ async def delete_user(
     await session.commit()
 
 
-@router.get("/subscriptions", response_model=PaginatedResponse[SubscriptionResponse])
+@router.get("/subscriptions", response_model=PaginatedResponse[SubscriptionResponse], summary="Daftar Langganan", description="Mengembalikan daftar langganan tenant")
 async def list_subscriptions(
     session: AsyncSession = Depends(get_session),
     params: ListParams = Depends(),
@@ -522,7 +522,7 @@ async def list_subscriptions(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.get("/subscription-events", response_model=PaginatedResponse[SubscriptionEventResponse])
+@router.get("/subscription-events", response_model=PaginatedResponse[SubscriptionEventResponse], summary="Daftar Event Langganan", description="Mengembalikan daftar event langganan dengan pencarian dan filter tanggal")
 async def list_subscription_events(
     session: AsyncSession = Depends(get_session),
     params: ListParams = Depends(),
@@ -558,7 +558,7 @@ async def list_subscription_events(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.get("/incidents", response_model=PaginatedResponse[IncidentResponse])
+@router.get("/incidents", response_model=PaginatedResponse[IncidentResponse], summary="Daftar Insiden", description="Mengembalikan daftar insiden platform")
 async def list_incidents(
     session: AsyncSession = Depends(get_session),
     params: ListParams = Depends(),
@@ -589,7 +589,7 @@ async def list_incidents(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/incidents", response_model=IncidentResponse, status_code=201)
+@router.post("/incidents", response_model=IncidentResponse, status_code=201, summary="Buat Insiden", description="Membuat insiden baru")
 async def create_incident(
     body: IncidentCreate,
     session: AsyncSession = Depends(get_session),
@@ -611,7 +611,7 @@ async def create_incident(
     return IncidentResponse.model_validate(incident)
 
 
-@router.patch("/incidents/{incident_id}", response_model=IncidentResponse)
+@router.patch("/incidents/{incident_id}", response_model=IncidentResponse, summary="Update Insiden", description="Memperbarui data insiden")
 async def update_incident(
     body: IncidentUpdate,
     incident_id: str = Path(...),
@@ -631,7 +631,7 @@ async def update_incident(
     return IncidentResponse.model_validate(inc)
 
 
-@router.get("/audit-events", response_model=PaginatedResponse[PlatformAuditEventResponse])
+@router.get("/audit-events", response_model=PaginatedResponse[PlatformAuditEventResponse], summary="Daftar Audit Platform", description="Mengembalikan daftar event audit platform")
 async def list_audit_events(
     session: AsyncSession = Depends(get_session),
     params: ListParams = Depends(),
@@ -651,7 +651,7 @@ async def list_audit_events(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.get("/health-summary", response_model=HealthSummaryResponse)
+@router.get("/health-summary", response_model=HealthSummaryResponse, summary="Ringkasan Kesehatan", description="Mengembalikan ringkasan kesehatan sistem")
 async def get_health_summary(
     session: AsyncSession = Depends(get_session),
 ):

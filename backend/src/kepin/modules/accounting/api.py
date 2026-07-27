@@ -200,7 +200,7 @@ async def _get_journal_lines(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@router.get("/accounts", response_model=PaginatedResponse[AccountSchema])
+@router.get("/accounts", response_model=PaginatedResponse[AccountSchema], summary="Daftar Akun", description="Mengembalikan daftar akun dengan pagination, pencarian, dan filter status")
 async def list_accounts(
     params: ListParams = Depends(),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -232,7 +232,7 @@ async def list_accounts(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/accounts", response_model=AccountSchema, status_code=201)
+@router.post("/accounts", response_model=AccountSchema, status_code=201, summary="Buat Akun", description="Membuat akun baru dalam chart of accounts")
 async def create_account(
     body: AccountCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -270,7 +270,7 @@ async def create_account(
     return AccountSchema.model_validate(account)
 
 
-@router.get("/accounts/{account_id}", response_model=AccountSchema)
+@router.get("/accounts/{account_id}", response_model=AccountSchema, summary="Detail Akun", description="Mengembalikan detail akun berdasarkan ID")
 async def get_account(
     account_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -288,7 +288,7 @@ async def get_account(
     return AccountSchema.model_validate(account)
 
 
-@router.patch("/accounts/{account_id}", response_model=AccountSchema)
+@router.patch("/accounts/{account_id}", response_model=AccountSchema, summary="Update Akun", description="Memperbarui data akun")
 async def update_account(
     body: AccountUpdate,
     account_id: str = Path(...),
@@ -331,7 +331,7 @@ async def update_account(
     return AccountSchema.model_validate(account)
 
 
-@router.delete("/accounts/{account_id}", status_code=204)
+@router.delete("/accounts/{account_id}", status_code=204, summary="Hapus Akun", description="Menghapus akun (hanya jika tidak memiliki transaksi)")
 async def delete_account(
     account_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -365,7 +365,8 @@ async def delete_account(
 
 
 @router.get(
-    "/accounts/{account_id}/balance", response_model=AccountBalanceSchema
+    "/accounts/{account_id}/balance", response_model=AccountBalanceSchema,
+    summary="Saldo Akun", description="Mengembalikan saldo akun berdasarkan jurnal yang sudah diposting"
 )
 async def get_account_balance(
     account_id: str = Path(...),
@@ -418,7 +419,7 @@ async def get_account_balance(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@router.get("/transactions", response_model=PaginatedResponse[TransactionSchema])
+@router.get("/transactions", response_model=PaginatedResponse[TransactionSchema], summary="Daftar Transaksi", description="Mengembalikan daftar transaksi dengan pagination, pencarian, dan filter")
 async def list_transactions(
     params: ListParams = Depends(),
     period: PeriodParams = Depends(),
@@ -466,7 +467,7 @@ async def list_transactions(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/transactions", response_model=TransactionSchema, status_code=201)
+@router.post("/transactions", response_model=TransactionSchema, status_code=201, summary="Buat Transaksi", description="Membuat transaksi baru (status draft)")
 async def create_transaction(
     body: TransactionCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -495,7 +496,7 @@ async def create_transaction(
     return TransactionSchema.model_validate(transaction)
 
 
-@router.get("/transactions/{transaction_id}", response_model=TransactionSchema)
+@router.get("/transactions/{transaction_id}", response_model=TransactionSchema, summary="Detail Transaksi", description="Mengembalikan detail transaksi")
 async def get_transaction(
     transaction_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -514,7 +515,7 @@ async def get_transaction(
     return TransactionSchema.model_validate(txn)
 
 
-@router.patch("/transactions/{transaction_id}", response_model=TransactionSchema)
+@router.patch("/transactions/{transaction_id}", response_model=TransactionSchema, summary="Update Transaksi", description="Memperbarui transaksi draft")
 async def update_transaction(
     body: TransactionUpdate,
     transaction_id: str = Path(...),
@@ -548,7 +549,7 @@ async def update_transaction(
     return TransactionSchema.model_validate(txn)
 
 
-@router.delete("/transactions/{transaction_id}", status_code=204)
+@router.delete("/transactions/{transaction_id}", status_code=204, summary="Hapus Transaksi", description="Menghapus transaksi draft")
 async def delete_transaction(
     transaction_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -572,7 +573,8 @@ async def delete_transaction(
 
 
 @router.post(
-    "/transactions/{transaction_id}/post", response_model=TransactionSchema
+    "/transactions/{transaction_id}/post", response_model=TransactionSchema,
+    summary="Posting Transaksi", description="Memposting transaksi dan membuat jurnal otomatis"
 )
 async def post_transaction(
     transaction_id: str = Path(...),
@@ -671,7 +673,8 @@ async def post_transaction(
 
 
 @router.post(
-    "/transactions/{transaction_id}/void", response_model=TransactionSchema
+    "/transactions/{transaction_id}/void", response_model=TransactionSchema,
+    summary="Void Transaksi", description="Membatalkan transaksi dengan membuat jurnal reversal"
 )
 async def void_transaction(
     transaction_id: str = Path(...),
@@ -766,7 +769,7 @@ async def void_transaction(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@router.get("/journals", response_model=PaginatedResponse[JournalSchema])
+@router.get("/journals", response_model=PaginatedResponse[JournalSchema], summary="Daftar Jurnal", description="Mengembalikan daftar jurnal dengan pagination dan filter")
 async def list_journals(
     params: ListParams = Depends(),
     period: PeriodParams = Depends(),
@@ -856,7 +859,7 @@ async def list_journals(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/journals", response_model=JournalSchema, status_code=201)
+@router.post("/journals", response_model=JournalSchema, status_code=201, summary="Buat Jurnal", description="Membuat jurnal baru dengan lines debit/kredit")
 async def create_journal(
     body: JournalCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -931,7 +934,7 @@ async def create_journal(
     )
 
 
-@router.get("/journals/{journal_id}", response_model=JournalSchema)
+@router.get("/journals/{journal_id}", response_model=JournalSchema, summary="Detail Jurnal", description="Mengembalikan detail jurnal beserta lines")
 async def get_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -965,7 +968,7 @@ async def get_journal(
     )
 
 
-@router.patch("/journals/{journal_id}", response_model=JournalSchema)
+@router.patch("/journals/{journal_id}", response_model=JournalSchema, summary="Update Jurnal", description="Memperbarui jurnal draft")
 async def update_journal(
     body: JournalUpdate,
     journal_id: str = Path(...),
@@ -1051,7 +1054,7 @@ async def update_journal(
     )
 
 
-@router.delete("/journals/{journal_id}", status_code=204)
+@router.delete("/journals/{journal_id}", status_code=204, summary="Hapus Jurnal", description="Menghapus jurnal draft")
 async def delete_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -1085,7 +1088,7 @@ async def delete_journal(
     await session.commit()
 
 
-@router.post("/journals/{journal_id}/post", response_model=JournalSchema)
+@router.post("/journals/{journal_id}/post", response_model=JournalSchema, summary="Posting Jurnal", description="Memposting jurnal (divalidasi balance)")
 async def post_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -1141,7 +1144,7 @@ async def post_journal(
     )
 
 
-@router.post("/journals/{journal_id}/reverse", response_model=JournalSchema)
+@router.post("/journals/{journal_id}/reverse", response_model=JournalSchema, summary="Reversal Jurnal", description="Membalik jurnal yang sudah diposting")
 async def reverse_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -1232,7 +1235,8 @@ async def reverse_journal(
 
 
 @router.get(
-    "/reconciliation", response_model=PaginatedResponse[ReconciliationSchema]
+    "/reconciliation", response_model=PaginatedResponse[ReconciliationSchema],
+    summary="Daftar Rekonsiliasi", description="Mengembalikan daftar rekonsiliasi bank"
 )
 async def list_reconciliation(
     params: ListParams = Depends(),
@@ -1282,6 +1286,7 @@ async def list_reconciliation(
     "/reconciliation/matches",
     response_model=ReconciliationSchema,
     status_code=201,
+    summary="Buat Match", description="Mencocokkan transaksi bank dengan transaksi internal",
 )
 async def create_reconciliation_match(
     body: ReconciliationCreate,
@@ -1340,6 +1345,7 @@ async def create_reconciliation_match(
 @router.post(
     "/reconciliation/matches/{match_id}/confirm",
     response_model=ReconciliationSchema,
+    summary="Konfirmasi Match", description="Mengkonfirmasi pencocokan rekonsiliasi",
 )
 async def confirm_reconciliation_match(
     match_id: str = Path(...),
@@ -1379,7 +1385,8 @@ async def confirm_reconciliation_match(
 
 
 @router.delete(
-    "/reconciliation/matches/{match_id}", status_code=204
+    "/reconciliation/matches/{match_id}", status_code=204,
+    summary="Hapus Match", description="Menghapus pencocokan rekonsiliasi",
 )
 async def delete_reconciliation_match(
     match_id: str = Path(...),

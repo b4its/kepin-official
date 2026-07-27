@@ -261,7 +261,7 @@ def _compute_line_totals(
 # ── Customers ─────────────────────────────────────────────────────────
 
 
-@router.get("/customers", response_model=PaginatedResponse[CustomerSchema])
+@router.get("/customers", response_model=PaginatedResponse[CustomerSchema], summary="Daftar Pelanggan", description="Mengembalikan daftar pelanggan dengan pagination dan pencarian")
 async def list_customers(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -292,7 +292,7 @@ async def list_customers(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/customers", response_model=CustomerSchema, status_code=201)
+@router.post("/customers", response_model=CustomerSchema, status_code=201, summary="Buat Pelanggan", description="Menambahkan pelanggan baru")
 async def create_customer(
     body: CustomerCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -325,7 +325,7 @@ async def create_customer(
     return CustomerSchema.model_validate(customer)
 
 
-@router.get("/customers/{customer_id}", response_model=CustomerSchema)
+@router.get("/customers/{customer_id}", response_model=CustomerSchema, summary="Detail Pelanggan", description="Mengembalikan detail pelanggan")
 async def get_customer(
     customer_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -340,7 +340,7 @@ async def get_customer(
     return CustomerSchema.model_validate(customer)
 
 
-@router.patch("/customers/{customer_id}", response_model=CustomerSchema)
+@router.patch("/customers/{customer_id}", response_model=CustomerSchema, summary="Update Pelanggan", description="Memperbarui data pelanggan")
 async def update_customer(
     body: CustomerUpdate,
     customer_id: str = Path(...),
@@ -367,7 +367,7 @@ async def update_customer(
     return CustomerSchema.model_validate(customer)
 
 
-@router.delete("/customers/{customer_id}", status_code=204)
+@router.delete("/customers/{customer_id}", status_code=204, summary="Hapus Pelanggan", description="Menghapus pelanggan")
 async def delete_customer(
     customer_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -393,7 +393,7 @@ async def delete_customer(
 # ── Invoices ──────────────────────────────────────────────────────────
 
 
-@router.get("/invoices", response_model=PaginatedResponse[InvoiceSchema])
+@router.get("/invoices", response_model=PaginatedResponse[InvoiceSchema], summary="Daftar Invoice", description="Mengembalikan daftar invoice dengan pagination dan filter")
 async def list_invoices(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -436,7 +436,7 @@ async def list_invoices(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/invoices", response_model=InvoiceSchema, status_code=201)
+@router.post("/invoices", response_model=InvoiceSchema, status_code=201, summary="Buat Invoice", description="Membuat invoice baru dengan line items (total dihitung backend)")
 async def create_invoice(
     body: InvoiceCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -510,7 +510,7 @@ async def create_invoice(
     return _build_invoice_schema(invoice, lines)
 
 
-@router.get("/invoices/{invoice_id}", response_model=InvoiceSchema)
+@router.get("/invoices/{invoice_id}", response_model=InvoiceSchema, summary="Detail Invoice", description="Mengembalikan detail invoice beserta lines")
 async def get_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -527,7 +527,7 @@ async def get_invoice(
     return _build_invoice_schema(invoice, lines)
 
 
-@router.patch("/invoices/{invoice_id}", response_model=InvoiceSchema)
+@router.patch("/invoices/{invoice_id}", response_model=InvoiceSchema, summary="Update Invoice", description="Memperbarui invoice draft")
 async def update_invoice(
     body: InvoiceUpdate,
     invoice_id: str = Path(...),
@@ -593,7 +593,7 @@ async def update_invoice(
     return _build_invoice_schema(invoice, lines)
 
 
-@router.delete("/invoices/{invoice_id}", status_code=204)
+@router.delete("/invoices/{invoice_id}", status_code=204, summary="Hapus Invoice", description="Menghapus invoice draft")
 async def delete_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -616,7 +616,7 @@ async def delete_invoice(
     await session.commit()
 
 
-@router.post("/invoices/{invoice_id}/send", response_model=InvoiceSchema)
+@router.post("/invoices/{invoice_id}/send", response_model=InvoiceSchema, summary="Kirim Invoice", description="Mengubah status invoice menjadi sent")
 async def send_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -640,7 +640,7 @@ async def send_invoice(
     return _build_invoice_schema(invoice, lines)
 
 
-@router.post("/invoices/{invoice_id}/cancel", response_model=InvoiceSchema)
+@router.post("/invoices/{invoice_id}/cancel", response_model=InvoiceSchema, summary="Batal Invoice", description="Membatalkan invoice")
 async def cancel_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -664,7 +664,7 @@ async def cancel_invoice(
     return _build_invoice_schema(invoice, lines)
 
 
-@router.get("/invoices/{invoice_id}/pdf")
+@router.get("/invoices/{invoice_id}/pdf", summary="Download PDF Invoice", description="Mengunduh invoice dalam format PDF")
 async def get_invoice_pdf(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -677,7 +677,7 @@ async def get_invoice_pdf(
 # ── Customer Payments ─────────────────────────────────────────────────
 
 
-@router.get("/customer-payments", response_model=PaginatedResponse[CustomerPaymentSchema])
+@router.get("/customer-payments", response_model=PaginatedResponse[CustomerPaymentSchema], summary="Daftar Pembayaran", description="Mengembalikan daftar pembayaran pelanggan")
 async def list_customer_payments(
     session: AsyncSession = Depends(get_session),
     tenant: TenantContext = Depends(get_tenant_context),
@@ -703,7 +703,7 @@ async def list_customer_payments(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/customer-payments", response_model=CustomerPaymentSchema, status_code=201)
+@router.post("/customer-payments", response_model=CustomerPaymentSchema, status_code=201, summary="Buat Pembayaran", description="Mencatat pembayaran dari pelanggan")
 async def create_customer_payment(
     body: CustomerPaymentCreate,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -794,7 +794,7 @@ async def create_customer_payment(
     return CustomerPaymentSchema.model_validate(payment)
 
 
-@router.post("/customer-payments/{payment_id}/void", response_model=CustomerPaymentSchema)
+@router.post("/customer-payments/{payment_id}/void", response_model=CustomerPaymentSchema, summary="Void Pembayaran", description="Membatalkan pembayaran")
 async def void_customer_payment(
     payment_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),

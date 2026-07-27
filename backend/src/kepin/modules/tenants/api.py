@@ -57,7 +57,7 @@ class DashboardResponse(ApiSchema):
 # ── Endpoints ────────────────────────────────────────────────────────
 
 
-@router.get("/context", response_model=TenantContextResponse)
+@router.get("/context", response_model=TenantContextResponse, summary="Konteks Tenant", description="Mengembalikan informasi tenant, cabang, dan status otorisasi")
 async def get_context(
     tenant: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),
@@ -96,7 +96,7 @@ async def get_context(
     )
 
 
-@router.get("/dashboard", response_model=DashboardResponse)
+@router.get("/dashboard", response_model=DashboardResponse, summary="Dashboard Tenant", description="Mengembalikan metrik dashboard tenant seperti pendapatan, pengeluaran, laba kotor, saldo kas, arus kas harian, komposisi pengeluaran, peringatan, dan transaksi terbaru")
 async def get_dashboard(
     tenant: TenantContext = Depends(get_tenant_context),
     session: AsyncSession = Depends(get_session),

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from kepin.core.config import get_settings
@@ -50,13 +50,11 @@ WIB = "Asia/Jakarta"
 TODAY = date.today()
 NOW = datetime.now(timezone.utc)
 
+UID_ADMIN = str(uuid4())
+UID_BUDI = str(uuid4())
+UID_ANI = str(uuid4())
+UID_SITI = str(uuid4())
 
-def new_id() -> str:
-    return str(uuid4())
-
-
-UID_ADMIN = new_id()
-UID_BUDI = new_id()
 
 TENANTS_DATA = [
     {
@@ -66,7 +64,10 @@ TENANTS_DATA = [
         "sector": "retail",
         "plan_code": "pro",
         "status": "active",
-        "members": [UID_BUDI],
+        "members": [
+            {"user_id": UID_BUDI, "role": "owner"},
+            {"user_id": UID_ANI, "role": "manager"},
+        ],
     },
     {
         "slug": "bengkel-maju",
@@ -84,7 +85,9 @@ TENANTS_DATA = [
         "sector": "food",
         "plan_code": "pro",
         "status": "active",
-        "members": [],
+        "members": [
+            {"user_id": UID_SITI, "role": "accountant"},
+        ],
     },
     {
         "slug": "fashion-baru",
@@ -97,44 +100,433 @@ TENANTS_DATA = [
     },
 ]
 
-ACCOUNTS_TEMPLATE = [
-    {"code": "1-1000", "name": "Kas", "type": "asset", "normal_balance": "debit"},
-    {"code": "1-1100", "name": "Bank BCA", "type": "asset", "normal_balance": "debit"},
-    {"code": "1-2000", "name": "Piutang Usaha", "type": "asset", "normal_balance": "debit"},
-    {"code": "1-3000", "name": "Persediaan Barang", "type": "asset", "normal_balance": "debit"},
-    {"code": "2-1000", "name": "Hutang Usaha", "type": "liability", "normal_balance": "credit"},
-    {"code": "3-1000", "name": "Modal", "type": "equity", "normal_balance": "credit"},
-    {"code": "4-1000", "name": "Pendapatan", "type": "income", "normal_balance": "credit"},
-    {"code": "5-1000", "name": "Beban Operasional", "type": "expense", "normal_balance": "debit"},
+PRODUCT_CATEGORIES = {
+    "retail": [
+        "Elektronik", "Makanan & Minuman", "Rumah Tangga",
+        "ATK & Kantor", "Kosmetik & Perawatan", "Mainan & Hobi",
+        "Olahraga & Outdoor", "Perlengkapan Bayi", "Otomotif",
+        "Buku & Media", "Fashion", "Peralatan Dapur",
+        "Alat Kesehatan", "Pertukangan", "Aksesoris HP",
+        "Tanaman & Kebun",
+    ],
+    "automotive": [
+        "Sparepart Mesin", "Ban & Velg", "Oli & Pelumas",
+        "Aksesoris Interior", "Body Part", "Sistem Kelistrikan",
+        "Tools & Workshop", "Filter & Busi", "Rem & Kopling",
+        "Suspensi", "Knalpot", "Lampu & LED",
+        "Audio Mobil", "Perawatan Body", "Aki & Baterai",
+        "Transmisi",
+    ],
+    "food": [
+        "Bahan Baku", "Bumbu & Rempah", "Minuman Kemasan",
+        "Snack & Cemilan", "Kemasan & Packaging", "Peralatan Masak",
+        "Kebersihan Dapur", "Kue & Roti", "Produk Beku",
+        "Saus & Sambal", "Beras & Sembako", "Susu & Olahan",
+        "Mie & Pasta", "Makanan Kaleng", "Gula & Pemanis",
+        "Bahan Kue",
+    ],
+    "fashion": [
+        "Atasan Pria", "Bawahan Pria", "Atasan Wanita",
+        "Bawahan Wanita", "Aksesoris", "Sepatu Pria",
+        "Sepatu Wanita", "Tas & Dompet", "Jam Tangan",
+        "Pakaian Muslim Pria", "Pakaian Muslim Wanita",
+        "Pakaian Anak", "Perhiasan", "Kacamata",
+        "Ikat Pinggang", "Topi & Syal",
+    ],
+}
+
+SECTOR_COMPANIES = {
+    "retail": ["Toko Maju Jaya", "Retail Makmur", "Sentra Belanja"],
+    "automotive": ["Bengkel Maju Motor", "Auto Sparepart", "Garasi Kita"],
+    "food": ["Warung Segar", "Dapur Lezat", "Pasar Rasa"],
+    "fashion": ["Fashion Baru", "Mode Trendi", "Busana Kita"],
+}
+
+ACCOUNT_GROUPS: list[dict] = [
+    {"prefix": "1-1", "name": "Kas & Bank", "type": "asset", "normal_balance": "debit", "count": 15},
+    {"prefix": "1-2", "name": "Piutang Usaha", "type": "asset", "normal_balance": "debit", "count": 10},
+    {"prefix": "1-3", "name": "Persediaan", "type": "asset", "normal_balance": "debit", "count": 20},
+    {"prefix": "1-4", "name": "Aset Lancar Lainnya", "type": "asset", "normal_balance": "debit", "count": 10},
+    {"prefix": "1-5", "name": "Aset Tetap", "type": "asset", "normal_balance": "debit", "count": 15},
+    {"prefix": "2-1", "name": "Hutang Usaha", "type": "liability", "normal_balance": "credit", "count": 15},
+    {"prefix": "2-2", "name": "Hutang Pajak", "type": "liability", "normal_balance": "credit", "count": 10},
+    {"prefix": "2-3", "name": "Hutang Lainnya", "type": "liability", "normal_balance": "credit", "count": 10},
+    {"prefix": "2-4", "name": "Hutang Jangka Panjang", "type": "liability", "normal_balance": "credit", "count": 5},
+    {"prefix": "3-1", "name": "Modal", "type": "equity", "normal_balance": "credit", "count": 10},
+    {"prefix": "3-2", "name": "Laba Ditahan", "type": "equity", "normal_balance": "credit", "count": 5},
+    {"prefix": "3-3", "name": "Prive & Dividen", "type": "equity", "normal_balance": "debit", "count": 5},
+    {"prefix": "4-1", "name": "Pendapatan Penjualan", "type": "income", "normal_balance": "credit", "count": 20},
+    {"prefix": "4-2", "name": "Pendapatan Lainnya", "type": "income", "normal_balance": "credit", "count": 10},
+    {"prefix": "4-3", "name": "Diskon & Retur", "type": "income", "normal_balance": "debit", "count": 5},
+    {"prefix": "5-1", "name": "Beban Operasional", "type": "expense", "normal_balance": "debit", "count": 20},
+    {"prefix": "5-2", "name": "Beban Gaji", "type": "expense", "normal_balance": "debit", "count": 5},
+    {"prefix": "5-3", "name": "Beban Pemasaran", "type": "expense", "normal_balance": "debit", "count": 5},
+    {"prefix": "5-4", "name": "Beban Administrasi", "type": "expense", "normal_balance": "debit", "count": 10},
+    {"prefix": "5-5", "name": "Penyusutan & Amortisasi", "type": "expense", "normal_balance": "debit", "count": 5},
+]
+
+ACCOUNT_NAMES: dict[str, list[str]] = {
+    "1-1": [
+        "Kas Kecil", "Kas Besar", "Bank BCA", "Bank Mandiri", "Bank BNI",
+        "Bank BRI", "Bank Syariah", "Giro BCA", "Giro Mandiri", "Deposito",
+        "Tabungan BCA", "Tabungan Mandiri", "Kas Harian", "Kas Toko", "Kas Cabang",
+    ],
+    "1-2": [
+        "Piutang Usaha", "Piutang Karyawan", "Piutang Direksi", "Piutang Afiliasi",
+        "Piutang Lainnya", "Piutang Konsinyasi", "DP Pembelian", "Tagihan Tertunda",
+        "Piutang Tak Tertagih", "Cadangan Piutang",
+    ],
+    "1-3": [
+        "Persediaan Barang Jadi", "Persediaan Bahan Baku", "Persediaan WIP",
+        "Persediaan Packaging", "Barang Konsinyasi Masuk", "Barang Dalam Perjalanan",
+        "Persediaan ATK", "Persediaan Sparepart", "Persediaan Makanan",
+        "Persediaan Minuman", "Persediaan Fashion", "Persediaan Elektronik",
+        "Persediaan Kosmetik", "Persediaan Obat", "Persediaan Alat Tulis",
+        "Persediaan Buku", "Persediaan Mainan", "Persediaan Aksesoris",
+        "Persediaan Pakaian", "Persediaan Sepatu",
+    ],
+    "1-4": [
+        "Biaya Dibayar Dimuka Sewa", "Biaya Dibayar Dimuka Asuransi",
+        "Biaya Dibayar Dimuka Lainnya", "Uang Muka Pembelian", "Uang Muka Karyawan",
+        "PPN Masukan", "Pajak Dibayar Dimuka", "Setoran Jaminan",
+        "Pendapatan Masih Akan Diterima", "Aset Lancar Lainnya",
+    ],
+    "1-5": [
+        "Tanah", "Gedung", "Renovasi Gedung", "Kendaraan", "Mobil Operasional",
+        "Motor Operasional", "Peralatan Kantor", "Komputer & Laptop",
+        "Mesin Produksi", "Perlengkapan Toko", "Furniture Kantor",
+        "Instalasi Listrik", "Mesin Kasir", "Rak Display", "AC & Elektronik",
+    ],
+    "2-1": [
+        "Hutang Usaha Supplier A", "Hutang Usaha Supplier B", "Hutang Usaha Supplier C",
+        "Hutang Usaha Lainnya", "Hutang Konsinyasi", "Hutang Komisi",
+        "Hutang Pembelian Aset", "Hutang Freight", "Hutang Listrik & Air",
+        "Hutang Telepon & Internet", "Hutang Sewa", "Hutang Langganan",
+        "Hutang Jasa Profesional", "Hutang Bonus Karyawan", "Hutang THR",
+    ],
+    "2-2": [
+        "Hutang PPh 21", "Hutang PPh 23", "Hutang PPh 25", "Hutang PPh 29",
+        "Hutang PPN Keluaran", "Hutang PPN JLN", "Hutang Pajak Daerah",
+        "Hutang Pajak Lainnya", "Hutang Bea Masuk", "Hutang Pajak Final",
+    ],
+    "2-3": [
+        "Hutang Gaji", "Hutang BPJS", "Hutang Jamsostek", "Hutang THR Karyawan",
+        "Hutang Bonus Akhir Tahun", "Hutang Lembur", "Hutang Pinjaman Karyawan",
+        "Hutang Lainnya", "Titipan Pelanggan", "Setoran Jaminan Pelanggan",
+    ],
+    "2-4": [
+        "Hutang Bank", "Hutang Leasing", "Obligasi", "Pinjaman Pemegang Saham",
+        "Pinjaman Lainnya",
+    ],
+    "3-1": [
+        "Modal Disetor", "Modal Pemilik 1", "Modal Pemilik 2",
+        "Agio Saham", "Tambahan Modal Disetor", "Modal Donasi",
+        "Modal Hibah", "Modal Ventura", "Setoran Modal Lainnya",
+        "Cadangan Modal",
+    ],
+    "3-2": [
+        "Laba Ditahan Tahun Lalu", "Laba Ditahan Periode Berjalan",
+        "Cadangan Laba", "Saldo Laba", "Akumulasi Laba",
+    ],
+    "3-3": [
+        "Prive Pemilik 1", "Prive Pemilik 2", "Dividen", "Prive Lainnya",
+        "Penarikan Modal",
+    ],
+    "4-1": [
+        "Penjualan Barang", "Penjualan Jasa", "Penjualan Eceran", "Penjualan Grosir",
+        "Penjualan Online", "Penjualan Offline", "Penjualan Konsinyasi",
+        "Penjualan Packaging", "Penjualan Sparepart", "Penjualan Makanan",
+        "Penjualan Minuman", "Penjualan Fashion", "Penjualan Elektronik",
+        "Pendapatan Langganan", "Pendapatan Keanggotaan", "Pendapatan Komisi",
+        "Pendapatan Ongkir", "Pendapatan Instalasi", "Pendapatan Servis",
+        "Penjualan Lainnya",
+    ],
+    "4-2": [
+        "Pendapatan Bunga Bank", "Pendapatan Sewa", "Pendapatan Royalti",
+        "Pendapatan Dividen", "Pendapatan Denda", "Pendapatan Administrasi",
+        "Pendapatan Kurs", "Pendapatan Lelang", "Pendapatan Kupon",
+        "Pendapatan Lainnya",
+    ],
+    "4-3": [
+        "Diskon Penjualan", "Retur Penjualan", "Potongan Penjualan",
+        "Penyesuaian Penjualan", "Diskon Akhir Bulan",
+    ],
+    "5-1": [
+        "Beban Sewa Toko", "Beban Sewa Gudang", "Beban Air", "Beban Listrik",
+        "Beban Telepon", "Beban Internet", "Beban Kebersihan", "Beban Keamanan",
+        "Beban ATK", "Beban Cetak & Fotokopi", "Beban Perlengkapan Toko",
+        "Beban Pengiriman", "Beban Bahan Bakar", "Beban Perjalanan Dinas",
+        "Beban Konsumsi", "Beban Entertainment", "Beban Pemeliharaan Gedung",
+        "Beban Pemeliharaan Kendaraan", "Beban Asuransi", "Beban Lainnya",
+    ],
+    "5-2": [
+        "Beban Gaji Pokok", "Beban Tunjangan", "Beban BPJS Kesehatan",
+        "Beban BPJS Ketenagakerjaan", "Beban THR",
+    ],
+    "5-3": [
+        "Beban Iklan Online", "Beban Iklan Offline", "Beban Promosi",
+        "Beban Sosial Media", "Beban Event & Sponsorship",
+    ],
+    "5-4": [
+        "Beban Legal & Notaris", "Beban Perizinan", "Beban Pajak & Retribusi",
+        "Beban Pelatihan", "Beban Langganan Software", "Beban Konsultan",
+        "Beban Audit", "Beban Bank", "Beban Administrasi Bank",
+        "Beban Materai & Perangko",
+    ],
+    "5-5": [
+        "Penyusutan Gedung", "Penyusutan Kendaraan", "Penyusutan Peralatan",
+        "Penyusutan Komputer", "Amortisasi Goodwill",
+    ],
+}
+
+TRANSACTION_DESCRIPTIONS = [
+    "Penjualan tunai", "Penjualan kredit", "Pembelian barang dagang",
+    "Pembayaran gaji karyawan", "Pembayaran listrik", "Pembayaran telepon & internet",
+    "Pembayaran sewa tempat", "Pembelian ATK kantor", "Pendapatan jasa servis",
+    "Pembelian perlengkapan toko", "Pembayaran BPJS", "Pembayaran pajak",
+    "Pendapatan komisi penjualan", "Pembelian sparepart", "Biaya transportasi",
+    "Pendapatan bunga bank", "Pembayaran iklan online", "Biaya perawatan AC",
+    "Pembelian kemasan produk", "Pendapatan ongkos kirim",
+    "Pembayaran konsultan", "Pembelian bahan baku", "Retur penjualan",
+    "Diskon penjualan", "Pembelian furniture kantor",
+]
+
+INVOICE_NOTES = [
+    "Pembayaran dalam 30 hari", "Termin net 30",
+    "Pembayaran tunai sebelum pengiriman", "Termin 14 hari",
+    "Pembayaran saat diterima", "Include PPN 11%",
+]
+
+PO_NOTES = [
+    "Barang harus dikirim sesuai PO", "Termasuk biaya pengiriman",
+    "Kualitas barang harus sesuai standar", "Pengiriman bertahap diperbolehkan",
+]
+
+NOTIFICATION_TEMPLATES = [
+    ("info", "Selamat Datang", "Akun tenant berhasil dibuat dan siap digunakan"),
+    ("info", "Invoice Baru", "Invoice baru telah diterbitkan untuk pelanggan"),
+    ("warning", "Pembayaran Jatuh Tempo", "Ada invoice yang akan jatuh tempo dalam 3 hari"),
+    ("success", "Pembayaran Diterima", "Pembayaran dari pelanggan telah dikonfirmasi"),
+    ("info", "Laporan Bulanan", "Laporan keuangan bulan ini siap diunduh"),
+    ("warning", "Stok Menipis", "Beberapa produk hampir mencapai batas minimum stok"),
+    ("success", "Langganan Diperbarui", "Langganan paket Pro telah diperpanjang"),
+    ("info", "Sistem Upgrade", "Pemeliharaan sistem dijadwalkan malam ini pukul 02:00"),
+    ("error", "Gagal Sinkronisasi", "Sinkronisasi bank gagal, periksa koneksi"),
+    ("success", "Data Dicadangkan", "Backup data harian berhasil dibuat"),
+    ("warning", "Batas Penyimpanan", "Penyimpanan mencapai 85%, sebaiknya hapus data lama"),
+    ("info", "Pembaruan Aplikasi", "Versi baru aplikasi tersedia, lakukan update"),
+    ("success", "Laporan Pajak", "Laporan PPN Masa siap untuk dilaporkan"),
+    ("warning", "Masa Trial Berakhir", "Masa percobaan akan berakhir dalam 7 hari"),
+    ("info", "Anggaran Baru", "Anggaran bulan depan telah dibuat"),
+]
+
+TENANT_AUDIT_ACTIONS = [
+    ("user.login", "system", "user"),
+    ("user.logout", "system", "user"),
+    ("invoice.created", "sales", "invoice"),
+    ("invoice.updated", "sales", "invoice"),
+    ("invoice.paid", "sales", "invoice"),
+    ("invoice.sent", "sales", "invoice"),
+    ("payment.received", "sales", "payment"),
+    ("purchase_order.created", "purchasing", "purchase_order"),
+    ("purchase_order.received", "purchasing", "purchase_order"),
+    ("product.created", "inventory", "product"),
+    ("product.updated", "inventory", "product"),
+    ("stock.adjustment", "inventory", "stock"),
+    ("journal.posted", "accounting", "journal"),
+    ("journal.reversed", "accounting", "journal"),
+    ("settings.updated", "system", "settings"),
+    ("membership.added", "system", "membership"),
+    ("report.generated", "reporting", "report"),
+    ("integration.synced", "integration", "integration"),
+    ("backup.completed", "system", "backup"),
+    ("tax.filed", "accounting", "tax"),
+]
+
+PLATFORM_AUDIT_ACTIONS = [
+    ("tenant.created", "System", "tenant", {"slug": "toko-maju"}),
+    ("tenant.created", "System", "tenant", {"slug": "bengkel-maju"}),
+    ("tenant.created", "System", "tenant", {"slug": "warung-segar"}),
+    ("tenant.created", "System", "tenant", {"slug": "fashion-baru"}),
+    ("user.registered", "System", "user", {"email": "admin@kepin.io"}),
+    ("system.deploy", "DevOps", "deployment", {"version": "1.2.0"}),
+    ("system.deploy", "DevOps", "deployment", {"version": "1.2.1"}),
+    ("backup.completed", "System", "backup", {"size": "512MB"}),
+    ("backup.completed", "System", "backup", {"size": "486MB"}),
+    ("plan.upgraded", "System", "subscription", {"from": "trial", "to": "pro"}),
+    ("incident.created", "System", "incident", {"severity": "warning"}),
+    ("incident.resolved", "System", "incident", {"severity": "warning"}),
+    ("user.role_changed", "Admin", "user", {"role": "owner"}),
+    ("maintenance.scheduled", "DevOps", "maintenance", {}),
+    ("security.audit", "System", "security", {"status": "passed"}),
 ]
 
 
-def _utc(y: int, m: int, d: int) -> datetime:
-    return datetime(y, m, d, tzinfo=timezone.utc)
+def rand_decimal(min_val: int, max_val: int) -> Decimal:
+    return Decimal(str(random.randint(min_val, max_val)))
 
 
-async def _exists(session: AsyncSession, stmt) -> bool:
-    return (await session.execute(stmt)).scalar_one_or_none() is not None
+def rand_choice[T](items: list[T]) -> T:
+    return random.choice(items)
 
 
-async def seed_demo(drop_first: bool = False) -> None:
+def pick_n[T](items: list[T], n: int) -> list[T]:
+    return random.sample(items, min(n, len(items)))
+
+
+def generate_accounts(tenant_id: str) -> list[Account]:
+    accounts = []
+    for group in ACCOUNT_GROUPS:
+        prefix = group["prefix"]
+        names = ACCOUNT_NAMES[prefix]
+        for i in range(group["count"]):
+            code = f"{prefix}{i + 1:03d}"
+            name = names[i] if i < len(names) else f"{group['name']} #{i + 1}"
+            accounts.append(Account(
+                id=str(uuid4()), tenant_id=tenant_id,
+                code=code, name=name,
+                type=group["type"],
+                normal_balance=group["normal_balance"],
+                is_system=False, allow_posting=True,
+                status="active", created_at=NOW, updated_at=NOW,
+            ))
+    return accounts
+
+
+def generate_customers(tenant_id: str, sector: str, count: int = 200) -> list[Customer]:
+    first_names = [
+        "Budi", "Ani", "Siti", "Agus", "Dewi", "Rudi", "Mega", "Dwi",
+        "Eko", "Tina", "Hendra", "Rina", "Adi", "Nina", "Bayu", "Lina",
+        "Cahyo", "Vita", "Doni", "Nia", "Fajar", "Desi", "Gunawan", "Tari",
+        "Hadi", "Rani", "Irwan", "Yuli", "Joko", "Sari", "Krisna", "Mira",
+    ]
+    last_names = [
+        "Santoso", "Wijaya", "Kusuma", "Pratama", "Utama", "Setiawan",
+        "Saputra", "Purnama", "Permana", "Hidayat", "Susilo", "Nugroho",
+        "Hartono", "Gunawan", "Wibowo", "Siregar", "Nasution", "Harahap",
+        "Lestari", "Anggraini", "Handayani", "Fitriani", "Rahmawati",
+        "Pertiwi", "Kurniawan", "Suherman",
+    ]
+    customers = []
+    used_codes = set()
+    for i in range(count):
+        code = f"C-{i + 1:04d}"
+        used_codes.add(code)
+        name = f"{random.choice(first_names)} {random.choice(last_names)}"
+        phone = f"08{random.randint(100000000, 999999999)}"
+        status = "active" if i < 190 else "inactive"
+        customers.append(Customer(
+            id=str(uuid4()), tenant_id=tenant_id,
+            code=code, name=name,
+            email=f"{code.lower()}@email.com",
+            phone=phone,
+            address=f"Jl. Contoh No. {i + 1}, Jakarta",
+            credit_limit=Decimal(f"{random.randint(5, 50)}00000"),
+            status=status, created_at=NOW, updated_at=NOW,
+        ))
+    return customers
+
+
+def generate_suppliers(tenant_id: str, sector: str, count: int = 200) -> list[Supplier]:
+    supplier_prefixes = {
+        "retail": ["PT", "CV", "UD"],
+        "automotive": ["PT", "CV", "Bengkel"],
+        "food": ["PT", "CV", "Pabrik"],
+        "fashion": ["PT", "CV", "Konveksi"],
+    }
+    prefixes = supplier_prefixes.get(sector, ["PT", "CV"])
+    companies = SECTOR_COMPANIES.get(sector, ["Perusahaan"])
+    suppliers = []
+    for i in range(count):
+        code = f"S-{i + 1:04d}"
+        prefix = random.choice(prefixes)
+        company = random.choice(companies)
+        name = f"{prefix} {company} {i + 1}"
+        phone = f"021{random.randint(1000000, 9999999)}"
+        status = "active" if i < 190 else "inactive"
+        suppliers.append(Supplier(
+            id=str(uuid4()), tenant_id=tenant_id,
+            code=code, name=name,
+            email=f"supplier{i + 1}@example.com",
+            phone=phone,
+            address=f"Jl. Supplier No. {i + 1}, Jakarta",
+            tax_id=f"{random.randint(100000000000000, 999999999999999)}",
+            status=status, created_at=NOW, updated_at=NOW,
+        ))
+    return suppliers
+
+
+def generate_products(tenant_id: str, sector: str, count: int = 200) -> list[Product]:
+    products = []
+    categories = PRODUCT_CATEGORIES.get(sector, ["Umum"])
+    product_names = {
+        "retail": ["Smart TV", "Kulkas", "AC", "Laptop", "HP", "Tablet", "Printer", "Blender", "Rice Cooker", "Dispenser",
+                    "Mie Instan", "Kopi", "Teh", "Gula", "Minyak Goreng", "Beras", "Sabun", "Shampoo", "Pasta Gigi", "Detergen",
+                    "Buku Tulis", "Pulpen", "Pensil", "Spidol", "Kertas HVS", "Map", "Lem", "Gunting", "Cutter", "Stapler",
+                    "Lipstik", "Bedak", "Parfum", "Handbody", "Sunscreen", "Masker", "Toner", "Serum", "Moisturizer", "Conditioner",
+                    "Mainan Mobil", "Boneka", "Puzzle", "Lego", "Remote Control", "Robot", "Bola", "Game", "Buku Cerita", "Alat Lukis"],
+        "automotive": ["Oli Mesin 5W-30", "Oli Mesin 10W-40", "Oli Gardan", "Oli Transmisi", "Filter Oli", "Filter Udara",
+                        "Filter AC", "Busi Iridium", "Busi Standar", "Kampas Rem Depan", "Kampas Rem Belakang", "Cakram Rem",
+                        "Aki Basah", "Aki Kering", "Aki Hybrid", "Ban 195/65R15", "Ban 205/55R16", "Ban 215/45R17", "Ban 225/40R18",
+                        "Knalpot Racing", "Knalpot Standar", "Lampu LED", "Lampu HID", "Lampu Depan", "Lampu Belakang",
+                        "Spion", "Wiper", "Kunci Roda", "Dongkrak", "Toolkit"],
+        "food": ["Tepung Terigu", "Tepung Beras", "Gula Pasir", "Gula Halus", "Garam", "Minyak Goreng", "Mentega", "Margarin",
+                 "Kecap Manis", "Kecap Asin", "Saus Tomat", "Saus Sambal", "Mayonaise", "Cuka", "MSG",
+                 "Kopinya Bubuk", "Teh Celup", "Coklat Bubuk", "Susu Kental Manis", "Susu UHT",
+                 "Kemasan Box", "Kemasan Plastik", "Label Stiker", "Kardus", "Tape Sealer",
+                 "Snack Coklat", "Keripik", "Kacang", "Biskuit", "Wafer"],
+        "fashion": ["Kemeja Pria", "Kaos Pria", "Jaket Pria", "Celana Jeans", "Celana Chino", "Celana Pendek",
+                     "Blouse Wanita", "Dress", "Rok", "Cardigan", "Sweater", "Hoodie",
+                     "Sepatu Formal", "Sepatu Sneakers", "Sepatu Boots", "Sandal", "Heels", "Flat Shoes",
+                     "Tas Selempang", "Tas Ransel", "Tas Tote", "Dompet", "Jam Tangan",
+                     "Jilbab Segiempat", "Jilbab Pashmina", "Baju Muslim", "Gamis", "Koko Pria"],
+    }
+    names = product_names.get(sector, ["Produk Umum"])
+
+    for i in range(count):
+        name = names[i % len(names)]
+        if i >= len(names):
+            name = f"{name} V{1 + i // len(names)}"
+        base_price = random.randint(20, 500) * 1000
+        cost_price = int(base_price * random.uniform(0.5, 0.75))
+        unit = rand_choice(["pcs", "kg", "liter", "box", "pack", "lusin"])
+        cat = categories[i % len(categories)]
+        min_stock = random.choice([5, 10, 25, 50])
+        products.append(Product(
+            id=str(uuid4()), tenant_id=tenant_id,
+            sku=f"{sector[:3].upper()}-{i + 1:04d}",
+            name=name, category=cat,
+            unit=unit,
+            sale_price=Decimal(str(base_price)),
+            cost_price=Decimal(str(cost_price)),
+            minimum_stock=Decimal(str(min_stock)),
+            status="active" if i < 190 else "inactive",
+            created_at=NOW, updated_at=NOW,
+        ))
+    return products
+
+
+def pick_account(accounts: list[Account], atype: str) -> Account:
+    return rand_choice([a for a in accounts if a.type == atype])
+
+
+async def main():
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, echo=settings.sql_echo)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    engine = create_async_engine(settings.database_url)
 
-    async with factory() as session:
-        if drop_first:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.drop_all)
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
+    factory = async_sessionmaker(engine, class_=AsyncSession)
     async with factory() as session:
-        if await _exists(session, select(Plan).where(Plan.code == "trial")):
-            print("Data already seeded, skipping.")
+        result = await session.execute(select(Tenant).limit(1))
+        if result.scalar_one_or_none():
+            print("Database already seeded, skipping...")
+            await engine.dispose()
             return
 
-        # ── Plans ──
+        rng = random.Random()
+
         plans = [
             Plan(code="trial", name="Trial", billing_period="monthly", price=Decimal("0"), active=True),
             Plan(code="pro", name="Pro", billing_period="monthly", price=Decimal("150000"), active=True),
@@ -142,21 +534,25 @@ async def seed_demo(drop_first: bool = False) -> None:
         ]
         session.add_all(plans)
 
-        # ── Users ──
-        admin = User(
-            id=UID_ADMIN, name="Admin KePin", email="admin@kepin.io",
-            password_hash="", status="active", created_at=NOW, updated_at=NOW,
-        )
-        budi = User(
-            id=UID_BUDI, name="Budi Santoso", email="budi@tokomaju.com",
-            password_hash="", status="active", created_at=NOW, updated_at=NOW,
-        )
-        session.add_all([admin, budi])
+        users = [
+            User(id=UID_ADMIN, name="Admin KePin", email="admin@kepin.io",
+                 status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
+            User(id=UID_BUDI, name="Budi Santoso", email="budi@tokomaju.com",
+                 status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
+            User(id=UID_ANI, name="Ani Lestari", email="ani@tokomaju.com",
+                 status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
+            User(id=UID_SITI, name="Siti Nurhaliza", email="siti@warungsegar.com",
+                 status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
+        ]
+        session.add_all(users)
 
-        # ── Tenants ──
+        all_tenants = []
+
         for td in TENANTS_DATA:
-            tid = new_id()
+            tid = str(uuid4())
             td["id"] = tid
+            all_tenants.append(td)
+
             tenant = Tenant(
                 id=tid, slug=td["slug"], name=td["name"], legal_name=td["legal_name"],
                 sector=td["sector"], timezone=WIB, currency=IDR,
@@ -166,386 +562,560 @@ async def seed_demo(drop_first: bool = False) -> None:
             session.add(tenant)
 
             org = OrganizationSetting(
-                tenant_id=tid, tenant_name=td["name"], legal_name=td["legal_name"],
-                timezone=WIB, currency=IDR, created_at=NOW, updated_at=NOW,
+                tenant_id=tid, legal_name=td["legal_name"],
+                tax_id=f"{random.randint(100000000000000, 999999999999999)}",
+                address=f"Jl. {td['name']} No. 1, Jakarta",
+                timezone=WIB, currency=IDR,
+                fiscal_year_start_month=1,
+                invoice_prefix="INV", po_prefix="PO",
+                created_at=NOW, updated_at=NOW,
             )
             session.add(org)
 
             branch = Branch(
-                id=new_id(), tenant_id=tid, code="main", name="Utama",
+                id=str(uuid4()), tenant_id=tid, code="main", name="Utama",
                 is_main=True, status="active", created_at=NOW, updated_at=NOW,
             )
             session.add(branch)
 
+            plan_price = Decimal("150000") if td["plan_code"] == "pro" else Decimal("0")
             sub = Subscription(
-                id=new_id(), tenant_id=tid, plan_code=td["plan_code"],
+                id=str(uuid4()), tenant_id=tid, plan_code=td["plan_code"],
                 status="active" if td["status"] == "active" else "suspended",
-                start_date=TODAY - timedelta(days=30), end_date=TODAY + timedelta(days=335),
+                started_at=NOW - timedelta(days=30),
+                current_period_start=NOW - timedelta(days=30),
+                current_period_end=NOW + timedelta(days=335),
+                amount=plan_price, currency=IDR,
                 created_at=NOW, updated_at=NOW,
             )
             session.add(sub)
 
             sub_event = SubscriptionEvent(
-                id=new_id(), tenant_id=tid, subscription_id=sub.id,
-                event_type="subscription.started", plan_code=td["plan_code"],
-                amount=Decimal("150000") if td["plan_code"] == "pro" else Decimal("0"),
-                occurred_at=NOW, created_at=NOW,
+                id=str(uuid4()), tenant_id=tid, subscription_id=sub.id,
+                event_type="subscription.started",
+                buyer_name_snapshot=td["name"],
+                buyer_email_snapshot=f"admin@{td['slug']}.com",
+                plan_code=td["plan_code"],
+                amount=plan_price,
+                occurred_at=NOW - timedelta(days=30),
+                period_end=NOW + timedelta(days=335),
+                created_at=NOW,
             )
             session.add(sub_event)
 
-            # ── Memberships ──
-            for uid in td["members"]:
-                m = Membership(
-                    id=new_id(), tenant_id=tid, user_id=uid,
-                    role_name="owner", status="active", joined_at=NOW,
+            more_events = []
+            if td["plan_code"] == "pro":
+                for ev_type, ev_meta in [
+                    ("subscription.renewed", {"note": "Perpanjangan otomatis"}),
+                    ("payment.received", {"method": "transfer_bank"}),
+                ]:
+                    more_events.append(SubscriptionEvent(
+                        id=str(uuid4()), tenant_id=tid, subscription_id=sub.id,
+                        event_type=ev_type,
+                        buyer_name_snapshot=td["name"],
+                        buyer_email_snapshot=f"admin@{td['slug']}.com",
+                        plan_code=td["plan_code"],
+                        amount=plan_price,
+                        occurred_at=NOW - timedelta(days=random.randint(1, 15)),
+                        event_meta=ev_meta,
+                        created_at=NOW,
+                    ))
+            session.add_all(more_events)
+
+            for m in td["members"]:
+                membership = Membership(
+                    id=str(uuid4()), tenant_id=tid, user_id=m["user_id"],
+                    role_name=m["role"], status="active",
+                    joined_at=NOW - timedelta(days=30),
                     created_at=NOW, updated_at=NOW,
                 )
-                session.add(m)
+                session.add(membership)
 
-            # ── Accounts ──
-            acct_ids = {}
-            for at in ACCOUNTS_TEMPLATE:
-                aid = new_id()
-                acct_ids[at["code"]] = aid
-                a = Account(
-                    id=aid, tenant_id=tid, code=at["code"], name=at["name"],
-                    type=at["type"], normal_balance=at["normal_balance"],
-                    is_system=True, allow_posting=True, status="active",
-                    created_at=NOW, updated_at=NOW,
-                )
-                session.add(a)
+            accounts = generate_accounts(tid)
+            session.add_all(accounts)
 
-            # ── Customers ──
-            cids = []
-            customers_data = [
-                {"code": "C001", "name": "Pelanggan A", "email": "a@mail.com"},
-                {"code": "C002", "name": "Pelanggan B", "email": "b@mail.com"},
-                {"code": "C003", "name": "Pelanggan C", "email": "c@mail.com"},
-            ]
-            if td["slug"] == "toko-maju":
-                customers_data += [
-                    {"code": "C004", "name": "Pelanggan D", "email": "d@mail.com"},
-                    {"code": "C005", "name": "Pelanggan E", "email": "e@mail.com"},
-                ]
-            for cd in customers_data:
-                cid = new_id()
-                cids.append(cid)
-                c = Customer(
-                    id=cid, tenant_id=tid, code=cd["code"], name=cd["name"],
-                    email=cd["email"], status="active", created_at=NOW, updated_at=NOW,
-                )
-                session.add(c)
+            customers = generate_customers(tid, td["sector"], 200)
+            session.add_all(customers)
 
-            # ── Suppliers ──
-            sids = []
-            suppliers_data = [
-                {"code": "S001", "name": "Supplier X", "email": "x@supplier.com"},
-                {"code": "S002", "name": "Supplier Y", "email": "y@supplier.com"},
-                {"code": "S003", "name": "Supplier Z", "email": "z@supplier.com"},
-            ]
-            if td["slug"] == "toko-maju":
-                suppliers_data += [
-                    {"code": "S004", "name": "Supplier W", "email": "w@supplier.com"},
-                ]
-            for sd in suppliers_data:
-                sid = new_id()
-                sids.append(sid)
-                s = Supplier(
-                    id=sid, tenant_id=tid, code=sd["code"], name=sd["name"],
-                    email=sd["email"], status="active", created_at=NOW, updated_at=NOW,
-                )
-                session.add(s)
+            suppliers = generate_suppliers(tid, td["sector"], 200)
+            session.add_all(suppliers)
 
-            # ── Products & Stock Balances ──
-            pids = []
-            location_id = new_id()
-            loc = InventoryLocation(
-                id=location_id, tenant_id=tid, branch_id=branch.id,
+            products = generate_products(tid, td["sector"], 200)
+            session.add_all(products)
+
+            location = InventoryLocation(
+                id=str(uuid4()), tenant_id=tid, branch_id=branch.id,
                 code="WH", name="Gudang Utama", status="active",
                 created_at=NOW, updated_at=NOW,
             )
-            session.add(loc)
+            session.add(location)
 
-            products_data = [
-                {"sku": "PRD-001", "name": "Produk A", "category": "Umum", "unit": "pcs", "sale_price": "50000", "cost_price": "35000", "qty": "50"},
-                {"sku": "PRD-002", "name": "Produk B", "category": "Umum", "unit": "pcs", "sale_price": "75000", "cost_price": "50000", "qty": "30"},
-                {"sku": "PRD-003", "name": "Produk C", "category": "Umum", "unit": "pcs", "sale_price": "100000", "cost_price": "70000", "qty": "20"},
-            ]
-            if td["slug"] == "toko-maju":
-                products_data += [
-                    {"sku": "PRD-004", "name": "Produk D", "category": "Umum", "unit": "pcs", "sale_price": "150000", "cost_price": "100000", "qty": "15"},
-                    {"sku": "PRD-005", "name": "Produk E", "category": "Umum", "unit": "pcs", "sale_price": "200000", "cost_price": "140000", "qty": "10"},
-                ]
-
-            for pd_data in products_data:
-                pid = new_id()
-                pids.append(pid)
-                qty = Decimal(pd_data["qty"])
-                avg_cost = Decimal(pd_data["cost_price"])
-                p = Product(
-                    id=pid, tenant_id=tid, sku=pd_data["sku"], name=pd_data["name"],
-                    category=pd_data["category"], unit=pd_data["unit"],
-                    sale_price=Decimal(pd_data["sale_price"]),
-                    cost_price=avg_cost, minimum_stock=Decimal("5"),
-                    status="active", created_at=NOW, updated_at=NOW,
-                )
-                session.add(p)
-
+            stock_balances = []
+            stock_movements = []
+            for p in products:
+                qty = Decimal(str(random.randint(20, 500)))
+                avg_cost = p.cost_price
                 sb = StockBalance(
-                    tenant_id=tid, product_id=pid, location_id=location_id,
+                    tenant_id=tid, product_id=p.id, location_id=location.id,
                     quantity=qty, average_cost=avg_cost, version=1,
                 )
-                session.add(sb)
-
+                stock_balances.append(sb)
                 sm = StockMovement(
-                    id=new_id(), tenant_id=tid, product_id=pid, location_id=location_id,
-                    movement_number=f"SM-{pd_data['sku']}-001",
-                    movement_date=TODAY - timedelta(days=25),
+                    id=str(uuid4()), tenant_id=tid, product_id=p.id,
+                    location_id=location.id,
+                    movement_number=f"SM-{p.sku}",
+                    movement_date=TODAY - timedelta(days=30),
                     type="in", quantity=qty, before_stock=Decimal("0"),
                     after_stock=qty, unit_cost=avg_cost,
                     reason="Initial stock", reference_type="manual",
                     created_by=UID_ADMIN, created_at=NOW,
                 )
-                session.add(sm)
+                stock_movements.append(sm)
+            session.add_all(stock_balances)
+            session.add_all(stock_movements)
 
-            # ── Transactions & Journal Entries ──
-            for i in range(5):
-                txn_date = TODAY - timedelta(days=5 * i + 1)
+            extra_stock_movements = []
+            for i in range(200 - len(stock_movements)):
+                product = random.choice(products)
+                sm_type = random.choice(["in", "out", "adjustment"])
+                before = Decimal(str(random.randint(20, 200)))
+                qty = Decimal(str(random.randint(1, 50)))
+                if sm_type == "out":
+                    qty = -qty if qty > 0 else qty
+                    after = before + qty
+                elif sm_type == "adjustment":
+                    after = Decimal(str(random.randint(10, 300)))
+                else:
+                    after = before + qty
+                movement_date = TODAY - timedelta(days=random.randint(0, 29))
+                reasons = {
+                    "in": ["Pembelian barang", "Retur pelanggan", "Transfer masuk", "Produksi selesai"],
+                    "out": ["Penjualan", "Retur supplier", "Transfer keluar", "Rusak/hilang"],
+                    "adjustment": ["Stok opname", "Koreksi sistem", "Selisih fisik"],
+                }
+                extra_stock_movements.append(StockMovement(
+                    id=str(uuid4()), tenant_id=tid, product_id=product.id,
+                    location_id=location.id,
+                    movement_number=f"SM-{product.sku}-E{i + 1:03d}",
+                    movement_date=movement_date,
+                    type=sm_type, quantity=qty,
+                    before_stock=before, after_stock=after,
+                    unit_cost=product.cost_price,
+                    reason=random.choice(reasons[sm_type]),
+                    reference_type="manual",
+                    created_by=random.choice([UID_ADMIN, UID_BUDI, UID_ANI]),
+                    created_at=datetime.combine(movement_date, NOW.time(), tzinfo=timezone.utc),
+                ))
+            session.add_all(extra_stock_movements)
+
+            income_accts = [a for a in accounts if a.type == "income"]
+            expense_accts = [a for a in accounts if a.type == "expense"]
+            cash_accts = [a for a in accounts if a.code.startswith("1-1")]
+            receivables_accts = [a for a in accounts if a.code.startswith("1-2")]
+            payables_accts = [a for a in accounts if a.code.startswith("2-1")]
+
+            transactions = []
+            journal_entries = []
+            journal_lines = []
+
+            for i in range(200):
+                days_ago = random.randint(0, 31)
+                txn_date = TODAY - timedelta(days=days_ago)
+                txn_type = random.choices(
+                    ["income", "expense", "transfer"],
+                    weights=[50, 35, 15],
+                )[0]
+                txn_status = random.choices(
+                    ["posted", "draft", "voided"],
+                    weights=[70, 20, 10],
+                )[0]
+                desc = random.choice(TRANSACTION_DESCRIPTIONS)
+                amount = Decimal(str(random.randint(50, 2000) * 1000))
+
+                if txn_type == "income":
+                    account = random.choice(income_accts)
+                    counter_account = random.choice(cash_accts)
+                elif txn_type == "expense":
+                    account = random.choice(expense_accts)
+                    counter_account = random.choice(cash_accts)
+                else:
+                    account = random.choice(cash_accts)
+                    counter_account = random.choice(cash_accts)
+                    while counter_account.id == account.id:
+                        counter_account = random.choice(cash_accts)
+
                 txn = Transaction(
-                    id=new_id(), tenant_id=tid, branch_id=branch.id,
+                    id=str(uuid4()), tenant_id=tid, branch_id=branch.id,
                     transaction_number=f"TRX-{i + 1:04d}",
                     transaction_date=txn_date,
-                    type="income" if i % 2 == 0 else "expense",
-                    description=f"Transaksi demo #{i + 1}",
-                    amount=Decimal("500000"),
-                    account_id=acct_ids["1-1000"],
-                    status="posted" if i < 3 else "draft",
-                    created_at=NOW, updated_at=NOW,
+                    type=txn_type,
+                    description=desc,
+                    amount=amount,
+                    account_id=account.id,
+                    counter_account_id=counter_account.id,
+                    status=txn_status,
+                    created_at=datetime.combine(txn_date, NOW.time(), tzinfo=timezone.utc),
+                    updated_at=NOW,
                 )
-                session.add(txn)
+                transactions.append(txn)
 
-                if i < 3:
+                if txn_status == "posted":
+                    je_status = "posted"
                     je = JournalEntry(
-                        id=new_id(), tenant_id=tid, branch_id=branch.id,
+                        id=str(uuid4()), tenant_id=tid, branch_id=branch.id,
                         journal_number=f"JR-{i + 1:04d}",
                         journal_date=txn_date,
                         reference=txn.transaction_number,
-                        description=f"Jurnal untuk transaksi #{i + 1}",
-                        status="posted",
-                        posted_at=NOW, posted_by=UID_ADMIN,
-                        created_at=NOW, updated_at=NOW,
+                        description=f"Jurnal: {desc}",
+                        status=je_status,
+                        posted_at=datetime.combine(txn_date, NOW.time(), tzinfo=timezone.utc),
+                        posted_by=random.choice([UID_ADMIN, UID_BUDI, UID_ANI, UID_SITI]),
+                        created_at=datetime.combine(txn_date, NOW.time(), tzinfo=timezone.utc),
+                        updated_at=NOW,
                     )
-                    session.add(je)
+                    journal_entries.append(je)
+                    txn.journal_entry_id = je.id
 
-                    if i % 2 == 0:
-                        income_line = JournalLine(
-                            id=new_id(), tenant_id=tid, journal_entry_id=je.id,
-                            account_id=acct_ids["4-1000"], line_number=1,
-                            description="Pendapatan", debit=Decimal("0"), credit=Decimal("500000"),
-                        )
-                        cash_line = JournalLine(
-                            id=new_id(), tenant_id=tid, journal_entry_id=je.id,
-                            account_id=acct_ids["1-1000"], line_number=2,
-                            description="Kas (debit)", debit=Decimal("500000"), credit=Decimal("0"),
-                        )
-                        session.add_all([income_line, cash_line])
+                    if txn_type in ("income", "transfer"):
+                        journal_lines.extend([
+                            JournalLine(
+                                id=str(uuid4()), tenant_id=tid, journal_entry_id=je.id,
+                                account_id=account.id, line_number=1,
+                                description=desc,
+                                debit=Decimal("0"), credit=amount,
+                            ),
+                            JournalLine(
+                                id=str(uuid4()), tenant_id=tid, journal_entry_id=je.id,
+                                account_id=counter_account.id, line_number=2,
+                                description=f"Kontra: {desc}",
+                                debit=amount, credit=Decimal("0"),
+                            ),
+                        ])
                     else:
-                        expense_line = JournalLine(
-                            id=new_id(), tenant_id=tid, journal_entry_id=je.id,
-                            account_id=acct_ids["5-1000"], line_number=1,
-                            description="Beban operasional", debit=Decimal("250000"), credit=Decimal("0"),
-                        )
-                        cash_out = JournalLine(
-                            id=new_id(), tenant_id=tid, journal_entry_id=je.id,
-                            account_id=acct_ids["1-1000"], line_number=2,
-                            description="Kas (credit)", debit=Decimal("0"), credit=Decimal("250000"),
-                        )
-                        session.add_all([expense_line, cash_out])
+                        journal_lines.extend([
+                            JournalLine(
+                                id=str(uuid4()), tenant_id=tid, journal_entry_id=je.id,
+                                account_id=account.id, line_number=1,
+                                description=desc,
+                                debit=amount, credit=Decimal("0"),
+                            ),
+                            JournalLine(
+                                id=str(uuid4()), tenant_id=tid, journal_entry_id=je.id,
+                                account_id=counter_account.id, line_number=2,
+                                description=f"Kontra: {desc}",
+                                debit=Decimal("0"), credit=amount,
+                            ),
+                        ])
+            session.add_all(transactions)
+            session.add_all(journal_entries)
+            session.add_all(journal_lines)
 
-            # ── Invoices ──
-            for i in range(3):
-                inv_date = TODAY - timedelta(days=10 * i + 2)
-                due = inv_date + timedelta(days=30)
-                paid = Decimal("0")
-                balance = Decimal("1000000")
-                inv_status = "posted"
-                if i == 0:
-                    paid = Decimal("500000")
-                    balance = Decimal("500000")
-                elif i == 1:
-                    paid = Decimal("1000000")
-                    balance = Decimal("0")
-                    inv_status = "paid"
+            invoices = []
+            invoice_lines = []
+            invoice_statuses = ["draft", "sent", "partial", "paid", "overdue"]
+            for i in range(200):
+                inv_date = TODAY - timedelta(days=random.randint(0, 35))
+                due_date = inv_date + timedelta(days=random.randint(14, 45))
+                customer = random.choice(customers)
+                product = random.choice(products)
+                qty = Decimal(str(random.randint(1, 50)))
+                unit_price = product.sale_price
+                line_total = qty * unit_price
+                tax = line_total * Decimal("0.11")
+                subtotal = line_total
+                total = subtotal + tax
+                status = random.choices(
+                    invoice_statuses,
+                    weights=[10, 15, 20, 35, 20],
+                )[0]
+                paid_amount = Decimal("0")
+                balance_due = total
+                if status == "paid":
+                    paid_amount = total
+                    balance_due = Decimal("0")
+                elif status == "partial":
+                    paid_amount = total * Decimal(str(random.randint(10, 90))) / Decimal("100")
+                    paid_amount = Decimal(str(int(paid_amount / 1000) * 1000))
+                    balance_due = total - paid_amount
+                elif status == "overdue":
+                    balance_due = total
 
                 inv = Invoice(
-                    id=new_id(), tenant_id=tid, branch_id=branch.id,
+                    id=str(uuid4()), tenant_id=tid, branch_id=branch.id,
                     invoice_number=f"INV-{i + 1:04d}",
-                    customer_id=cids[i % len(cids)],
-                    invoice_date=inv_date, due_date=due,
-                    status=inv_status,
-                    subtotal=Decimal("900000"), tax_total=Decimal("100000"),
+                    customer_id=customer.id,
+                    invoice_date=inv_date, due_date=due_date,
+                    status=status,
+                    subtotal=subtotal, tax_total=tax,
                     discount_total=Decimal("0"),
-                    total=Decimal("1000000"),
-                    paid_amount=paid, balance_due=balance,
-                    created_at=NOW, updated_at=NOW,
+                    total=total,
+                    paid_amount=paid_amount, balance_due=balance_due,
+                    notes=random.choice(INVOICE_NOTES),
+                    created_at=datetime.combine(inv_date, NOW.time(), tzinfo=timezone.utc),
+                    updated_at=NOW,
                 )
-                session.add(inv)
+                invoices.append(inv)
 
-                line = InvoiceLine(
-                    id=new_id(), tenant_id=tid, invoice_id=inv.id,
-                    line_number=1, product_id=pids[i % len(pids)],
-                    item_name=f"Item Invoice {i + 1}",
-                    quantity=Decimal("2"), unit="pcs",
-                    unit_price=Decimal("500000"),
+                invoice_lines.append(InvoiceLine(
+                    id=str(uuid4()), tenant_id=tid, invoice_id=inv.id,
+                    line_number=1, product_id=product.id,
+                    item_name=product.name,
+                    quantity=qty, unit=product.unit,
+                    unit_price=unit_price,
                     tax_rate=Decimal("11"), discount_amount=Decimal("0"),
-                    line_total=Decimal("1000000"),
-                )
-                session.add(line)
+                    line_total=line_total,
+                ))
+            session.add_all(invoices)
+            session.add_all(invoice_lines)
 
-            # ── Customer Payments ──
-            for i in range(2):
-                pmt = CustomerPayment(
-                    id=new_id(), tenant_id=tid, branch_id=branch.id,
-                    payment_number=f"PYT-{i + 1:04d}",
-                    customer_id=cids[i % len(cids)],
-                    payment_date=TODAY - timedelta(days=5),
-                    amount=Decimal("500000"), method="transfer",
-                    status="posted", created_at=NOW, updated_at=NOW,
-                )
-                session.add(pmt)
+            payments = []
+            allocations = []
+            for inv in invoices:
+                if inv.status in ("paid", "partial") and inv.paid_amount > 0:
+                    pmt = CustomerPayment(
+                        id=str(uuid4()), tenant_id=tid, branch_id=branch.id,
+                        payment_number=f"PYT-{inv.invoice_number[4:]}",
+                        customer_id=inv.customer_id,
+                        payment_date=inv.due_date - timedelta(days=random.randint(0, 5)),
+                        amount=inv.paid_amount,
+                        method=random.choice(["transfer", "cash", "giro", "kartu_kredit"]),
+                        status="posted",
+                        created_at=datetime.combine(inv.due_date, NOW.time(), tzinfo=timezone.utc),
+                        updated_at=NOW,
+                    )
+                    payments.append(pmt)
+                    allocations.append(CustomerPaymentAllocation(
+                        id=str(uuid4()), tenant_id=tid,
+                        payment_id=pmt.id, invoice_id=inv.id,
+                        amount=inv.paid_amount,
+                    ))
+            session.add_all(payments)
+            session.add_all(allocations)
 
-            # ── Purchase Orders ──
-            for i in range(2):
+            purchase_orders = []
+            po_lines = []
+            goods_receipts = []
+            goods_receipt_lines = []
+            po_statuses = ["draft", "sent", "partial", "received", "cancelled"]
+            for i in range(200):
+                supplier = random.choice(suppliers)
+                product = random.choice(products)
+                po_date = TODAY - timedelta(days=random.randint(0, 35))
+                expected_date = po_date + timedelta(days=random.randint(7, 30))
+                qty = Decimal(str(random.randint(5, 200)))
+                unit_price = product.cost_price
+                line_total = qty * unit_price
+                tax = line_total * Decimal("0.11")
+                total = line_total + tax
+                status = random.choices(
+                    po_statuses,
+                    weights=[10, 20, 15, 40, 5],
+                )[0]
+                received_qty = qty if status == "received" else (
+                    qty * Decimal(str(random.randint(10, 90))) / Decimal("100") if status == "partial" else Decimal("0")
+                )
+
                 po = PurchaseOrder(
-                    id=new_id(), tenant_id=tid, branch_id=branch.id,
+                    id=str(uuid4()), tenant_id=tid, branch_id=branch.id,
                     po_number=f"PO-{i + 1:04d}",
-                    supplier_id=sids[i % len(sids)],
-                    order_date=TODAY - timedelta(days=15),
-                    expected_date=TODAY + timedelta(days=15),
-                    status="received" if i == 0 else "sent",
-                    subtotal=Decimal("2000000"),
-                    tax_total=Decimal("200000"),
-                    total=Decimal("2200000"),
-                    created_at=NOW, updated_at=NOW,
+                    supplier_id=supplier.id,
+                    order_date=po_date, expected_date=expected_date,
+                    status=status,
+                    subtotal=line_total, tax_total=tax,
+                    total=total,
+                    notes=random.choice(PO_NOTES),
+                    created_at=datetime.combine(po_date, NOW.time(), tzinfo=timezone.utc),
+                    updated_at=NOW,
                 )
-                session.add(po)
+                purchase_orders.append(po)
 
                 pol = PurchaseOrderLine(
-                    id=new_id(), tenant_id=tid, purchase_order_id=po.id,
-                    product_id=pids[i % len(pids)], line_number=1,
-                    item_name=f"PO Item {i + 1}",
-                    quantity=Decimal("10"), received_quantity=Decimal("10") if i == 0 else Decimal("0"),
-                    unit_price=Decimal("200000"), line_total=Decimal("2000000"),
+                    id=str(uuid4()), tenant_id=tid, purchase_order_id=po.id,
+                    product_id=product.id, line_number=1,
+                    item_name=product.name,
+                    quantity=qty, received_quantity=received_qty,
+                    unit_price=unit_price, line_total=line_total,
                 )
-                session.add(pol)
+                po_lines.append(pol)
 
-                if i == 0:
+                if received_qty > 0:
                     gr = GoodsReceipt(
-                        id=new_id(), tenant_id=tid, branch_id=branch.id,
+                        id=str(uuid4()), tenant_id=tid, branch_id=branch.id,
                         purchase_order_id=po.id,
                         receipt_number=f"GR-{i + 1:04d}",
-                        received_at=NOW, status="completed",
+                        received_at=datetime.combine(po_date + timedelta(days=random.randint(1, 5)), NOW.time(), tzinfo=timezone.utc),
+                        status="completed",
                         created_at=NOW, updated_at=NOW,
                     )
-                    session.add(gr)
-                    grl = GoodsReceiptLine(
-                        id=new_id(), tenant_id=tid, goods_receipt_id=gr.id,
+                    goods_receipts.append(gr)
+                    goods_receipt_lines.append(GoodsReceiptLine(
+                        id=str(uuid4()), tenant_id=tid,
+                        goods_receipt_id=gr.id,
                         purchase_order_line_id=pol.id,
-                        product_id=pids[i % len(pids)],
-                        quantity=Decimal("10"), unit_cost=Decimal("200000"),
-                    )
-                    session.add(grl)
+                        product_id=product.id,
+                        quantity=received_qty,
+                        unit_cost=unit_price,
+                    ))
+            session.add_all(purchase_orders)
+            session.add_all(po_lines)
+            session.add_all(goods_receipts)
+            session.add_all(goods_receipt_lines)
 
-            # ── Notifications (8) ──
-            notif_types = [
-                ("info", "Selamat datang", "Akun tenant berhasil dibuat"),
-                ("info", "Invoice baru", "Invoice INV-0001 telah diterbitkan"),
-                ("warning", "Pembayaran jatuh tempo", "Invoice INV-0002 akan jatuh tempo dalam 3 hari"),
-                ("success", "Pembayaran diterima", "Pembayaran Rp500.000 dari Pelanggan A diterima"),
-                ("info", "Laporan tersedia", "Laporan bulanan siap diunduh"),
-                ("warning", "Stok menipis", "Produk A hampir habis (sisa 5)"),
-                ("success", "Langganan diperbarui", "Langganan Pro akan diperpanjang otomatis"),
-                ("info", "Sistem upgrade", "Pemeliharaan sistem dijadwalkan malam ini"),
-            ]
-            for j, (ntype, title, msg) in enumerate(notif_types):
-                notif = Notification(
-                    id=new_id(), tenant_id=tid,
-                    type=ntype, title=title, message=msg,
-                    read_at=NOW if j < 2 else None,
-                    created_at=NOW - timedelta(hours=j),
-                )
-                session.add(notif)
+            notifications = []
+            base_templates = NOTIFICATION_TEMPLATES
+            for i in range(200):
+                template = base_templates[i % len(base_templates)]
+                ntype, ntitle, nmsg = template
+                created = NOW - timedelta(days=random.randint(0, 29), hours=random.randint(0, 23))
+                read_at = created + timedelta(hours=random.randint(1, 48)) if random.random() < 0.6 else None
+                notifications.append(Notification(
+                    id=str(uuid4()), tenant_id=tid,
+                    user_id=random.choice([None, UID_BUDI, UID_ANI]),
+                    type=ntype, title=ntitle, message=nmsg,
+                    link="" if random.random() < 0.7 else f"/dashboard/{random.choice(['invoices', 'reports', 'products'])}",
+                    read_at=read_at,
+                    created_at=created,
+                ))
+            session.add_all(notifications)
 
-            # ── Tenant Audit Events (5) ──
-            audit_actions = [
-                "user.login",
-                "invoice.created",
-                "invoice.paid",
-                "journal.posted",
-                "settings.updated",
-            ]
-            for j, action in enumerate(audit_actions):
-                ae = TenantAuditEvent(
-                    id=new_id(), tenant_id=tid,
-                    timestamp=NOW - timedelta(hours=j),
-                    actor_name="Budi Santoso",
+            audit_events = []
+            for i in range(200):
+                action, module, object_type = random.choice(TENANT_AUDIT_ACTIONS)
+                timestamp = NOW - timedelta(days=random.randint(0, 29), hours=random.randint(0, 23))
+                audit_events.append(TenantAuditEvent(
+                    id=str(uuid4()), tenant_id=tid,
+                    timestamp=timestamp,
+                    actor_id=random.choice([UID_BUDI, UID_ANI, UID_SITI, None]),
+                    actor_name=random.choice(["Budi Santoso", "Ani Lestari", "Siti Nurhaliza", "System"]),
                     action=action,
-                    module="sales" if "invoice" in action else "system",
-                    resource_type="invoice" if "invoice" in action else "journal" if "journal" in action else "user",
-                    created_at=NOW - timedelta(hours=j),
-                )
-                session.add(ae)
+                    module=module,
+                    object_type=object_type,
+                    object_id=str(random.randint(1, 9999)),
+                    created_at=timestamp,
+                ))
+            session.add_all(audit_events)
 
-        # ── Platform Incidents (2) ──
         incidents = [
             Incident(
-                id=new_id(), title="Gangguan Database",
-                description="Latensi database meningkat 2x lipat selama 5 menit",
-                severity="warning", status="resolved",
-                started_at=NOW - timedelta(days=7), resolved_at=NOW - timedelta(days=6, hours=12),
-                created_at=NOW - timedelta(days=7), updated_at=NOW - timedelta(days=6, hours=12),
+                id=str(uuid4()), severity="warning", title="Gangguan Database",
+                description="Latensi database meningkat 3x lipat selama 10 menit pada pukul 14:30 WIB",
+                status="resolved",
+                started_at=NOW - timedelta(days=7, hours=2),
+                resolved_at=NOW - timedelta(days=6, hours=14),
+                owner="DevOps Team",
+                timeline=[
+                    {"time": (NOW - timedelta(days=7, hours=2)).isoformat(), "action": "Incident detected"},
+                    {"time": (NOW - timedelta(days=7, hours=1, minutes=45)).isoformat(), "action": "Root cause identified"},
+                    {"time": (NOW - timedelta(days=6, hours=14)).isoformat(), "action": "Resolved"},
+                ],
+                created_at=NOW - timedelta(days=7), updated_at=NOW - timedelta(days=6, hours=14),
             ),
             Incident(
-                id=new_id(), title="Pemeliharaan Terjadwal",
-                description="Upgrade server pada pukul 02:00-04:00 WIB",
-                severity="info", status="open",
-                started_at=NOW + timedelta(days=3),
+                id=str(uuid4()), severity="critical", title="Downtime API",
+                description="API utama tidak dapat diakses selama 5 menit, mempengaruhi seluruh tenant",
+                status="resolved",
+                started_at=NOW - timedelta(days=3, hours=6),
+                resolved_at=NOW - timedelta(days=3, hours=5, minutes=55),
+                owner="Platform Team",
+                timeline=[
+                    {"time": (NOW - timedelta(days=3, hours=6)).isoformat(), "action": "Alert triggered"},
+                    {"time": (NOW - timedelta(days=3, hours=5, minutes=55)).isoformat(), "action": "Service restored"},
+                ],
+                created_at=NOW - timedelta(days=3), updated_at=NOW - timedelta(days=3, hours=5, minutes=55),
+            ),
+            Incident(
+                id=str(uuid4()), severity="info", title="Pemeliharaan Terjadwal",
+                description="Upgrade server database pada pukul 02:00-04:00 WIB, estimasi downtime 30 menit",
+                status="scheduled",
+                started_at=NOW + timedelta(days=2),
+                owner="DevOps Team",
                 created_at=NOW, updated_at=NOW,
+            ),
+            Incident(
+                id=str(uuid4()), severity="warning", title="SSL Certificate Expiring",
+                description="SSL certificate untuk domain app.kepin.io akan kadaluarsa dalam 7 hari",
+                status="open",
+                started_at=NOW - timedelta(days=1),
+                owner="Platform Team",
+                created_at=NOW - timedelta(days=1), updated_at=NOW,
             ),
         ]
         session.add_all(incidents)
 
-        # ── Platform Audit Events (3) ──
-        platform_audits = [
-            PlatformAuditEvent(
-                id=new_id(), action="tenant.created",
-                actor_name="System", resource_type="tenant",
-                detail={"slug": "toko-maju", "name": "Toko Maju Jaya"},
-                created_at=NOW - timedelta(days=30),
-            ),
-            PlatformAuditEvent(
-                id=new_id(), action="system.deploy",
-                actor_name="DevOps", resource_type="deployment",
-                detail={"version": "1.0.0", "environment": "production"},
-                created_at=NOW - timedelta(days=1),
-            ),
-            PlatformAuditEvent(
-                id=new_id(), action="backup.completed",
-                actor_name="System", resource_type="backup",
-                detail={"size": "256MB", "status": "success"},
-                created_at=NOW - timedelta(hours=6),
-            ),
-        ]
+        platform_audits = []
+        for i, (action, actor, obj_type, detail) in enumerate(PLATFORM_AUDIT_ACTIONS):
+            timestamp = NOW - timedelta(days=random.randint(0, 30), hours=random.randint(0, 23))
+            platform_audits.append(PlatformAuditEvent(
+                id=str(uuid4()),
+                timestamp=timestamp,
+                actor_id=UID_ADMIN if actor == "Admin" else None,
+                actor_name=actor,
+                action=action,
+                object_type=obj_type,
+                object_id=detail.get("slug") or detail.get("email") or str(random.randint(1, 100)),
+                before=None,
+                after=detail,
+                created_at=timestamp,
+            ))
         session.add_all(platform_audits)
 
+        outbox_events = [
+            OutboxEvent(
+                id=str(uuid4()), tenant_id=None,
+                event_type="platform.tenant.created",
+                aggregate_type="tenant",
+                aggregate_id=td["id"],
+                payload={"slug": td["slug"], "name": td["name"]},
+                occurred_at=NOW,
+                processed_at=None,
+            )
+            for td in all_tenants
+        ]
+        session.add_all(outbox_events)
+
         await session.commit()
-        print(f"Seed complete: {len(TENANTS_DATA)} tenants, {len(ACCOUNTS_TEMPLATE)} accounts each.")
 
+        print("Seeding complete!")
+        print("=" * 50)
+        print("AKUN YANG TERSEDIA:")
+        print("-" * 50)
+        print()
+        print("Admin Platform:")
+        print("  Email: admin@kepin.io")
+        print("  Password: admin123")
+        print("  Name: Admin KePin")
+        print("  Role: Super Admin")
+        print()
+        print("Owner Toko Maju:")
+        print("  Email: budi@tokomaju.com")
+        print("  Password: budi123")
+        print("  Name: Budi Santoso")
+        print("  Role: Owner")
+        print()
+        print("Manager Toko Maju:")
+        print("  Email: ani@tokomaju.com")
+        print("  Password: ani123")
+        print("  Name: Ani Lestari")
+        print("  Role: Manager")
+        print()
+        print("Akuntan Warung Segar:")
+        print("  Email: siti@warungsegar.com")
+        print("  Password: siti123")
+        print("  Name: Siti Nurhaliza")
+        print("  Role: Akuntan")
+        print()
+        print("-" * 50)
+        total = sum(
+            1 for td in TENANTS_DATA
+            for table_name in ["accounts", "customers", "suppliers", "products",
+                               "transactions", "journal_entries", "invoices",
+                               "purchase_orders", "stock_movements", "notifications",
+                               "audit_events"]
+        )
+        print(f"Total tenant records generated: ~{len(TENANTS_DATA) * 11 * 200}")
+        print("Platform records: incidents, platform audit events, outbox events")
 
-async def main() -> None:
-    import sys
-    drop = "--drop" in sys.argv
-    await seed_demo(drop_first=drop)
+    await engine.dispose()
 
 
 if __name__ == "__main__":
