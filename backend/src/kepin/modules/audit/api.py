@@ -43,7 +43,7 @@ async def list_audit_events(
     stmt = (
         select(TenantAuditEvent)
         .where(TenantAuditEvent.tenant_id == ctx.id)
-        .order_by(TenantAuditEvent.timestamp.desc(), TenantAuditEvent.created_at.desc())
+        .order_by(TenantAuditEvent.timestamp.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

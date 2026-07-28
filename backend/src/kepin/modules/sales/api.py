@@ -30,7 +30,7 @@ router = APIRouter(tags=["Sales"])
 
 
 class CustomerSchema(ApiSchema):
-    id: str
+    id: UUID
     code: str
     name: str
     email: str = ""

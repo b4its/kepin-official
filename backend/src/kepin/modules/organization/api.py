@@ -32,7 +32,6 @@ router = APIRouter(tags=["Organization"])
 
 
 class OrganizationSettingResponse(ApiSchema):
-    id: str
     tenant_id: str
     tenant_name: str | None = None
     legal_name: str | None = None

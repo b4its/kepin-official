@@ -23,7 +23,7 @@ router = APIRouter(tags=["Accounting"])
 
 
 class AccountSchema(ApiSchema):
-    id: str
+    id: UUID
     code: str
     name: str
     type: str
