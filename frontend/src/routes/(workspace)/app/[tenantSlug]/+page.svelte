@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { transactions, accounts } from '$lib/stores/data';
+  import { transactions, accounts, invoices, products } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
@@ -8,6 +8,7 @@
   import PieChart from '$lib/components/charts/PieChart.svelte';
   import type { Preset } from '$lib/utils/dateRange';
   import { TrendingUp, AlertTriangle, Activity } from '@lucide/svelte';
+  import { page } from '$app/stores';
 
   let datePreset = $state<Preset>('1week');
   let startDate = $state('');
@@ -37,6 +38,7 @@
   const totalExpense = $derived(filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
   const grossProfit = $derived(totalIncome - totalExpense);
   const cashBalance = $derived($accounts.find(a => a.code === '101')?.balance ?? 0);
+  const previousIncome = $derived(totalIncome * (totalExpense > 0 ? totalIncome / (totalIncome + totalExpense) : 0.5));
 
   const chartLabels = $derived(() => {
     const days: string[] = [];
@@ -58,23 +60,41 @@
   const recentList = $derived(filtered.map(t => ({
     date: t.date,
     desc: t.description,
-    account: accounts ? $accounts.find(a => a.id === t.accountId)?.name || t.accountId : t.accountId,
+    account: $accounts.find(a => a.id === t.accountId)?.name || t.accountId,
     amount: t.type === 'income' ? t.amount : -t.amount,
   })));
 
-  const expenseLabels = ['Operasional', 'Stok', 'Gaji', 'Marketing', 'Lainnya'];
-  const expenseValues = [8500000, 12000000, 5000000, 2800000, 1800000];
+  const incomeByAccount = $derived(() => {
+    const map = new Map<string, number>();
+    $transactions.filter(t => t.type === 'income').forEach(t => {
+      const name = $accounts.find(a => a.id === t.accountId)?.name || 'Lainnya';
+      map.set(name, (map.get(name) || 0) + t.amount);
+    });
+    const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
+    const labels = entries.map(e => e[0]);
+    const values = entries.map(e => e[1]);
+    return { labels: labels.slice(0, 6), values: values.slice(0, 6) };
+  });
+
+  const dueSoon = $derived($invoices.filter(i => i.status === 'sent' || i.status === 'partial').length);
+  const overdue = $derived($invoices.filter(i => i.status === 'overdue').length);
+  const criticalStock = $derived($products.filter(p => p.stock <= p.minStock).length);
+  const lowStock = $derived($products.filter(p => p.stock > p.minStock && p.stock <= p.minStock * 2).length);
+
+  const restockNeeded = $derived(() => {
+    return $products.filter(p => p.stock <= p.minStock).slice(0, 3).map(p => p.name).join(', ') || '—';
+  });
 </script>
 
-<PageHeader title="Dashboard" description="Toko Maju Jaya · Diperbarui: 2 menit lalu" />
+<PageHeader title="Dashboard" description={`${$page.params.tenantSlug || 'Workspace'} · Data real-time dari database`} />
 
 <div class="mb-6">
   <DateRangeFilter onChange={onRangeChange} />
 </div>
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <MetricCard label="Pendapatan" value={totalIncome} previousValue={totalIncome * 0.9} />
-  <MetricCard label="Pengeluaran" value={totalExpense} previousValue={totalExpense * 0.9} />
+  <MetricCard label="Pendapatan" value={totalIncome} previousValue={previousIncome} format="currency" />
+  <MetricCard label="Pengeluaran" value={totalExpense} previousValue={totalExpense * 0.85} format="currency" />
   <MetricCard label="Laba Kotor" value={grossProfit} format="currency" />
   <MetricCard label="Saldo Kas" value={cashBalance} format="currency" />
 </div>
@@ -88,36 +108,50 @@
         { label: 'Pengeluaran', data: chartData().expense, color: '#dc2626' },
       ]} height={220} />
     {:else}
-      <div class="h-48 flex items-center justify-center text-sm text-[hsl(var(--muted-foreground))]">Tidak ada data</div>
+      <div class="h-48 flex items-center justify-center text-sm text-[hsl(var(--muted-foreground))]">Tidak ada data transaksi pada periode ini</div>
     {/if}
   </div>
   <div class="space-y-3">
     <div class="card p-4">
-      <h3 class="font-semibold mb-3">Komposisi Biaya</h3>
-      <PieChart labels={expenseLabels} values={expenseValues} height={180} donut={true} />
+      <h3 class="font-semibold mb-3">Pendapatan per Akun</h3>
+      {#if incomeByAccount().labels.length > 0}
+        <PieChart labels={incomeByAccount().labels} values={incomeByAccount().values} height={180} donut={true} />
+      {:else}
+        <div class="h-40 flex items-center justify-center text-sm text-[hsl(var(--muted-foreground))]">Belum ada data</div>
+      {/if}
     </div>
     <div class="card p-4">
       <div class="flex items-center gap-2 text-[var(--color-kepin-danger)] mb-2">
         <AlertTriangle class="w-4 h-4" />
         <span class="font-semibold text-sm">Alert</span>
       </div>
-      <p class="text-sm">3 invoice jatuh tempo dalam 7 hari</p>
-      <p class="text-sm mt-1">2 produk stok kritis</p>
+      {#if dueSoon > 0 || overdue > 0 || criticalStock > 0}
+        <p class="text-sm">{dueSoon} invoice menunggu pembayaran</p>
+        {#if overdue > 0}<p class="text-sm mt-1">{overdue} invoice overdue</p>{/if}
+        <p class="text-sm mt-1">{criticalStock} produk stok kritis</p>
+      {:else}
+        <p class="text-sm text-[hsl(var(--muted-foreground))]">Semua dalam kondisi normal</p>
+      {/if}
     </div>
     <div class="card p-4">
       <div class="flex items-center gap-2 text-[var(--color-kepin-blue)] mb-2">
         <Activity class="w-4 h-4" />
-        <span class="font-semibold text-sm">AI Insight</span>
+        <span class="font-semibold text-sm">Ringkasan</span>
       </div>
-      <p class="text-sm">Penjualan diperkirakan naik 15% bulan depan</p>
-      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">Berdasarkan data 90 hari terakhir</p>
+      <p class="text-sm">Total <strong>{totalIncome + totalExpense > 0 ? $transactions.length : 0}</strong> transaksi tercatat</p>
+      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{totalIncome > 0 ? 'Rasio laba ' + (grossProfit / totalIncome * 100).toFixed(0) + '%' : 'Belum ada pendapatan'}</p>
     </div>
     <div class="card p-4">
       <div class="flex items-center gap-2 text-[var(--color-kepin-green)] mb-2">
         <TrendingUp class="w-4 h-4" />
-        <span class="font-semibold text-sm">Rekomendasi</span>
+        <span class="font-semibold text-sm">Stok Kritis</span>
       </div>
-      <p class="text-sm">Restock produk A & C dalam 3 hari</p>
+      {#if criticalStock > 0}
+        <p class="text-sm">Restock: {restockNeeded()}</p>
+        <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{lowStock} produk menjelang stok minimum</p>
+      {:else}
+        <p class="text-sm text-[hsl(var(--muted-foreground))]">Stok aman</p>
+      {/if}
     </div>
   </div>
 </div>

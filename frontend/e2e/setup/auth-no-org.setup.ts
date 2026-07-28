@@ -1,5 +1,4 @@
 import { test as setup, expect, request } from '@playwright/test';
-import { loginApi } from '../fixtures/api.fixture';
 import { uniqueEmail } from '../helpers/ids';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -21,18 +20,22 @@ setup('setup no-org storage state', async ({ page }) => {
   expect(regRes.status()).toBe(201);
   await anonymous.dispose();
 
-  const { api: authedApi } = await loginApi(apiURL, email, password);
-  const res = await authedApi.get('auth/me');
-  expect(res.ok()).toBeTruthy();
+  const ctx = await request.newContext({ baseURL: apiURL });
+  const loginRes = await ctx.post('auth/login', { data: { email, password } });
+  const loginBody = await loginRes.json();
+  expect(loginRes.status()).toBe(200);
+  await ctx.dispose();
 
   await page.goto(webURL + '/auth/login');
-  await page.evaluate(([e, p]) => {
-    const user = { id: 'no-org-setup', name: 'No Org User', email: e, phone: '' };
+  await page.evaluate((data) => {
+    localStorage.setItem('kepin_token', data.access_token);
+    const user = { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone || '', avatar: data.user.avatarUrl };
     localStorage.setItem('kepin_session', JSON.stringify(user));
-    localStorage.setItem('kepin_users', JSON.stringify([{ ...user, password: p }]));
-  }, [email, password] as [string, string]);
+    const tenants = (data.tenants || []).map((t: any) => ({ slug: t.slug, role: t.role }));
+    localStorage.setItem('kepin_tenants', JSON.stringify(tenants));
+  }, loginBody);
+
   await page.goto(webURL + '/app');
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(2000);
   await page.context().storageState({ path: authFile });
-  await authedApi.dispose();
 });

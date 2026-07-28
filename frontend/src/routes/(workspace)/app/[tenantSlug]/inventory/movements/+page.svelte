@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { stockMovements } from '$lib/stores/data';
+  import { stockMovements, loadStockMovements } from '$lib/stores/data';
+  import { onMount } from 'svelte';
+
+  onMount(() => loadStockMovements());
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
@@ -36,7 +39,7 @@
     { key: 'reason', label: 'Alasan' },
   ]}
   data={$stockMovements}
-  total={256}
+  total={$stockMovements.length}
   page={1}
   pageSize={5}
   searchable={true}

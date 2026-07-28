@@ -42,6 +42,13 @@ export async function createInvoice(slug: string, data: any) { return api(`/tena
 export async function updateInvoice(slug: string, id: string, data: any) { return api(`/tenants/${slug}/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
 export async function deleteInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}`, { method: 'DELETE' }); }
 export async function getSuppliers(slug: string) { return api(`/tenants/${slug}/suppliers`); }
+export async function createSupplier(slug: string, data: any) { return api(`/tenants/${slug}/suppliers`, { method: 'POST', body: JSON.stringify(data) }); }
+export async function updateSupplier(slug: string, id: string, data: any) { return api(`/tenants/${slug}/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+export async function deleteSupplier(slug: string, id: string) { return api(`/tenants/${slug}/suppliers/${id}`, { method: 'DELETE' }); }
+export async function getPurchaseOrders(slug: string) { return api(`/tenants/${slug}/purchase-orders`); }
+export async function createPurchaseOrder(slug: string, data: any) { return api(`/tenants/${slug}/purchase-orders`, { method: 'POST', body: JSON.stringify(data) }); }
+export async function updatePurchaseOrder(slug: string, id: string, data: any) { return api(`/tenants/${slug}/purchase-orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+export async function deletePurchaseOrder(slug: string, id: string) { return api(`/tenants/${slug}/purchase-orders/${id}`, { method: 'DELETE' }); }
 export async function getProducts(slug: string) { return api(`/tenants/${slug}/products`); }
 export async function getStockBalances(slug: string) { return api(`/tenants/${slug}/stock-balances`); }
 export async function getStockMovements(slug: string) { return api(`/tenants/${slug}/stock-movements`); }

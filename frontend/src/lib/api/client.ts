@@ -3,6 +3,7 @@ import { PUBLIC_API_URL } from '$env/static/public';
 export type ApiError = {
   code: string;
   message: string;
+  detail?: string;
   fieldErrors?: Record<string, string[]>;
   requestId?: string;
 };
@@ -15,11 +16,25 @@ export type PaginatedResponse<T> = {
   totalPages: number;
 };
 
+const TOKEN_KEY = 'kepin_token';
+
+function getToken(): string | null {
+  if (typeof localStorage === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const response = await fetch(`${PUBLIC_API_URL}${path}`, {
     ...init,
     headers: {
-      'content-type': 'application/json',
+      ...headers,
       ...init?.headers,
     },
   });

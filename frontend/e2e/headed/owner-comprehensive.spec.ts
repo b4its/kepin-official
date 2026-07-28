@@ -202,9 +202,12 @@ test.describe('OWNER: Comprehensive Workspace CRUD', () => {
     }
 
     // EDIT
+    await dismiss(page);
     const editBtns = page.locator('button', { hasText: /edit/i });
     if (await editBtns.count() > 0) {
-      await editBtns.first().click();
+      const overlay = page.locator('[role="dialog"] .fixed.inset-0.bg-black\\/50');
+      const hasOverlay = await overlay.isVisible().catch(() => false);
+      await editBtns.first().click({ force: hasOverlay });
       await page.waitForTimeout(600);
       console.log('   ✏️ UPDATE: modal edit terbuka');
       await fill(page, 'Nama', 'Akun E2E Updated');

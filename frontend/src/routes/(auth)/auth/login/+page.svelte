@@ -3,6 +3,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
   import { login } from '$lib/stores/auth';
+  import { showToast } from '$lib/stores/toast';
 
   let email = $state('');
   let password = $state('');
@@ -10,16 +11,19 @@
   let loading = $state(false);
   let error = $state('');
 
-  function handleLogin(e: Event) {
+  async function handleLogin(e: Event) {
     e.preventDefault();
     error = '';
     loading = true;
-    const result = login(email, password);
+    const result = await login(email, password);
     loading = false;
     if (result.success) {
-      window.location.href = '/app/toko-maju';
+      showToast('Login berhasil', 'success');
+      const targetSlug = result.tenantSlug || 'toko-maju';
+      window.location.href = `/app/${targetSlug}`;
     } else {
       error = result.error || 'Login gagal';
+      showToast(error, 'error');
     }
   }
 </script>

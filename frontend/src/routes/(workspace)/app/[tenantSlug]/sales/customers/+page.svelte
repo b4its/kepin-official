@@ -6,6 +6,7 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import { customers, createCustomer, updateCustomer, deleteCustomer } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -36,20 +37,23 @@
     showModal = true;
   }
 
-  function save() {
+  async function save() {
     const data = { name: form.name, email: form.email, phone: form.phone, address: form.address };
     if (editingIndex !== null) {
-      updateCustomer($customers[editingIndex].id, data);
+      await updateCustomer($customers[editingIndex].id, data);
+      showToast('Pelanggan berhasil diperbarui', 'success');
     } else {
-      createCustomer(data);
+      await createCustomer(data);
+      showToast('Pelanggan berhasil ditambahkan', 'success');
     }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      deleteCustomer($customers[deleteIndex].id);
+      await deleteCustomer($customers[deleteIndex].id);
       deleteIndex = null;
+      showToast('Pelanggan berhasil dihapus', 'success');
     }
   }
 </script>
@@ -69,7 +73,7 @@
     { key: 'createdAt', label: 'Bergabung' },
   ]}
   data={$customers}
-  total={24}
+  total={$customers.length}
   searchable={true}
 >
   {#snippet rowActions(item: any, i: number)}

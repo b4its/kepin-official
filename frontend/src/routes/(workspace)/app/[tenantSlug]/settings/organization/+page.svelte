@@ -2,6 +2,7 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { showToast } from '$lib/stores/toast';
 
   let companyName = $state('Toko Maju Jaya');
   let legalName = $state('UD Toko Maju Jaya');
@@ -22,6 +23,7 @@
     sector = editForm.sector;
     timezone = editForm.timezone;
     showModal = false;
+    showToast('Profil organisasi berhasil diperbarui', 'success');
   }
 </script>
 

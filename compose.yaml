@@ -29,7 +29,7 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       DATABASE_URL: postgresql+psycopg://kepin:kepin@db:5432/kepin
-      CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://frontend:3000
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://frontend:3000
       AUTHORIZATION_ENABLED: "false"
       SQL_ECHO: "false"
       LOG_LEVEL: INFO

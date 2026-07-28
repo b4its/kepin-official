@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { PUBLIC_API_URL } from '$env/static/public';
 
 export type AuthUser = {
   id: string;
@@ -8,26 +9,8 @@ export type AuthUser = {
   avatar?: string;
 };
 
-type StoredUser = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
-};
-
-const USERS_KEY = 'kepin_users';
 const SESSION_KEY = 'kepin_session';
-
-function getStoredUsers(): StoredUser[] {
-  if (typeof localStorage === 'undefined') return [];
-  return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-}
-
-function saveUsers(users: StoredUser[]) {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
+const TOKEN_KEY = 'kepin_token';
 
 function getSession(): AuthUser | null {
   if (typeof localStorage === 'undefined') return null;
@@ -36,41 +19,69 @@ function getSession(): AuthUser | null {
 }
 
 function saveSession(user: AuthUser) {
+  if (typeof localStorage === 'undefined') return;
   localStorage.setItem(SESSION_KEY, JSON.stringify(user));
 }
 
 function clearSession() {
+  if (typeof localStorage === 'undefined') return;
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 export const currentUser = writable<AuthUser | null>(getSession());
 
-export function login(email: string, password: string): { success: boolean; error?: string } {
-  const users = getStoredUsers();
-  const found = users.find(u => u.email === email);
-  if (!found) return { success: false, error: 'Email tidak terdaftar' };
-  if (found.password !== password) return { success: false, error: 'Password salah' };
-  const user: AuthUser = { id: found.id, name: found.name, email: found.email, phone: found.phone };
-  saveSession(user);
-  currentUser.set(user);
-  return { success: true };
+export async function login(email: string, password: string): Promise<{ success: boolean; error?: string; tenantSlug?: string }> {
+  try {
+    const response = await fetch(`${PUBLIC_API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ detail: 'Email atau password salah' }));
+      return { success: false, error: body.detail || 'Email atau password salah' };
+    }
+    const body = await response.json();
+    localStorage.setItem(TOKEN_KEY, body.access_token);
+
+    const user: AuthUser = {
+      id: body.user.id,
+      name: body.user.name,
+      email: body.user.email,
+      phone: body.user.phone || '',
+      avatar: body.user.avatarUrl,
+    };
+    saveSession(user);
+    currentUser.set(user);
+
+    const tenants: { slug: string; role: string }[] = (body.tenants || []).map((t: any) => ({
+      slug: t.slug, role: t.role,
+    }));
+    localStorage.setItem('kepin_tenants', JSON.stringify(tenants));
+
+    const firstSlug = tenants[0]?.slug || '';
+    return { success: true, tenantSlug: firstSlug };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Gagal terhubung ke server' };
+  }
 }
 
-export function register(name: string, email: string, password: string): { success: boolean; error?: string } {
-  const users = getStoredUsers();
-  if (users.find(u => u.email === email)) return { success: false, error: 'Email sudah terdaftar' };
-  const newUser: StoredUser = {
-    id: crypto.randomUUID?.() || Date.now().toString(),
-    name,
-    email,
-    phone: '',
-    password,
-  };
-  saveUsers([...users, newUser]);
-  const user: AuthUser = { id: newUser.id, name: newUser.name, email: newUser.email, phone: newUser.phone };
-  saveSession(user);
-  currentUser.set(user);
-  return { success: true };
+export async function register(name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${PUBLIC_API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ detail: 'Registrasi gagal' }));
+      return { success: false, error: body.detail || 'Registrasi gagal' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Gagal terhubung ke server' };
+  }
 }
 
 export function logout() {
@@ -84,12 +95,5 @@ export function updateProfile(data: { name?: string; email?: string; phone?: str
   const updated = { ...user, ...data };
   saveSession(updated);
   currentUser.set(updated);
-
-  const users = getStoredUsers();
-  const idx = users.findIndex(u => u.id === user.id);
-  if (idx !== -1) {
-    users[idx] = { ...users[idx], ...data };
-    saveUsers(users);
-  }
   return updated;
 }

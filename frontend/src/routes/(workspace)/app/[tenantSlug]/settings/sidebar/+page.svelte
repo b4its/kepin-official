@@ -6,6 +6,7 @@
     saveSidebarSettings,
     currentRole,
   } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
   import { clientNavigation } from '$lib/config/navigation';
   import { page } from '$app/stores';
   import { Eye, EyeOff, LayoutGrid, Lock, CheckSquare } from '@lucide/svelte';
@@ -60,6 +61,7 @@
     try {
       await saveSidebarSettings(localSettings, slug);
       saved = true;
+      showToast('Pengaturan sidebar berhasil disimpan', 'success');
       setTimeout(() => (saved = false), 2500);
     } finally {
       saving = false;

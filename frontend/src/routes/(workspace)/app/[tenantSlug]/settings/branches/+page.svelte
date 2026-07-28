@@ -5,6 +5,7 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import { branches, createBranch, updateBranch, deleteBranch } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
 
   let showModal = $state(false);
   let editingIndex = $state<number | null>(null);
@@ -25,19 +26,22 @@
     showModal = true;
   }
 
-  function save() {
+  async function save() {
     if (editingIndex !== null) {
-      updateBranch($branches[editingIndex].id, form as any);
+      await updateBranch($branches[editingIndex].id, form as any);
+      showToast('Cabang berhasil diperbarui', 'success');
     } else {
-      createBranch(form as any);
+      await createBranch(form as any);
+      showToast('Cabang berhasil ditambahkan', 'success');
     }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      deleteBranch($branches[deleteIndex].id);
+      await deleteBranch($branches[deleteIndex].id);
       deleteIndex = null;
+      showToast('Cabang berhasil dihapus', 'success');
     }
   }
 </script>

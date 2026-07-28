@@ -3,6 +3,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
   import { register } from '$lib/stores/auth';
+  import { showToast } from '$lib/stores/toast';
 
   let name = $state('');
   let email = $state('');
@@ -12,16 +13,18 @@
   let error = $state('');
   let success = $state(false);
 
-  function handleRegister(e: Event) {
+  async function handleRegister(e: Event) {
     e.preventDefault();
     error = '';
     loading = true;
-    const result = register(name, email, password);
+    const result = await register(name, email, password);
     loading = false;
     if (result.success) {
       success = true;
+      showToast('Pendaftaran berhasil', 'success');
     } else {
       error = result.error || 'Registrasi gagal';
+      showToast(error, 'error');
     }
   }
 </script>

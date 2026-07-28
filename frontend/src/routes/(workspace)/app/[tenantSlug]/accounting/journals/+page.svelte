@@ -7,6 +7,7 @@
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { journalEntries } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -40,8 +41,10 @@
   function save() {
     journalEntries.update((list: any[]) => {
       if (editingIndex !== null) {
+        showToast('Jurnal berhasil diperbarui', 'success');
         return list.map((j, i) => i === editingIndex ? { ...j, ...form } : j);
       } else {
+        showToast('Jurnal berhasil ditambahkan', 'success');
         return [...list, { id: 'JNL-' + Date.now(), date: form.date, description: form.desc, reference: form.ref, status: form.status, lines: [], createdBy: 'User', createdAt: new Date().toISOString() }];
       }
     });
@@ -52,6 +55,7 @@
     if (deleteIndex !== null) {
       journalEntries.update(list => list.filter((_, i) => i !== deleteIndex));
       deleteIndex = null;
+      showToast('Jurnal berhasil dihapus', 'success');
     }
   }
 </script>

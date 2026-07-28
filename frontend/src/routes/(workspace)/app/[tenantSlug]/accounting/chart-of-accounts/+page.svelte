@@ -6,8 +6,8 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
-  import { accounts } from '$lib/stores/data';
-  import type { Account } from '$lib/api/types';
+  import { accounts, createAccount, updateAccount, deleteAccount } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -37,21 +37,23 @@
     showModal = true;
   }
 
-  function save() {
-    accounts.update(list => {
-      if (editingIndex !== null) {
-        return list.map((a, i) => i === editingIndex ? { ...a, code: form.code, name: form.name, type: form.type.toLowerCase() as Account['type'], balance: form.balance, status: form.status as Account['status'] } : a);
-      } else {
-        return [...list, { id: 'ACC-' + String(Date.now()).slice(-6), code: form.code, name: form.name, type: form.type.toLowerCase() as Account['type'], balance: form.balance, isSystem: false, status: form.status as Account['status'] }];
-      }
-    });
+  async function save() {
+    const data = { code: form.code, name: form.name, type: form.type.toLowerCase(), balance: String(form.balance), status: form.status };
+    if (editingIndex !== null) {
+      await updateAccount($accounts[editingIndex].id, data);
+      showToast('Akun berhasil diperbarui', 'success');
+    } else {
+      await createAccount(data);
+      showToast('Akun berhasil ditambahkan', 'success');
+    }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      accounts.update(list => list.filter((_, i) => i !== deleteIndex));
+      await deleteAccount($accounts[deleteIndex].id);
       deleteIndex = null;
+      showToast('Akun berhasil dihapus', 'success');
     }
   }
 </script>
@@ -72,7 +74,7 @@
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
   data={$accounts}
-  total={24}
+  total={$accounts.length}
   searchable={true}
 >
   {#snippet rowActions(item: any, i: number)}

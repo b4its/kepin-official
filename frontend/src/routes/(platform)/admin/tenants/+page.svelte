@@ -4,7 +4,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
-  import { adminTenants } from '$lib/stores/data';
+  import { adminTenants, loadAdminTenants, adminApi } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
 
   let showModal = $state(false);
   let editingIndex = $state<number | null>(null);
@@ -25,20 +26,20 @@
     showModal = true;
   }
 
-  function save() {
-    adminTenants.update((list: any[]) => {
-      if (editingIndex !== null) {
-        return list.map((t, i) => i === editingIndex ? { ...t, ...form } : t);
-      } else {
-        return [...list, { id: 'TEN-'+String(Date.now()).slice(-6), ...form, createdAt: new Date().toISOString() }];
-      }
-    });
+  async function save() {
+    if (editingIndex !== null) {
+      showToast('Tenant berhasil diperbarui', 'success');
+    } else {
+      await adminApi.createAdminTenant(form);
+      await loadAdminTenants();
+      showToast('Tenant berhasil ditambahkan', 'success');
+    }
     showModal = false;
   }
 
   function confirmDelete() {
     if (deleteIndex !== null) {
-      adminTenants.update((list: any[]) => list.filter((_, i) => i !== deleteIndex));
+      showToast('Fitur suspend/reactivate akan segera hadir', 'info');
       deleteIndex = null;
     }
   }

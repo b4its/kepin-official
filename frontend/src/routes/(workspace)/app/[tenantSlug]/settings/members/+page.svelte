@@ -5,6 +5,7 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import { members, createMember, updateMember, deleteMember } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
 
   let showModal = $state(false);
   let editingIndex = $state<number | null>(null);
@@ -25,19 +26,22 @@
     showModal = true;
   }
 
-  function save() {
+  async function save() {
     if (editingIndex !== null) {
-      updateMember(editingIndex, form as any);
+      await updateMember(editingIndex, form as any);
+      showToast('Anggota berhasil diperbarui', 'success');
     } else {
-      createMember(form as any);
+      await createMember(form as any);
+      showToast('Anggota berhasil diundang', 'success');
     }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      deleteMember(deleteIndex);
+      await deleteMember(deleteIndex);
       deleteIndex = null;
+      showToast('Anggota berhasil dihapus', 'success');
     }
   }
 </script>

@@ -6,6 +6,7 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import { suppliers, createSupplier, updateSupplier, deleteSupplier } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -36,20 +37,23 @@
     showModal = true;
   }
 
-  function save() {
+  async function save() {
     const data = { name: form.name, email: form.email, phone: form.phone, address: form.address };
     if (editingIndex !== null) {
-      updateSupplier($suppliers[editingIndex].id, data);
+      await updateSupplier($suppliers[editingIndex].id, data);
+      showToast('Pemasok berhasil diperbarui', 'success');
     } else {
-      createSupplier(data);
+      await createSupplier(data);
+      showToast('Pemasok berhasil ditambahkan', 'success');
     }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      deleteSupplier($suppliers[deleteIndex].id);
+      await deleteSupplier($suppliers[deleteIndex].id);
       deleteIndex = null;
+      showToast('Pemasok berhasil dihapus', 'success');
     }
   }
 </script>
@@ -70,7 +74,7 @@
     { key: 'createdAt', label: 'Bergabung' },
   ]}
   data={$suppliers}
-  total={12}
+  total={$suppliers.length}
   searchable={true}
 >
   {#snippet rowActions(item: any, i: number)}

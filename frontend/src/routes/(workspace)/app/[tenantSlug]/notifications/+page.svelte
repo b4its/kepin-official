@@ -2,6 +2,7 @@
   import { Inbox, CheckCheck } from '@lucide/svelte';
   import { notifications, markAllNotifRead } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
+  import { showToast } from '$lib/stores/toast';
   import { formatRelativeTime } from '$lib/utils/time';
   import type { Notification } from '$lib/api/types';
   import Button from '$lib/components/ui/Button.svelte';
@@ -29,7 +30,7 @@
 <PageHeader title="Notifikasi" description="Pemberitahuan dan aktivitas terbaru" breadcrumbs={[{ label: 'Notifikasi' }]}>
   {#snippet actions()}
     {#if unreadCount > 0}
-      <Button variant="secondary" onclick={markAllNotifRead}>
+      <Button variant="secondary" onclick={async () => { await markAllNotifRead(); showToast('Semua notifikasi ditandai dibaca', 'success'); }}>
         <CheckCheck class="w-4 h-4" />
         Tandai Dibaca
       </Button>

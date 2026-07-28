@@ -4,8 +4,18 @@
   import {
     setSlug,
     loadSidebarSettings,
+    loadCustomers,
+    loadSuppliers,
+    loadProducts,
+    loadPurchaseOrders,
+    loadTransactions,
+    loadAccounts,
+    loadInvoices,
+    loadBranches,
+    loadMembers,
+    loadNotifications,
+    loadStockMovements,
     setCurrentRole,
-    currentRole,
   } from '$lib/stores/data';
   import { api } from '$lib/api/client';
   import { onMount } from 'svelte';
@@ -34,8 +44,19 @@
         setCurrentRole(null);
       });
 
-    // Load sidebar settings for the tenant
+    // Load all data stores for this tenant
     loadSidebarSettings(tenantSlug);
+    loadCustomers(tenantSlug);
+    loadSuppliers(tenantSlug);
+    loadProducts(tenantSlug);
+    loadPurchaseOrders(tenantSlug);
+    loadTransactions(tenantSlug);
+    loadAccounts(tenantSlug);
+    loadInvoices(tenantSlug);
+    loadBranches(tenantSlug);
+    loadMembers(tenantSlug);
+    loadNotifications(tenantSlug);
+    loadStockMovements(tenantSlug);
   });
 
   function navigate(href: string) {

@@ -6,7 +6,8 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
-  import { invoices, createInvoice, updateInvoice, deleteInvoice } from '$lib/stores/data';
+  import { purchaseOrders, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -31,26 +32,29 @@
   }
 
   function openEdit(i: number) {
-    const item = $invoices[i];
-    form = { number: item.number, customerName: item.customerName, date: item.date, items: 0, total: item.total, status: item.status };
+    const item = $purchaseOrders[i];
+    form = { number: item.number, customerName: item.supplierName, date: item.date, items: item.items || 0, total: item.total, status: item.status };
     editingIndex = i;
     showModal = true;
   }
 
-  function save() {
+  async function save() {
     const data = { number: form.number, customerName: form.customerName, date: form.date, total: form.total, status: form.status };
     if (editingIndex !== null) {
-      updateInvoice($invoices[editingIndex].id, data);
+      await updatePurchaseOrder($purchaseOrders[editingIndex].id, data);
+      showToast('PO berhasil diperbarui', 'success');
     } else {
-      createInvoice(data);
+      await createPurchaseOrder(data);
+      showToast('PO berhasil ditambahkan', 'success');
     }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      deleteInvoice($invoices[deleteIndex].id);
+      await deletePurchaseOrder($purchaseOrders[deleteIndex].id);
       deleteIndex = null;
+      showToast('PO berhasil dihapus', 'success');
     }
   }
 </script>
@@ -71,8 +75,8 @@
     { key: 'total', label: 'Total', align: 'right', render: (item: any) => `Rp ${item.total.toLocaleString('id-ID')}` },
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
-  data={$invoices}
-  total={18}
+  data={$purchaseOrders}
+  total={$purchaseOrders.length}
   searchable={true}
 >
   {#snippet rowActions(item: any, i: number)}
@@ -136,6 +140,6 @@
   title="Purchase Order"
   subtitle="Daftar pesanan pembelian"
   columns={exportColumns}
-  rows={$invoices}
+  rows={$purchaseOrders}
   filename="purchase-order"
 />

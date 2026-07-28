@@ -1,7 +1,7 @@
 <script lang="ts">
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
-  import { auditEvents } from '$lib/stores/data';
+  import { platformAuditEvents } from '$lib/stores/data';
 </script>
 
 <PageHeader title="Audit Platform" description="Log aktivitas administratif platform" />
@@ -14,7 +14,7 @@
     { key: 'objectId', label: 'Target' },
     { key: 'module', label: 'Modul' },
   ]}
-  data={$auditEvents}
-  total={$auditEvents.length}
+  data={$platformAuditEvents}
+  total={$platformAuditEvents.length}
   searchable={true}
 />

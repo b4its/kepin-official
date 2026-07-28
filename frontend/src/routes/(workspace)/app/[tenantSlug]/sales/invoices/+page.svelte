@@ -8,7 +8,13 @@
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { invoices, createInvoice, updateInvoice, deleteInvoice } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
   import { Download } from '@lucide/svelte';
+
+  let totalPiutang = $derived($invoices.filter(i => i.status !== 'paid' && i.status !== 'cancelled').reduce((s, i) => s + (i.total - i.paidAmount), 0));
+  let jatuhTempo = $derived($invoices.filter(i => i.status === 'sent' || i.status === 'partial').reduce((s, i) => s + (i.total - i.paidAmount), 0));
+  let invoiceBulanIni = $derived($invoices.filter(i => new Date(i.date).getMonth() === new Date().getMonth() && new Date(i.date).getFullYear() === new Date().getFullYear()).length);
+  let rataRata = $derived($invoices.length > 0 ? Math.round($invoices.reduce((s, i) => s + i.total, 0) / $invoices.length) : 0);
 
   let showModal = $state(false);
   let showExport = $state(false);
@@ -40,19 +46,22 @@
     showModal = true;
   }
 
-  function save() {
+  async function save() {
     if (editingIndex !== null) {
-      updateInvoice($invoices[editingIndex].id, { ...form });
+      await updateInvoice($invoices[editingIndex].id, { ...form });
+      showToast('Invoice berhasil diperbarui', 'success');
     } else {
-      createInvoice({ ...form });
+      await createInvoice({ ...form });
+      showToast('Invoice berhasil ditambahkan', 'success');
     }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      deleteInvoice($invoices[deleteIndex].id);
+      await deleteInvoice($invoices[deleteIndex].id);
       deleteIndex = null;
+      showToast('Invoice berhasil dihapus', 'success');
     }
   }
 </script>
@@ -65,10 +74,10 @@
 </PageHeader>
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <MetricCard label="Total Piutang" value={13200000} format="currency" />
-  <MetricCard label="Jatuh Tempo" value={5200000} format="currency" />
-  <MetricCard label="Invoice Bulan Ini" value={12} format="number" />
-  <MetricCard label="Rata-rata" value={2800000} format="currency" />
+  <MetricCard label="Total Piutang" value={totalPiutang} format="currency" />
+  <MetricCard label="Jatuh Tempo" value={jatuhTempo} format="currency" />
+  <MetricCard label="Invoice Bulan Ini" value={invoiceBulanIni} format="number" />
+  <MetricCard label="Rata-rata" value={rataRata} format="currency" />
 </div>
 
 <DataTable
@@ -81,7 +90,7 @@
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
   data={$invoices}
-  total={48}
+  total={$invoices.length}
   page={1}
   pageSize={5}
   searchable={true}

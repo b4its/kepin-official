@@ -121,6 +121,22 @@ export async function createProduct(data: any) { const s = _slug; if (!s) return
 export async function updateProduct(id: string, data: any) { const s = _slug; if (!s) return; await api(`/tenants/${s}/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); await loadProducts(s); }
 export async function deleteProduct(id: string) { const s = _slug; if (!s) return; await api(`/tenants/${s}/products/${id}`, { method: 'DELETE' }); await loadProducts(s); }
 
+// ── Purchase Orders ──
+export const purchaseOrders = writable<any[]>([]);
+export async function loadPurchaseOrders(slug?: string) {
+  const s = slug || _slug; if (!s) return;
+  const res: any = await tenantApi.getPurchaseOrders(s);
+  purchaseOrders.set(res.items?.map((p: any) => ({
+    id: p.id, number: p.po_number || '', supplierId: p.supplier_id || '',
+    supplierName: p.supplier_name || '', date: p.order_date || '',
+    total: parseFloat(p.total || '0'), status: p.status || 'draft',
+    items: (p.lines || []).length,
+  })) || []);
+}
+export async function createPurchaseOrder(data: any) { const s = _slug; if (!s) return; await tenantApi.createPurchaseOrder(s, data); await loadPurchaseOrders(s); }
+export async function updatePurchaseOrder(id: string, data: any) { const s = _slug; if (!s) return; await tenantApi.updatePurchaseOrder(s, id, data); await loadPurchaseOrders(s); }
+export async function deletePurchaseOrder(id: string) { const s = _slug; if (!s) return; await tenantApi.deletePurchaseOrder(s, id); await loadPurchaseOrders(s); }
+
 // ── Stock Movements ──
 export const stockMovements = writable<StockMovement[]>([]);
 export async function loadStockMovements(slug?: string) {
@@ -196,6 +212,18 @@ export async function loadAuditEvents(slug?: string) {
   const s = slug || _slug; if (!s) return;
   const res: any = await tenantApi.getAuditEvents(s);
   auditEvents.set(res.items?.map((a: any) => ({
+    id: a.id, timestamp: a.timestamp || a.createdAt, actor: a.actor || '',
+    action: a.action, module: a.module, objectId: a.objectId || '',
+    objectType: a.objectType || '', before: a.before, after: a.after,
+    correlationId: a.correlationId, integrityVerified: a.integrityVerified,
+  })) || []);
+}
+
+// ── Admin: Platform Audit ──
+export const platformAuditEvents = writable<AuditEvent[]>([]);
+export async function loadPlatformAudit() {
+  const res: any = await adminApi.getPlatformAudit();
+  platformAuditEvents.set(res.items?.map((a: any) => ({
     id: a.id, timestamp: a.timestamp || a.createdAt, actor: a.actor || '',
     action: a.action, module: a.module, objectId: a.objectId || '',
     objectType: a.objectType || '', before: a.before, after: a.after,

@@ -21,6 +21,6 @@
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
   data={reconciliations}
-  total={12}
+  total={reconciliations.length}
   searchable={true}
 />

@@ -8,6 +8,12 @@
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { products, createProduct, updateProduct, deleteProduct } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
+
+  let totalProduk = $derived($products.length);
+  let stokKritis = $derived($products.filter(p => p.stock <= p.minStock).length);
+  let nilaiStok = $derived($products.reduce((s, p) => s + p.stock * p.cost, 0));
+  let deadStock = $derived($products.filter(p => p.stock > 0 && p.stock <= p.minStock / 2).length);
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -40,19 +46,22 @@
     showModal = true;
   }
 
-  function save() {
+  async function save() {
     if (editingIndex !== null) {
-      updateProduct($products[editingIndex].id, form);
+      await updateProduct($products[editingIndex].id, form);
+      showToast('Produk berhasil diperbarui', 'success');
     } else {
-      createProduct(form);
+      await createProduct(form);
+      showToast('Produk berhasil ditambahkan', 'success');
     }
     showModal = false;
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteIndex !== null) {
-      deleteProduct($products[deleteIndex].id);
+      await deleteProduct($products[deleteIndex].id);
       deleteIndex = null;
+      showToast('Produk berhasil dihapus', 'success');
     }
   }
 </script>
@@ -65,10 +74,10 @@
 </PageHeader>
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <MetricCard label="Total Produk" value={24} format="number" />
-  <MetricCard label="Stok Kritis" value={1} format="number" />
-  <MetricCard label="Nilai Stok" value={38500000} format="currency" />
-  <MetricCard label="Dead Stock" value={3} format="number" />
+  <MetricCard label="Total Produk" value={totalProduk} format="number" />
+  <MetricCard label="Stok Kritis" value={stokKritis} format="number" />
+  <MetricCard label="Nilai Stok" value={nilaiStok} format="currency" />
+  <MetricCard label="Dead Stock" value={deadStock} format="number" />
 </div>
 
 <DataTable
@@ -81,7 +90,7 @@
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
   data={$products}
-  total={24}
+  total={totalProduk}
   searchable={true}
 >
   {#snippet rowActions(item: any, i: number)}

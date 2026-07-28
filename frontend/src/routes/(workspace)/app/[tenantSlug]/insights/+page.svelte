@@ -28,43 +28,50 @@
   );
 
   const monthlyIncome = $derived(() => {
-    const months = ['Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul'];
-    const data = [32000000, 35000000, 38000000, 41000000, 45000000, 45200000];
-    return { labels: months, data };
+    const map = new Map<string, number>();
+    $transactions.filter(t => t.type === 'income').forEach(t => {
+      const month = t.date.slice(0, 7);
+      map.set(month, (map.get(month) || 0) + t.amount);
+    });
+    const sorted = [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    const labels = sorted.map(([m]) => {
+      const d = new Date(m + '-01');
+      return d.toLocaleDateString('id-ID', { month: 'short' });
+    });
+    const data = sorted.map(([, v]) => v);
+    return { labels, data };
   });
 
-  const insights = [
-    {
-      icon: TrendingUp,
-      iconBg: 'bg-[var(--color-kepin-green)]',
-      title: 'Penjualan Diprediksi Naik 15%',
-      desc: 'Berdasarkan tren 90 hari terakhir dan pola musiman, penjualan bulan depan diperkirakan mencapai Rp 52 juta.',
-      range: 'Rp 48-56 Juta',
-      confidence: 85,
-      factors: 'Meningkatnya penjualan online, musim liburan',
-      cta: 'Lihat Detail Penjualan',
-    },
-    {
-      icon: AlertTriangle,
-      iconBg: 'bg-[var(--color-kepin-yellow)]',
-      title: 'Stok Menipis, Segera Restock',
-      desc: 'Produk B diperkirakan habis dalam 6 hari berdasarkan rata-rata penjualan harian.',
-      range: '6 hari',
-      confidence: 78,
-      factors: 'Penjualan meningkat 25%, lead time supplier 4 hari',
-      cta: 'Buat Purchase Order',
-    },
-    {
-      icon: Lightbulb,
-      iconBg: 'bg-[var(--color-kepin-blue)]',
-      title: 'Optimasi Margin Produk A',
-      desc: 'Menaikkan harga produk A sebesar 10% berpotensi meningkatkan laba kotor hingga Rp 3 juta/bulan tanpa menurunkan permintaan signifikan.',
-      range: '+Rp 3 Juta/bulan',
-      confidence: 72,
-      factors: 'Harga kompetitor 15% lebih tinggi, elastisitas permintaan rendah',
-      cta: 'Analisis Harga',
-    },
-  ];
+  const leadingProduct = $derived(() => {
+    return $transactions.filter(t => t.type === 'income').reduce((max, t) => t.amount > max.amount ? t : max, { amount: 0, description: '' } as any).description || '';
+  });
+
+  const totalIncomeAll = $derived($transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
+  const insightData = $derived(() => {
+    const list = [];
+    if (totalIncomeAll > 0) {
+      list.push({
+        icon: TrendingUp, iconBg: 'bg-[var(--color-kepin-green)]',
+        title: `Pendapatan ${filtered.length > 0 ? (totalIncome > totalExpense ? 'Melebihi' : 'Di Bawah') : '—'}`,
+        desc: filtered.length > 0 ? `${totalIncome > totalExpense ? 'Laba' : 'Rugi bersih'} Rp ${Math.abs(totalIncome - totalExpense).toLocaleString('id-ID')} pada periode ini.` : 'Belum ada transaksi pada periode ini.',
+        range: `Rp ${totalIncome.toLocaleString('id-ID')}`,
+        confidence: 100, factors: `${$transactions.length} total transaksi tercatat`,
+        cta: 'Lihat Laporan',
+      });
+    }
+    if (monthlyIncome().data.length > 1) {
+      const trend = monthlyIncome().data.slice(-1)[0] - monthlyIncome().data.slice(-2)[0];
+      list.push({
+        icon: trend > 0 ? TrendingUp : AlertTriangle, iconBg: trend > 0 ? 'bg-[var(--color-kepin-green)]' : 'bg-[var(--color-kepin-yellow)]',
+        title: trend > 0 ? 'Pendapatan Meningkat' : 'Pendapatan Menurun',
+        desc: `${trend > 0 ? 'Kenaikan' : 'Penurunan'} Rp ${Math.abs(trend).toLocaleString('id-ID')} dibanding bulan sebelumnya.`,
+        range: trend > 0 ? `+Rp ${trend.toLocaleString('id-ID')}` : `-Rp ${Math.abs(trend).toLocaleString('id-ID')}`,
+        confidence: 90, factors: `Data ${monthlyIncome().labels.length} bulan terakhir`,
+        cta: 'Analisis Tren',
+      });
+    }
+    return list;
+  });
 
   const totalIncome = $derived(filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
   const totalExpense = $derived(filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
@@ -84,14 +91,22 @@
 
 <div class="card p-5 mb-6">
   <h3 class="font-semibold mb-4">Tren Pendapatan (6 Bulan)</h3>
-  <BarChart labels={monthlyIncome().labels} datasets={[
-    { label: 'Pendapatan', data: monthlyIncome().data, color: '#059669' },
-  ]} height={200} yFormat="currency" />
-  <p class="text-xs text-[hsl(var(--muted-foreground))] mt-2">Prediksi bulan depan: <strong class="text-[var(--color-kepin-green)]">Rp 48-56 Juta</strong> (naik 6-15%)</p>
+  {#if monthlyIncome().data.length > 0}
+    <BarChart labels={monthlyIncome().labels} datasets={[
+      { label: 'Pendapatan', data: monthlyIncome().data, color: '#059669' },
+    ]} height={200} yFormat="currency" />
+  {:else}
+    <div class="h-48 flex items-center justify-center text-sm text-[hsl(var(--muted-foreground))]">Belum ada data pendapatan</div>
+  {/if}
 </div>
 
 <div class="space-y-4">
-  {#each insights as insight}
+  {#if insightData().length === 0}
+    <div class="card p-5 text-center text-[hsl(var(--muted-foreground))]">
+      <p>Belum cukup data untuk menghasilkan insight. Lakukan transaksi terlebih dahulu.</p>
+    </div>
+  {/if}
+  {#each insightData() as insight}
     <div class="card p-5">
       <div class="flex items-start gap-4">
         <div class="w-10 h-10 {insight.iconBg} rounded flex items-center justify-center shrink-0">
