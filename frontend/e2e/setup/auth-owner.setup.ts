@@ -1,15 +1,18 @@
 import { test as setup } from '@playwright/test';
 import { loginApi } from '../fixtures/api.fixture';
 import { DEMO_OWNER } from '../helpers/ids';
-import * as path from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const authFile = path.resolve(__dirname, '../.auth/tenant-owner.json');
-const apiURL = process.env.E2E_API_URL ?? 'http://127.0.0.1:8000/api/v1';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const authFile = resolve(__dirname, '../.auth/tenant-owner.json');
+const apiURL = process.env.E2E_API_URL ?? 'http://127.0.0.1:8000/api/v1/';
 const webURL = process.env.E2E_WEB_URL ?? 'http://127.0.0.1:5173';
 
 setup('setup tenant owner storage state', async ({ page }) => {
   const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-  const res = await api.get('/auth/me');
+  const res = await api.get('auth/me');
   const body = await res.json();
   console.log('Owner login OK:', body.email);
 

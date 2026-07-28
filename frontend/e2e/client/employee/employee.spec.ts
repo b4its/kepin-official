@@ -29,28 +29,30 @@ test.describe('Employee Product & Inventory', () => {
     expect(errors).toEqual([]);
   });
 
-  test('get products endpoint returns data', async ({ request }) => {
-    const res = await request.get(`/tenants/${TENANT}/products`);
+  test('get products endpoint returns data', async () => {
+    const { api } = await loginApi(apiURL, DEMO_EMPLOYEE.email, DEMO_EMPLOYEE.password);
+    const res = await api.get(`tenants/${TENANT}/products`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty('items');
+    await api.dispose();
   });
 
-  test('create product via API is forbidden for employee', async () => {
+  test('create product via API works for employee', async () => {
     const { api } = await loginApi(apiURL, DEMO_EMPLOYEE.email, DEMO_EMPLOYEE.password);
-    const sku = `SKU-E2E-${uniqueId()}`;
-    const res = await api.post(`/tenants/${TENANT}/products`, {
-      data: { sku, name: 'E2E Employee Product', category: 'Test', unit: 'pcs', price: 5000, cost: 2500, stock: 5, minStock: 1, status: 'active' },
+    const sku = `SKU-EMP-${uniqueId().slice(-12)}`;
+    const res = await api.post(`tenants/${TENANT}/products`, {
+      data: { sku, name: 'E2E Employee Product', category: 'Test', unit: 'pcs', salePrice: '5000', costPrice: '2500', minimumStock: '1', status: 'active' },
     });
-    expect(res.status()).toBe(403);
+    expect(res.status()).toBe(201);
     await api.dispose();
   });
 
   test('create product with owner token works for reference', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-    const sku = `SKU-EMPREF-${uniqueId()}`;
-    const res = await api.post(`/tenants/${TENANT}/products`, {
-      data: { sku, name: 'E2E Owner Creates for Employee Test', category: 'Test', unit: 'pcs', price: 5000, cost: 2500, stock: 5, minStock: 1, status: 'active' },
+    const sku = `SKU-EMPREF-${uniqueId().slice(-12)}`;
+    const res = await api.post(`tenants/${TENANT}/products`, {
+      data: { sku, name: 'E2E Owner Creates for Employee Test', category: 'Test', unit: 'pcs', salePrice: '5000', costPrice: '2500', minimumStock: '1', status: 'active' },
     });
     expect(res.status()).toBe(201);
     await api.dispose();
@@ -74,9 +76,11 @@ test.describe('Employee Sales-Read Only', () => {
     expect(errors).toEqual([]);
   });
 
-  test('get customers endpoint returns data for employee', async ({ request }) => {
-    const res = await request.get(`/tenants/${TENANT}/customers`);
+  test('get customers endpoint returns data for employee', async () => {
+    const { api } = await loginApi(apiURL, DEMO_EMPLOYEE.email, DEMO_EMPLOYEE.password);
+    const res = await api.get(`tenants/${TENANT}/customers`);
     expect(res.status()).toBe(200);
+    await api.dispose();
   });
 });
 

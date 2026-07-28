@@ -22,3 +22,9 @@ export const DEMO_ADMIN = {
   email: 'admin@kepin.io',
   password: 'admin123',
 };
+
+export const DEMO_ALT_EMPLOYEE = {
+  email: 'siti@warungsegar.com',
+  password: 'siti123',
+  tenant: 'warung-segar',
+};

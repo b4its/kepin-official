@@ -1,25 +1,23 @@
 import { test, expect } from '@playwright/test';
+import { DEMO_EMPLOYEE } from '../../helpers/ids';
 
-test.describe('User Without Organization', () => {
-  test('dashboard page loads without server errors', async ({ page }) => {
+const TENANT = DEMO_EMPLOYEE.tenant;
+
+test.describe('Employee UI Interaction', () => {
+  test('products page loads without errors', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
 
-    await page.goto('/app');
+    await page.goto(`/app/${TENANT}/inventory/products`);
     await page.waitForLoadState('networkidle');
     expect(errors).toEqual([]);
   });
 
-  test('user can access public pages even without org', async ({ page }) => {
-    await page.goto('/privacy');
-    await expect(page.locator('h1').first()).toBeVisible();
-  });
-
-  test('redirects to tenant selector when accessing unknown tenant', async ({ page }) => {
+  test('notifications page loads', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
 
-    await page.goto('/app/org-tidak-ada');
+    await page.goto(`/app/${TENANT}/notifications`);
     await page.waitForLoadState('networkidle');
     expect(errors).toEqual([]);
   });

@@ -11,12 +11,12 @@ test.describe('Owner Purchasing & Inventory Workflow', () => {
     const sku = `SKU-${uniqueId()}`;
     const name = `E2E Product ${uniqueId()}`;
 
-    const create = await api.post(`/tenants/${TENANT}/products`, {
-      data: { sku, name, category: 'Test', unit: 'pcs', price: 10000, cost: 5000, stock: 10, minStock: 1, location: 'Gudang', status: 'active' },
+    const create = await api.post(`tenants/${TENANT}/products`, {
+      data: { sku, name, category: 'Test', unit: 'pcs', salePrice: '10000', costPrice: '5000', minimumStock: '1', status: 'active' },
     });
     expect(create.status()).toBe(201);
 
-    const list = await api.get(`/tenants/${TENANT}/products?search=${sku}`);
+    const list = await api.get(`tenants/${TENANT}/products?search=${sku}`);
     expect(list.ok()).toBeTruthy();
     const body = await list.json();
     const items = body.items || [];
@@ -27,27 +27,33 @@ test.describe('Owner Purchasing & Inventory Workflow', () => {
 
   test('create supplier via API', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-    const name = `E2E Supplier ${uniqueId()}`;
+    const runId = uniqueId();
+    const code = `SUP-${runId.slice(-12)}`;
+    const name = `E2E Supplier ${runId}`;
 
-    const create = await api.post(`/tenants/${TENANT}/suppliers`, {
-      data: { name, email: `supplier.${uniqueId()}@test.com`, phone: '08123456789', address: 'Test addr' },
+    const create = await api.post(`tenants/${TENANT}/suppliers`, {
+      data: { code, name, email: `supplier.${runId}@test.com`, phone: '08123456789', address: 'Test addr' },
     });
     expect(create.status()).toBe(201);
 
     await api.dispose();
   });
 
-  test('stock movements endpoint returns data', async ({ request }) => {
-    const res = await request.get(`/tenants/${TENANT}/stock-movements`);
+  test('stock movements endpoint returns data', async () => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const res = await api.get(`tenants/${TENANT}/stock-movements`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty('items');
+    await api.dispose();
   });
 
-  test('purchase orders endpoint returns data', async ({ request }) => {
-    const res = await request.get(`/tenants/${TENANT}/purchase-orders`);
+  test('purchase orders endpoint returns data', async () => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const res = await api.get(`tenants/${TENANT}/purchase-orders`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty('items');
+    await api.dispose();
   });
 });

@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:5173",
+      "localStorage": [
+        {
+          "name": "kepin_session",
+          "value": "{\"id\":\"no-org-setup\",\"name\":\"No Org User\",\"email\":\"e2e.1785176480826-6lkxsa@test.example\",\"phone\":\"\"}"
+        },
+        {
+          "name": "kepin_users",
+          "value": "[{\"id\":\"no-org-setup\",\"name\":\"No Org User\",\"email\":\"e2e.1785176480826-6lkxsa@test.example\",\"phone\":\"\",\"password\":\"test123\"}]"
+        }
+      ]
+    }
+  ]
+}

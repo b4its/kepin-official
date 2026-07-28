@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 loadEnv({ path: resolve(__dirname, '.env.e2e') });
 
 const webURL = process.env.E2E_WEB_URL ?? 'http://127.0.0.1:5173';
-const apiURL = process.env.E2E_API_URL ?? 'http://127.0.0.1:8000/api/v1';
+const apiURL = process.env.E2E_API_URL ?? 'http://127.0.0.1:8000/api/v1/';
 
 export default defineConfig({
   testDir: './e2e',
@@ -31,7 +31,7 @@ export default defineConfig({
     navigationTimeout: 15_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: 'off',
     locale: 'id-ID',
     timezoneId: 'Asia/Jakarta',
     colorScheme: 'light',
@@ -108,6 +108,16 @@ export default defineConfig({
     {
       name: 'chrome-no-organization',
       testMatch: /client\/no-organization\/.*\.spec\.ts/,
+      dependencies: ['setup-no-org'],
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chrome',
+        storageState: 'e2e/.auth/no-org.json',
+      },
+    },
+    {
+      name: 'setup-no-org',
+      testMatch: /setup\/auth-no-org\.setup\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         channel: 'chrome',

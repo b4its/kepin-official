@@ -9,7 +9,7 @@ test.describe('Auth API', () => {
     const { api, token } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
     expect(token).toBeTruthy();
     expect(typeof token).toBe('string');
-    const res = await api.get('/auth/me');
+    const res = await api.get('auth/me');
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.email).toBe(DEMO_OWNER.email);
@@ -21,7 +21,7 @@ test.describe('Auth API', () => {
   test('login wrong password returns 401', async () => {
     const anonymous = (await import('@playwright/test')).request;
     const ctx = await anonymous.newContext({ baseURL: apiURL });
-    const res = await ctx.post('/auth/login', {
+    const res = await ctx.post('auth/login', {
       data: { email: DEMO_OWNER.email, password: 'wrong-password-123!' },
     });
     expect(res.status()).toBe(401);
@@ -32,7 +32,7 @@ test.describe('Auth API', () => {
     const email = uniqueEmail();
     const anonymous = (await import('@playwright/test')).request;
     const ctx = await anonymous.newContext({ baseURL: apiURL });
-    const res = await ctx.post('/auth/register', {
+    const res = await ctx.post('auth/register', {
       data: { name: 'E2E Test User', email, password: 'E2E-password-123' },
     });
     expect(res.status()).toBe(201);
@@ -45,7 +45,7 @@ test.describe('Auth API', () => {
   test('register duplicate email returns 409', async () => {
     const anonymous = (await import('@playwright/test')).request;
     const ctx = await anonymous.newContext({ baseURL: apiURL });
-    const res = await ctx.post('/auth/register', {
+    const res = await ctx.post('auth/register', {
       data: { name: 'Duplicate', email: DEMO_OWNER.email, password: 'E2E-password-123' },
     });
     expect(res.status()).toBe(409);
@@ -54,7 +54,7 @@ test.describe('Auth API', () => {
 
   test('/auth/me with valid token returns user', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-    const res = await api.get('/auth/me');
+    const res = await api.get('auth/me');
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.email).toBe(DEMO_OWNER.email);

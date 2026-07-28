@@ -6,7 +6,7 @@ export async function loginApi(
   password: string,
 ): Promise<{ api: APIRequestContext; token: string; userId: string }> {
   const anonymous = await request.newContext({ baseURL: apiURL });
-  const response = await anonymous.post('/auth/login', {
+  const response = await anonymous.post('auth/login', {
     data: { email, password },
   });
   expect(response.status()).toBe(200);

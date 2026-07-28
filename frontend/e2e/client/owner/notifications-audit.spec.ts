@@ -24,14 +24,14 @@ test.describe('Owner Notifications & Audit', () => {
 
   test('notifications API returns list', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-    const res = await api.get(`/tenants/${TENANT}/notifications`);
+    const res = await api.get(`tenants/${TENANT}/notifications`);
     expect(res.status()).toBe(200);
     await api.dispose();
   });
 
   test('audit events API returns list', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-    const res = await api.get(`/tenants/${TENANT}/audit-events`);
+    const res = await api.get(`tenants/${TENANT}/audit-events`);
     expect(res.status()).toBe(200);
     await api.dispose();
   });

@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:5173",
+      "localStorage": [
+        {
+          "name": "kepin_session",
+          "value": "{\"id\":\"employee-setup\",\"name\":\"Ani Lestari\",\"email\":\"ani@tokomaju.com\",\"phone\":\"\"}"
+        },
+        {
+          "name": "kepin_users",
+          "value": "[{\"id\":\"employee-setup\",\"name\":\"Ani Lestari\",\"email\":\"ani@tokomaju.com\",\"phone\":\"\",\"password\":\"ani123\"}]"
+        }
+      ]
+    }
+  ]
+}

@@ -52,19 +52,20 @@ test.describe('Owner Organization, Members & Sidebar', () => {
 
   test('members API returns list', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-    const res = await api.get(`/tenants/${TENANT}/org/members`);
+    const res = await api.get(`tenants/${TENANT}/members`);
     expect(res.status()).toBe(200);
     const body = await res.json();
-    expect(body).toHaveProperty('items');
+    expect(Array.isArray(body)).toBeTruthy();
+    expect(body.length).toBeGreaterThanOrEqual(1);
     await api.dispose();
   });
 
   test('sidebar settings can be fetched and updated', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
-    const get = await api.get(`/tenants/${TENANT}/sidebar-settings`);
+    const get = await api.get(`tenants/${TENANT}/sidebar-settings`);
     expect(get.status()).toBe(200);
 
-    const put = await api.put(`/tenants/${TENANT}/sidebar-settings`, {
+    const put = await api.put(`tenants/${TENANT}/sidebar-settings`, {
       data: { enabledItems: { sales_invoices: true, inventory_products: false } },
     });
     expect(put.status()).toBe(200);
