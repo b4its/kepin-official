@@ -123,5 +123,15 @@ export default defineConfig({
         channel: 'chrome',
       },
     },
+    {
+      name: 'headed',
+      testMatch: /headed\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chrome',
+        headless: false,
+        launchOptions: { slowMo: 300 },
+      },
+    },
   ],
 });
