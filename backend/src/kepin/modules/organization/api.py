@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, text
 from uuid import UUID
@@ -23,6 +23,8 @@ from kepin.db.models import (
     User,
     Subscription,
     Integration,
+    BankAccount,
+    BankTransaction,
 )
 from kepin.modules.auth.api import PLANS
 
@@ -156,6 +158,7 @@ class IntegrationResponse(ApiSchema):
     display_name: str | None = None
     status: str = "disconnected"
     last_synced_at: datetime | None = None
+    error_message: str | None = None
 
 
 class IntegrationCreate(ApiSchema):
@@ -166,6 +169,24 @@ class IntegrationCreate(ApiSchema):
 class IntegrationUpdate(ApiSchema):
     display_name: str | None = None
     status: str | None = None
+
+
+class IntegrationSyncItem(ApiSchema):
+    external_id: str
+    transaction_date: date
+    description: str = ""
+    amount: str
+
+
+class IntegrationSyncRequest(ApiSchema):
+    bank_account_id: str
+    transactions: list[IntegrationSyncItem]
+
+
+class IntegrationSyncResponse(ApiSchema):
+    integration: IntegrationResponse
+    imported: int
+    skipped: int
 
 
 class BillingResponse(ApiSchema):
@@ -582,6 +603,7 @@ async def list_integrations(
             display_name=row.display_name,
             status=row.status,
             last_synced_at=row.last_synced_at,
+            error_message=row.error_message,
         )
         for row in rows
     ]
@@ -621,6 +643,7 @@ async def create_integration(
         display_name=integration.display_name,
         status=integration.status,
         last_synced_at=integration.last_synced_at,
+        error_message=integration.error_message,
     )
 
 
@@ -662,6 +685,140 @@ async def update_integration(
         display_name=integration.display_name,
         status=integration.status,
         last_synced_at=integration.last_synced_at,
+        error_message=integration.error_message,
+    )
+
+
+@router.delete(
+    "/integrations/{integration_id}",
+    status_code=204,
+    summary="Hapus Integrasi",
+    description="Menghapus integrasi tenant; transaksi bank yang sudah diimpor tetap tersimpan",
+)
+async def delete_integration(
+    integration_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    integration = (
+        await session.execute(
+            select(Integration).where(
+                Integration.id == integration_id,
+                Integration.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not integration:
+        raise NotFoundError(message="Integrasi tidak ditemukan")
+    await session.delete(integration)
+    await session.commit()
+    return Response(status_code=204)
+
+
+@router.post(
+    "/integrations/{integration_id}/sync",
+    response_model=IntegrationSyncResponse,
+    status_code=200,
+    summary="Sinkronisasi Integrasi",
+    description="Impor batch transaksi bank dari provider integrasi; hanya untuk integrasi aktif",
+)
+async def sync_integration(
+    body: IntegrationSyncRequest,
+    integration_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    integration = (
+        await session.execute(
+            select(Integration).where(
+                Integration.id == integration_id,
+                Integration.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not integration:
+        raise NotFoundError(message="Integrasi tidak ditemukan")
+    if integration.status != "active":
+        raise ValidationError(message="Integrasi tidak aktif; aktifkan terlebih dahulu")
+
+    bank = (
+        await session.execute(
+            select(BankAccount).where(
+                BankAccount.id == body.bank_account_id,
+                BankAccount.tenant_id == tenant.id,
+                BankAccount.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    if not bank:
+        raise NotFoundError(message="Rekening bank aktif tidak ditemukan")
+
+    existing = set(
+        (
+            await session.execute(
+                select(BankTransaction.external_id).where(
+                    BankTransaction.tenant_id == tenant.id,
+                    BankTransaction.bank_account_id == bank.id,
+                )
+            )
+        ).scalars().all()
+    )
+
+    now = datetime.now(timezone.utc)
+    imported = 0
+    skipped = 0
+    seen: set[str] = set()
+    rows: list[BankTransaction] = []
+    for item in body.transactions:
+        external_id = item.external_id.strip()
+        if not external_id or external_id in existing or external_id in seen:
+            skipped += 1
+            continue
+        amount = to_money(item.amount)
+        if amount == Decimal("0"):
+            raise ValidationError(message="Jumlah transaksi bank tidak boleh nol")
+        seen.add(external_id)
+        rows.append(
+            BankTransaction(
+                id=new_uuid(),
+                tenant_id=tenant.id,
+                bank_account_id=bank.id,
+                external_id=external_id,
+                transaction_date=item.transaction_date,
+                description=item.description.strip(),
+                amount=amount,
+                raw_payload={"provider": integration.provider, "sync_at": now.isoformat()},
+                created_at=now,
+            )
+        )
+
+    if rows:
+        session.add_all(rows)
+        imported = len(rows)
+    integration.last_synced_at = now
+    integration.error_message = None
+    integration.updated_at = now
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        integration.error_message = "Sinkronisasi gagal: duplikat external ID dalam satu batch"
+        await session.commit()
+        raise ConflictError(message="Sinkronisasi gagal: duplikat external ID dalam satu batch")
+
+    return IntegrationSyncResponse(
+        integration=IntegrationResponse(
+            id=str(integration.id),
+            provider=integration.provider,
+            display_name=integration.display_name,
+            status=integration.status,
+            last_synced_at=integration.last_synced_at,
+            error_message=integration.error_message,
+        ),
+        imported=imported,
+        skipped=skipped,
     )
 
 

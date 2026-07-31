@@ -23,6 +23,7 @@ export async function getRoles(slug: string) { return api(`/tenants/${slug}/role
 export async function getIntegrations(slug: string) { return api(`/tenants/${slug}/integrations`); }
 export async function createIntegration(slug: string, data: { provider: string; displayName: string }) { return api(`/tenants/${slug}/integrations`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateIntegration(slug: string, id: string, data: { displayName?: string; status?: string }) { return api(`/tenants/${slug}/integrations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+export async function syncIntegration(slug: string, id: string, data: { bankAccountId: string; transactions: Array<{ externalId: string; transactionDate: string; description?: string; amount: string }> }) { return api(`/tenants/${slug}/integrations/${id}/sync`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function getBilling(slug: string) { return api(`/tenants/${slug}/billing`); }
 export async function getBillingHistory(slug: string) { return api(`/tenants/${slug}/billing-history`); }
 export async function getNotifications(slug: string) { return api(`/tenants/${slug}/notifications`); }

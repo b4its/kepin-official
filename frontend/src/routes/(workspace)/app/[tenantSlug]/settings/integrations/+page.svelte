@@ -7,7 +7,7 @@
   import { showToast } from '$lib/stores/toast';
   import { Link, Plus, RefreshCw } from '@lucide/svelte';
 
-  type Integration = { id?: string | null; provider?: string | null; displayName?: string | null; display_name?: string | null; status: string; lastSyncedAt?: string | null; last_synced_at?: string | null };
+  type Integration = { id?: string | null; provider?: string | null; displayName?: string | null; display_name?: string | null; status: string; lastSyncedAt?: string | null; last_synced_at?: string | null; errorMessage?: string | null; error_message?: string | null };
 
   const slug = $derived($page.params.tenantSlug || '');
   let integrations = $state<Integration[]>([]);
@@ -33,6 +33,10 @@
 
   function nameOf(item: Integration) {
     return item.displayName || item.display_name || item.provider || 'Integrasi';
+  }
+
+  function errOf(item: Integration) {
+    return item.errorMessage || item.error_message || '';
   }
 
   async function createIntegration() {
@@ -89,6 +93,9 @@
           <div>
             <p class="font-medium text-sm">{nameOf(int)}</p>
             <p class="text-xs text-[hsl(var(--muted-foreground))]">Sinkron terakhir: {int.lastSyncedAt || int.last_synced_at || '-'}</p>
+            {#if errOf(int)}
+              <p class="text-xs text-red-600">Sync error: {errOf(int)}</p>
+            {/if}
           </div>
         </div>
         <span class="rounded-full border border-[hsl(var(--border))] px-2.5 py-1 text-xs uppercase">{int.status}</span>
