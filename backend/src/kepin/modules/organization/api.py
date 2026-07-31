@@ -227,13 +227,20 @@ async def get_organization(
     ).scalar_one_or_none()
     if not org:
         raise NotFoundError(message="Pengaturan organisasi tidak ditemukan")
+    meta = org.org_meta or {}
     return OrganizationSettingResponse(
         tenant_id=str(org.tenant_id),
         tenant_name=tenant_row.name,
         legal_name=org.legal_name,
         tax_id=org.tax_id,
+        address=org.address,
+        phone=meta.get("phone"),
+        email=meta.get("email"),
+        website=meta.get("website"),
+        logo_url=meta.get("logo_url"),
         timezone=org.timezone,
         currency=org.currency,
+        date_format=meta.get("date_format"),
         fiscal_year_start=str(org.fiscal_year_start_month),
         created_at=org.created_at,
         updated_at=org.updated_at,
@@ -257,14 +264,18 @@ async def update_organization(
 
     tenant_row = (await session.execute(select(Tenant).where(Tenant.id == tenant.id))).scalar_one()
     patch = body.model_dump(exclude_unset=True)
+    meta = dict(org.org_meta or {})
     for field, value in patch.items():
         if field == "tenant_name":
             tenant_row.name = value
             tenant_row.updated_at = datetime.now(timezone.utc)
         elif field == "fiscal_year_start":
             org.fiscal_year_start_month = int(value)
+        elif field in {"phone", "email", "website", "logo_url", "date_format"}:
+            meta[field] = value
         elif hasattr(org, field):
             setattr(org, field, value)
+    org.org_meta = meta
     org.updated_at = datetime.now(timezone.utc)
 
     await session.commit()
@@ -274,8 +285,14 @@ async def update_organization(
         tenant_name=tenant_row.name,
         legal_name=org.legal_name,
         tax_id=org.tax_id,
+        address=org.address,
+        phone=meta.get("phone"),
+        email=meta.get("email"),
+        website=meta.get("website"),
+        logo_url=meta.get("logo_url"),
         timezone=org.timezone,
         currency=org.currency,
+        date_format=meta.get("date_format"),
         fiscal_year_start=str(org.fiscal_year_start_month),
         created_at=org.created_at,
         updated_at=org.updated_at,

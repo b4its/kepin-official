@@ -18,11 +18,24 @@ test.describe('Organization Module', () => {
   });
 
   test('GET /tenants/:slug/organization returns settings', async () => {
-    test.fixme(true, 'Backend needs restart: OrganizationSettingResponse id field mismatch');
+    const res = await api.get(`tenants/${TENANT}/organization`);
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.tenantId).toBeTruthy();
+    expect(body.tenantName).toBeTruthy();
   });
 
   test('PATCH /tenants/:slug/organization updates settings', async () => {
-    test.fixme(true, 'Backend needs restart: OrganizationSettingResponse id field mismatch');
+    const site = `https://${uniqueId().slice(-8)}.example.com`;
+    const res = await api.patch(`tenants/${TENANT}/organization`, {
+      data: { website: site },
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.website).toBe(site);
+
+    const reset = await api.patch(`tenants/${TENANT}/organization`, { data: { website: null } });
+    expect(reset.status()).toBe(200);
   });
 
   test('GET /tenants/:slug/branches returns list', async () => {
