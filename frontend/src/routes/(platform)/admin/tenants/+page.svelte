@@ -8,39 +8,68 @@
   import { showToast } from '$lib/stores/toast';
 
   let showModal = $state(false);
-  let editingIndex = $state<number | null>(null);
-  let deleteIndex = $state<number | null>(null);
+  let editingId = $state<string | null>(null);
+  let deleteTarget = $state<{ id: string; name: string } | null>(null);
+  let saving = $state(false);
 
-  let form = $state({ name: '', slug: '', legalName: '', sector: 'Ritel', timezone: 'Asia/Jakarta', plan: 'Pro', status: 'active' });
+  let form = $state({ name: '', slug: '', legalName: '', sector: 'Ritel', timezone: 'Asia/Jakarta', currency: 'IDR' });
 
   function openCreate() {
-    form = { name: '', slug: '', legalName: '', sector: 'Ritel', timezone: 'Asia/Jakarta', plan: 'Pro', status: 'active' };
-    editingIndex = null;
+    form = { name: '', slug: '', legalName: '', sector: 'Ritel', timezone: 'Asia/Jakarta', currency: 'IDR' };
+    editingId = null;
     showModal = true;
   }
 
   function openEdit(i: number) {
     const t = $adminTenants[i];
-    form = { name: t.name, slug: t.slug, legalName: t.legalName, sector: t.sector, timezone: t.timezone, plan: t.plan, status: t.status };
-    editingIndex = i;
+    form = { name: t.name, slug: t.slug, legalName: t.legalName, sector: t.sector, timezone: t.timezone, currency: t.currency || 'IDR' };
+    editingId = t.id;
     showModal = true;
   }
 
   async function save() {
-    if (editingIndex !== null) {
-      showToast('Tenant berhasil diperbarui', 'success');
-    } else {
-      await adminApi.createAdminTenant(form);
+    saving = true;
+    try {
+      if (editingId !== null) {
+        await adminApi.updateAdminTenant(editingId, form);
+        showToast('Tenant berhasil diperbarui', 'success');
+      } else {
+        await adminApi.createAdminTenant(form);
+        showToast('Tenant berhasil ditambahkan', 'success');
+      }
       await loadAdminTenants();
-      showToast('Tenant berhasil ditambahkan', 'success');
+      showModal = false;
+    } catch (e: any) {
+      showToast(e?.message || 'Gagal menyimpan tenant', 'error');
+    } finally {
+      saving = false;
     }
-    showModal = false;
   }
 
-  function confirmDelete() {
-    if (deleteIndex !== null) {
-      showToast('Fitur suspend/reactivate akan segera hadir', 'info');
-      deleteIndex = null;
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    try {
+      await adminApi.deleteAdminTenant(deleteTarget.id);
+      showToast('Tenant dihapus', 'success');
+      await loadAdminTenants();
+    } catch (e: any) {
+      showToast(e?.message || 'Gagal menghapus tenant', 'error');
+    }
+    deleteTarget = null;
+  }
+
+  async function toggleStatus(t: any) {
+    try {
+      if (t.status === 'active') {
+        await adminApi.suspendTenant(t.id);
+        showToast('Tenant ditangguhkan', 'success');
+      } else {
+        await adminApi.reactivateTenant(t.id);
+        showToast('Tenant diaktifkan kembali', 'success');
+      }
+      await loadAdminTenants();
+    } catch (e: any) {
+      showToast(e?.message || 'Gagal mengubah status', 'error');
     }
   }
 
@@ -59,7 +88,6 @@
   columns={[
     { key: 'name', label: 'Nama', sortable: true },
     { key: 'legalName', label: 'Legal', sortable: true },
-    { key: 'plan', label: 'Paket' },
     { key: 'sector', label: 'Sektor' },
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
@@ -70,11 +98,16 @@
   {#snippet rowActions(item: any, i: number)}
     <button onclick={() => goToTenant(item.slug)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">View</button>
     <button onclick={() => openEdit(i)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
-    <button onclick={() => deleteIndex = i} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
+    {#if item.status === 'active'}
+      <button onclick={() => toggleStatus(item)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Suspend</button>
+    {:else if item.status === 'suspended'}
+      <button onclick={() => toggleStatus(item)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Reactivate</button>
+    {/if}
+    <button onclick={() => deleteTarget = { id: item.id, name: item.name }} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
   {/snippet}
 </DataTable>
 
-<Modal title={editingIndex !== null ? 'Edit Tenant' : 'Tambah Tenant'} open={showModal} onclose={() => showModal = false}>
+<Modal title={editingId !== null ? 'Edit Tenant' : 'Tambah Tenant'} open={showModal} onclose={() => showModal = false}>
   <form onsubmit={save} class="space-y-4">
     <div>
       <label class="label-text">Nama Tenant</label>
@@ -82,7 +115,7 @@
     </div>
     <div>
       <label class="label-text">Slug</label>
-      <input type="text" bind:value={form.slug} class="input-field mt-1" required placeholder="nama-perusahaan" />
+      <input type="text" bind:value={form.slug} class="input-field mt-1" required placeholder="nama-perusahaan" disabled={editingId !== null} />
     </div>
     <div>
       <label class="label-text">Nama Legal</label>
@@ -101,17 +134,6 @@
         </select>
       </div>
       <div>
-        <label class="label-text">Paket</label>
-        <select bind:value={form.plan} class="input-field mt-1">
-          <option value="Trial">Trial</option>
-          <option value="Basic">Basic</option>
-          <option value="Pro">Pro</option>
-          <option value="Enterprise">Enterprise</option>
-        </select>
-      </div>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
         <label class="label-text">Zona Waktu</label>
         <select bind:value={form.timezone} class="input-field mt-1">
           <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
@@ -119,27 +141,25 @@
           <option value="Asia/Jayapura">Asia/Jayapura (WIT)</option>
         </select>
       </div>
-      <div>
-        <label class="label-text">Status</label>
-        <select bind:value={form.status} class="input-field mt-1">
-          <option value="active">Aktif</option>
-          <option value="trial">Trial</option>
-          <option value="suspended">Ditangguhkan</option>
-        </select>
-      </div>
+    </div>
+    <div>
+      <label class="label-text">Mata Uang</label>
+      <select bind:value={form.currency} class="input-field mt-1">
+        <option value="IDR">IDR</option>
+      </select>
     </div>
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
-      <Button type="submit">Simpan</Button>
+      <Button type="submit" disabled={saving}>Simpan</Button>
     </div>
   </form>
 </Modal>
 
 <ConfirmDialog
-  open={deleteIndex !== null}
-  onclose={() => deleteIndex = null}
+  open={deleteTarget !== null}
+  onclose={() => deleteTarget = null}
   onconfirm={confirmDelete}
   title="Hapus Tenant"
-  message="Apakah Anda yakin ingin menghapus tenant ini? Tindakan ini tidak dapat dibatalkan."
+  message={`Apakah Anda yakin ingin menghapus tenant "${deleteTarget?.name ?? ''}"? Seluruh datanya akan terhapus permanen.`}
   confirmText="Hapus"
 />

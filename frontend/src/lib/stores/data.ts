@@ -321,7 +321,7 @@ export async function loadAdminTenants() {
   adminTenants.set(res.items?.map((t: any) => ({
     id: t.id, slug: t.slug, name: t.name, legalName: t.legalName || '',
     sector: t.sector || '', timezone: t.timezone || '',
-    plan: t.plan || '', status: t.status, createdAt: t.createdAt,
+    currency: t.currency || '', status: t.status, createdAt: t.createdAt,
   })) || []);
 }
 
@@ -330,13 +330,17 @@ export type SubscriberNotif = { id: string; tenantName: string; tenantSlug: stri
 export const subscriberNotifs = writable<SubscriberNotif[]>([]);
 export async function loadSubscriberNotifs() {
   const res: any = await adminApi.getSubscriptionEvents();
-  subscriberNotifs.set(res.items?.map((s: any) => ({
-    id: s.id, tenantName: s.tenantName || '', tenantSlug: s.tenantSlug || '',
-    buyerName: s.buyerName || s.userName || '', buyerEmail: s.buyerEmail || s.userEmail || '',
-    plan: s.plan || '', amount: parseFloat(s.amount || '0'),
-    joinedAt: s.joinedAt || s.createdAt, expiresAt: s.expiresAt || '',
-    status: s.status || 'active',
-  })) || []);
+  subscriberNotifs.set(res.items?.map((s: any) => {
+    const evt = s.eventType || '';
+    const status = evt.includes('expired') ? 'expired' : evt.includes('expiring') ? 'expiring' : 'active';
+    return {
+      id: s.id, tenantName: s.tenantName || '', tenantSlug: s.tenantSlug || '',
+      buyerName: s.buyerName || '', buyerEmail: s.buyerEmail || '',
+      plan: s.planCode || '', amount: parseFloat(s.amount || '0'),
+      joinedAt: s.occurredAt || s.createdAt, expiresAt: s.periodEnd || '',
+      status,
+    };
+  }) || []);
 }
 
 // ── Admin: Users ──

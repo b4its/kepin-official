@@ -104,9 +104,19 @@ class SubscriptionResponse(ApiSchema):
 class SubscriptionEventResponse(ApiSchema):
     id: str
     tenant_id: str
+    subscription_id: str
     event_type: str
-    payload: dict | None = None
+    buyer_user_id: str | None = None
+    buyer_name_snapshot: str = ""
+    buyer_email_snapshot: str = ""
+    plan_code: str = ""
+    amount: Decimal = Decimal("0")
+    occurred_at: datetime | None = None
+    period_end: datetime | None = None
+    metadata: dict | None = None
     created_at: datetime | None = None
+    tenant_name: str | None = None
+    tenant_slug: str | None = None
 
 
 class IncidentResponse(ApiSchema):
@@ -598,15 +608,21 @@ async def list_subscription_events(
     total = (await session.execute(total_q)).scalar() or 0
 
     stmt = (
-        select(SubscriptionEvent)
+        select(SubscriptionEvent, Tenant.name.label("tenant_name"), Tenant.slug.label("tenant_slug"))
+        .join(Tenant, Tenant.id == SubscriptionEvent.tenant_id)
         .where(where)
         .order_by(SubscriptionEvent.created_at.desc())
         .offset((params.page - 1) * params.page_size)
         .limit(params.page_size)
     )
-    rows = (await session.execute(stmt)).scalars().all()
+    rows = (await session.execute(stmt)).all()
 
-    items = [SubscriptionEventResponse.model_validate(e) for e in rows]
+    items = []
+    for ev, tenant_name, tenant_slug in rows:
+        d = SubscriptionEventResponse.model_validate(ev).model_dump(by_alias=True)
+        d["tenantName"] = tenant_name
+        d["tenantSlug"] = tenant_slug
+        items.append(SubscriptionEventResponse.model_validate(d))
     return make_paginated(items, params.page, params.page_size, total)
 
 

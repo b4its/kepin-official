@@ -19,7 +19,7 @@ export type Tenant = {
   legalName: string;
   sector: string;
   timezone: string;
-  plan: string;
+  currency?: string;
   status: 'active' | 'trial' | 'suspended';
   createdAt: string;
 };

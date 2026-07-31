@@ -3,6 +3,8 @@ import { api } from './client';
 export async function getAdminDashboard(params?: string) { return api(`/platform/dashboard${params || ''}`); }
 export async function getAdminTenants(params?: string) { return api(`/platform/tenants${params || ''}`); }
 export async function createAdminTenant(data: any) { return api('/platform/tenants', { method: 'POST', body: JSON.stringify(data) }); }
+export async function updateAdminTenant(id: string, data: any) { return api(`/platform/tenants/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+export async function deleteAdminTenant(id: string) { return api(`/platform/tenants/${id}`, { method: 'DELETE' }); }
 export async function suspendTenant(id: string) { return api(`/platform/tenants/${id}/suspend`, { method: 'POST' }); }
 export async function reactivateTenant(id: string) { return api(`/platform/tenants/${id}/reactivate`, { method: 'POST' }); }
 export async function getAdminUsers() { return api('/platform/users'); }
