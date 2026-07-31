@@ -307,10 +307,10 @@ export const platformAuditEvents = writable<AuditEvent[]>([]);
 export async function loadPlatformAudit() {
   const res: any = await adminApi.getPlatformAudit();
   platformAuditEvents.set(res.items?.map((a: any) => ({
-    id: a.id, timestamp: a.timestamp || a.createdAt, actor: a.actor || '',
-    action: a.action, module: a.module, objectId: a.objectId || '',
-    objectType: a.objectType || '', before: a.before, after: a.after,
-    correlationId: a.correlationId, integrityVerified: a.integrityVerified,
+    id: a.id, timestamp: a.timestamp || '', actor: a.actorName || '',
+    action: a.action, module: a.objectType || '',
+    objectId: a.objectId || '', before: a.before, after: a.after,
+    correlationId: a.correlationId || '',
   })) || []);
 }
 

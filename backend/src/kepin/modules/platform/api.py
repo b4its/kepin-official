@@ -146,13 +146,17 @@ class IncidentUpdate(ApiSchema):
 
 class PlatformAuditEventResponse(ApiSchema):
     id: str
-    tenant_id: str | None = None
+    timestamp: datetime | None = None
+    actor_id: str | None = None
     actor_name: str | None = None
     action: str
-    resource_type: str | None = None
-    resource_id: str | None = None
-    detail: dict | None = None
-    created_at: datetime | None = None
+    object_type: str | None = None
+    object_id: str | None = None
+    before: dict | None = None
+    after: dict | None = None
+    request_id: str | None = None
+    correlation_id: str | None = None
+    metadata: dict | None = None
 
 
 class HealthSummaryResponse(ApiSchema):
@@ -181,8 +185,16 @@ async def get_dashboard(
     metrics = {
         "activeTenants": status_counts.get("active", 0),
         "suspendedTenants": status_counts.get("suspended", 0),
-        "mrr": money_str(Decimal("0")),
     }
+    annual_amount = (
+        await session.execute(
+            select(func.coalesce(func.sum(Subscription.amount), Decimal("0"))).where(
+                Subscription.status == "active"
+            )
+        )
+    ).scalar() or Decimal("0")
+    mrr = (Decimal(annual_amount) / Decimal(12)).quantize(Decimal("0.01"))
+    metrics["mrr"] = money_str(mrr)
 
     # ── tenantGrowth: count tenants created per day ──
     tenant_growth = []
