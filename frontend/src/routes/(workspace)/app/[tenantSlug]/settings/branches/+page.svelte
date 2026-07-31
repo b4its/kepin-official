@@ -11,37 +11,43 @@
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
-  let form = $state({ name: '', code: '', city: '', isMain: false, status: 'active' });
+  let form = $state({ name: '', code: '', address: '', status: 'active' });
 
   function openCreate() {
-    form = { name: '', code: '', city: '', isMain: false, status: 'active' };
+    form = { name: '', code: '', address: '', status: 'active' };
     editingIndex = null;
     showModal = true;
   }
 
   function openEdit(i: number) {
     const b = $branches[i];
-    form = { name: b.name, code: b.code, city: '', isMain: b.isMain, status: 'active' };
+    form = { name: b.name, code: b.code, address: b.address || '', status: b.status || 'active' };
     editingIndex = i;
     showModal = true;
   }
 
   async function save() {
+    const data = { name: form.name, code: form.code, address: form.address };
     if (editingIndex !== null) {
-      await updateBranch($branches[editingIndex].id, form as any);
-      showToast('Cabang berhasil diperbarui', 'success');
+      try {
+        await updateBranch($branches[editingIndex].id, { ...data, status: form.status });
+        showToast('Cabang berhasil diperbarui', 'success');
+        showModal = false;
+      } catch (err: any) { showToast(err?.message || 'Gagal memperbarui cabang', 'error'); }
     } else {
-      await createBranch(form as any);
-      showToast('Cabang berhasil ditambahkan', 'success');
+      try {
+        await createBranch(data);
+        showToast('Cabang berhasil ditambahkan', 'success');
+        showModal = false;
+      } catch (err: any) { showToast(err?.message || 'Gagal menambahkan cabang', 'error'); }
     }
-    showModal = false;
   }
 
   async function confirmDelete() {
     if (deleteIndex !== null) {
-      await deleteBranch($branches[deleteIndex].id);
-      deleteIndex = null;
-      showToast('Cabang berhasil dihapus', 'success');
+      try { await deleteBranch($branches[deleteIndex].id); showToast('Cabang berhasil dihapus', 'success'); }
+      catch (err: any) { showToast(err?.message || 'Gagal menghapus cabang', 'error'); }
+      finally { deleteIndex = null; }
     }
   }
 </script>
@@ -56,7 +62,7 @@
   columns={[
     { key: 'name', label: 'Nama Cabang', sortable: true },
     { key: 'code', label: 'Kode' },
-    { key: 'city', label: 'Kota' },
+    { key: 'address', label: 'Alamat' },
     { key: 'isMain', label: 'Pusat', render: (item: any) => item.isMain ? 'Ya' : 'Tidak' },
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
@@ -83,10 +89,10 @@
       </div>
     </div>
     <div>
-      <label class="label-text">Kota</label>
-      <input type="text" bind:value={form.city} class="input-field mt-1" required />
+      <label class="label-text">Alamat</label>
+      <input type="text" bind:value={form.address} class="input-field mt-1" />
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {#if editingIndex !== null}
       <div>
         <label class="label-text">Status</label>
         <select bind:value={form.status} class="input-field mt-1">
@@ -94,13 +100,7 @@
           <option value="inactive">Nonaktif</option>
         </select>
       </div>
-      <div>
-        <label class="label-text flex items-center gap-2 mt-6">
-          <input type="checkbox" bind:checked={form.isMain} />
-          Cabang Pusat
-        </label>
-      </div>
-    </div>
+    {/if}
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
       <Button type="submit">Simpan</Button>

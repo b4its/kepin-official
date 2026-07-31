@@ -8,17 +8,21 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
+from kepin.api.dependencies import get_current_user, get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str, to_quantity, ZERO
+from kepin.core.gl_mapping import DEFAULT_ACCOUNT_CODES as GL, get_account_by_code
+from kepin.core.audit import record_audit
+from kepin.core.subledger import post_stock_movement_journal
 from kepin.db.models import (
     Membership,
     Product,
     InventoryLocation,
     StockBalance,
     StockMovement,
+    User,
 )
 
 router = APIRouter(tags=["Inventory"])
@@ -89,6 +93,7 @@ class StockMovementSchema(ApiSchema):
     reason: str = ""
     reference_type: str = ""
     reference_id: str | None = None
+    journal_entry_id: str | None = None
     created_at: datetime | None = None
 
 
@@ -168,6 +173,7 @@ async def list_products(
 async def create_product(
     body: ProductCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     dup = await session.execute(
@@ -201,6 +207,7 @@ async def create_product(
 async def get_product(
     product_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     p = await session.execute(
@@ -217,6 +224,7 @@ async def update_product(
     body: ProductUpdate,
     product_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     p = await session.execute(
@@ -245,6 +253,7 @@ async def update_product(
 async def delete_product(
     product_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     p = await session.execute(
@@ -268,6 +277,38 @@ async def delete_product(
 
 
 # ── Stock ─────────────────────────────────────────────────────────────
+
+
+class InventoryLocationSchema(ApiSchema):
+    id: str
+    code: str
+    name: str
+    status: str = "active"
+    branch_id: str | None = None
+
+
+@router.get("/inventory-locations", response_model=list[InventoryLocationSchema], summary="Daftar Lokasi", description="Mengembalikan daftar lokasi inventori milik tenant")
+async def list_inventory_locations(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    stmt = (
+        select(InventoryLocation)
+        .where(InventoryLocation.tenant_id == tenant.id)
+        .order_by(InventoryLocation.name)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return [
+        InventoryLocationSchema(
+            id=str(loc.id),
+            code=loc.code,
+            name=loc.name,
+            status=loc.status,
+            branch_id=str(loc.branch_id) if loc.branch_id else None,
+        )
+        for loc in rows
+    ]
 
 
 @router.get("/stock-balances", response_model=list[StockBalanceSchema])
@@ -364,6 +405,7 @@ async def list_stock_movements(
             reason=m.reason or "",
             reference_type=m.reference_type or "",
             reference_id=str(m.reference_id) if m.reference_id else None,
+            journal_entry_id=str(m.journal_entry_id) if m.journal_entry_id else None,
             created_at=m.created_at,
         )
         for m, product_name, location_name in rows
@@ -401,6 +443,8 @@ async def _lock_stock_balance(
 async def create_stock_receipt(
     body: StockReceiptCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     product = await session.execute(
@@ -465,6 +509,30 @@ async def create_stock_receipt(
         created_at=datetime.now(timezone.utc),
     )
     session.add(mov)
+    await session.flush()
+
+    if unit_cost > ZERO:
+        diff_account = await get_account_by_code(session, tenant.id, GL["stock_diff"])
+        await post_stock_movement_journal(
+            session=session,
+            tenant_id=tenant.id,
+            user_id=str(user.id),
+            movement=mov,
+            counterpart_account=diff_account,
+            description=f"Penerimaan stok {p.name} ({mov.movement_number})",
+        )
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="stock_movement.receipt",
+        module="inventory",
+        object_type="stock_movement",
+        object_id=str(mov.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"movementNumber": mov.movement_number, "journalEntryId": str(mov.journal_entry_id) if mov.journal_entry_id else None},
+    )
     await session.commit()
     await session.refresh(mov)
 
@@ -484,6 +552,7 @@ async def create_stock_receipt(
         reason=mov.reason or "",
         reference_type=mov.reference_type or "",
         reference_id=str(mov.reference_id) if mov.reference_id else None,
+        journal_entry_id=str(mov.journal_entry_id) if mov.journal_entry_id else None,
         created_at=mov.created_at,
     )
 
@@ -492,6 +561,8 @@ async def create_stock_receipt(
 async def create_stock_issue(
     body: StockIssueCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     product = await session.execute(
@@ -538,6 +609,29 @@ async def create_stock_issue(
         created_at=datetime.now(timezone.utc),
     )
     session.add(mov)
+    await session.flush()
+
+    cogs_account = await get_account_by_code(session, tenant.id, GL["cogs"])
+    await post_stock_movement_journal(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=str(user.id),
+        movement=mov,
+        counterpart_account=cogs_account,
+        description=f"Pengeluaran stok {p.name} ({mov.movement_number})",
+    )
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="stock_movement.issue",
+        module="inventory",
+        object_type="stock_movement",
+        object_id=str(mov.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"movementNumber": mov.movement_number, "journalEntryId": str(mov.journal_entry_id) if mov.journal_entry_id else None},
+    )
     await session.commit()
     await session.refresh(mov)
 
@@ -557,6 +651,7 @@ async def create_stock_issue(
         reason=mov.reason or "",
         reference_type=mov.reference_type or "",
         reference_id=str(mov.reference_id) if mov.reference_id else None,
+        journal_entry_id=str(mov.journal_entry_id) if mov.journal_entry_id else None,
         created_at=mov.created_at,
     )
 
@@ -565,6 +660,8 @@ async def create_stock_issue(
 async def create_stock_adjustment(
     body: StockAdjustmentCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     product = await session.execute(
@@ -629,6 +726,31 @@ async def create_stock_adjustment(
         created_at=datetime.now(timezone.utc),
     )
     session.add(mov)
+    await session.flush()
+
+    diff_account = await get_account_by_code(session, tenant.id, GL["stock_diff"])
+    if sb.average_cost > ZERO:
+        await post_stock_movement_journal(
+            session=session,
+            tenant_id=tenant.id,
+            user_id=str(user.id),
+            movement=mov,
+            counterpart_account=diff_account,
+            description=f"Penyesuaian stok {p.name} ({mov.movement_number})",
+            effective_type=movement_type,
+        )
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="stock_movement.adjustment",
+        module="inventory",
+        object_type="stock_movement",
+        object_id=str(mov.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"movementNumber": mov.movement_number, "journalEntryId": str(mov.journal_entry_id) if mov.journal_entry_id else None},
+    )
     await session.commit()
     await session.refresh(mov)
 
@@ -648,5 +770,6 @@ async def create_stock_adjustment(
         reason=mov.reason or "",
         reference_type=mov.reference_type or "",
         reference_id=str(mov.reference_id) if mov.reference_id else None,
+        journal_entry_id=str(mov.journal_entry_id) if mov.journal_entry_id else None,
         created_at=mov.created_at,
     )

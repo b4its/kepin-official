@@ -67,6 +67,12 @@ async def get_current_user(
     return user
 
 
+async def require_superadmin(user: User = Depends(get_current_user)) -> User:
+    if not user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Hanya superadmin yang dapat mengakses")
+    return user
+
+
 async def get_tenant_membership(
     tenant: TenantContext = Depends(get_tenant_context),
     user: User = Depends(get_current_user),
@@ -82,6 +88,14 @@ async def get_tenant_membership(
     membership = result.scalar_one_or_none()
     if not membership:
         raise HTTPException(status_code=403, detail="Anda bukan anggota organisasi ini")
+    return membership
+
+
+async def require_tenant_owner(
+    membership: Membership = Depends(get_tenant_membership),
+) -> Membership:
+    if membership.role_name != "tenant_owner":
+        raise HTTPException(status_code=403, detail="Hanya tenant_owner yang dapat mengakses")
     return membership
 
 

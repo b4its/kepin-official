@@ -155,6 +155,7 @@ ACCOUNT_GROUPS: list[dict] = [
     {"prefix": "3-1", "name": "Modal", "type": "equity", "normal_balance": "credit", "count": 10},
     {"prefix": "3-2", "name": "Laba Ditahan", "type": "equity", "normal_balance": "credit", "count": 5},
     {"prefix": "3-3", "name": "Prive & Dividen", "type": "equity", "normal_balance": "debit", "count": 5},
+    {"prefix": "3-4", "name": "Selisih Persediaan", "type": "equity", "normal_balance": "credit", "count": 5},
     {"prefix": "4-1", "name": "Pendapatan Penjualan", "type": "income", "normal_balance": "credit", "count": 20},
     {"prefix": "4-2", "name": "Pendapatan Lainnya", "type": "income", "normal_balance": "credit", "count": 10},
     {"prefix": "4-3", "name": "Diskon & Retur", "type": "income", "normal_balance": "debit", "count": 5},
@@ -163,6 +164,7 @@ ACCOUNT_GROUPS: list[dict] = [
     {"prefix": "5-3", "name": "Beban Pemasaran", "type": "expense", "normal_balance": "debit", "count": 5},
     {"prefix": "5-4", "name": "Beban Administrasi", "type": "expense", "normal_balance": "debit", "count": 10},
     {"prefix": "5-5", "name": "Penyusutan & Amortisasi", "type": "expense", "normal_balance": "debit", "count": 5},
+    {"prefix": "6-1", "name": "Harga Pokok Penjualan", "type": "expense", "normal_balance": "debit", "count": 5},
 ]
 
 ACCOUNT_NAMES: dict[str, list[str]] = {
@@ -276,6 +278,14 @@ ACCOUNT_NAMES: dict[str, list[str]] = {
     "5-5": [
         "Penyusutan Gedung", "Penyusutan Kendaraan", "Penyusutan Peralatan",
         "Penyusutan Komputer", "Amortisasi Goodwill",
+    ],
+    "6-1": [
+        "Harga Pokok Penjualan", "HPP Barang Dagangan", "HPP Jasa",
+        "HPP Produksi", "HPP Lainnya",
+    ],
+    "3-4": [
+        "Selisih Persediaan", "Selisih Stock Opname", "Koreksi Persediaan",
+        "Selisih Harga", "Penyesuaian Persediaan",
     ],
 }
 

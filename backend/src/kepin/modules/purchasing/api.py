@@ -8,22 +8,31 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
+from kepin.api.dependencies import get_current_user, get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str, to_quantity, ZERO
+from kepin.core.audit import record_audit
+from kepin.core.subledger import (
+    post_goods_receipt_journal,
+    post_supplier_payment_journal,
+    reverse_posted_journal,
+)
 from kepin.db.models import (
     Membership,
     Supplier,
+    SupplierPayment,
     PurchaseOrder,
     PurchaseOrderLine,
     GoodsReceipt,
     GoodsReceiptLine,
+    JournalEntry,
     Product,
     StockBalance,
     StockMovement,
     InventoryLocation,
+    User,
 )
 
 router = APIRouter(tags=["Purchasing"])
@@ -162,6 +171,7 @@ async def list_suppliers(
 async def create_supplier(
     body: SupplierCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     dup = await session.execute(
@@ -194,6 +204,7 @@ async def create_supplier(
 async def get_supplier(
     supplier_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     s = await session.execute(
@@ -210,6 +221,7 @@ async def update_supplier(
     body: SupplierUpdate,
     supplier_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     s = await session.execute(
@@ -233,6 +245,7 @@ async def update_supplier(
 async def delete_supplier(
     supplier_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     s = await session.execute(
@@ -367,6 +380,7 @@ async def list_purchase_orders(
 async def create_purchase_order(
     body: POCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     supplier = await session.execute(
@@ -443,6 +457,7 @@ async def create_purchase_order(
 async def get_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     po = await session.execute(
@@ -487,6 +502,7 @@ async def update_purchase_order(
     body: POUpdate,
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     po = await session.execute(
@@ -556,6 +572,7 @@ async def update_purchase_order(
 async def delete_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     po = await session.execute(
@@ -580,6 +597,7 @@ async def delete_purchase_order(
 async def send_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     po = await session.execute(
@@ -626,11 +644,13 @@ async def send_purchase_order(
     )
 
 
-@router.post("/purchase-orders/{po_id}/receive", response_model=POSchema, summary="Terima Barang", description="Menerima barang (membuat goods receipt dan update stok)")
+@router.post("/purchase-orders/{po_id}/receive", response_model=POSchema, summary="Terima Barang", description="Menerima barang (membuat goods receipt, update stok, dan posting jurnal Persediaan/Hutang)")
 async def receive_purchase_order(
     body: POReceiveRequest,
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     po = await session.execute(
@@ -680,7 +700,7 @@ async def receive_purchase_order(
     )
     base_mov = (mov_count.scalar() or 0) + 1
 
-    receive_map = {rl.line_id: rl.quantity_received for rl in body.lines}
+    receive_map = {str(rl.line_id): rl.quantity_received for rl in body.lines}
 
     po_line_stmt = select(PurchaseOrderLine).where(
         PurchaseOrderLine.purchase_order_id == po.id
@@ -691,8 +711,8 @@ async def receive_purchase_order(
     all_fully_received = True
 
     for po_line in all_lines:
-        if po_line.id in receive_map:
-            qty_str = receive_map[po_line.id]
+        if str(po_line.id) in receive_map:
+            qty_str = receive_map[str(po_line.id)]
             receive_qty = to_quantity(qty_str)
 
             if receive_qty <= ZERO:
@@ -783,6 +803,43 @@ async def receive_purchase_order(
         po.status = "partial"
 
     po.updated_at = now
+
+    await session.flush()
+
+    gr_lines = (
+        (
+            await session.execute(
+                select(GoodsReceiptLine).where(
+                    GoodsReceiptLine.goods_receipt_id == receipt.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    await post_goods_receipt_journal(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=str(user.id),
+        receipt=receipt,
+        received_lines=[(l, l.quantity) for l in gr_lines],
+    )
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="purchase_order.receive",
+        module="purchasing",
+        object_type="goods_receipt",
+        object_id=str(receipt.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={
+            "poNumber": po.po_number,
+            "receiptNumber": receipt.receipt_number,
+            "journalEntryId": str(receipt.journal_entry_id) if receipt.journal_entry_id else None,
+        },
+    )
     await session.commit()
     await session.refresh(po)
 
@@ -820,6 +877,7 @@ async def receive_purchase_order(
 async def cancel_purchase_order(
     po_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     po = await session.execute(
@@ -864,3 +922,206 @@ async def cancel_purchase_order(
         ) for l in po_lines],
         version=po.version,
     )
+
+
+# ── Supplier Payments ─────────────────────────────────────────────────
+
+
+class SupplierPaymentSchema(ApiSchema):
+    id: str
+    payment_number: str
+    payment_date: date
+    amount: str
+    method: str = ""
+    reference: str = ""
+    status: str
+    supplier_id: str
+    branch_id: str | None = None
+    journal_entry_id: str | None = None
+    created_at: datetime | None = None
+
+
+class SupplierPaymentCreate(ApiSchema):
+    supplier_id: str
+    payment_date: date
+    amount: str
+    method: str = ""
+    reference: str = ""
+    branch_id: str | None = None
+
+
+async def _next_supplier_payment_number(
+    session: AsyncSession,
+    tenant_id: str,
+) -> str:
+    cnt = await session.execute(
+        select(func.count(SupplierPayment.id)).where(SupplierPayment.tenant_id == tenant_id)
+    )
+    return f"SPAY-{cnt.scalar() or 0 + 1:06d}"
+
+
+@router.get("/supplier-payments", response_model=PaginatedResponse[SupplierPaymentSchema], summary="Daftar Pembayaran Supplier", description="Mengembalikan daftar pembayaran ke supplier")
+async def list_supplier_payments(
+    session: AsyncSession = Depends(get_session),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    params: ListParams = Depends(),
+):
+    conditions = [SupplierPayment.tenant_id == tenant.id]
+
+    where = and_(*conditions)
+
+    total_q = select(func.count(SupplierPayment.id)).where(where)
+    total = (await session.execute(total_q)).scalar() or 0
+
+    stmt = (
+        select(SupplierPayment)
+        .where(where)
+        .order_by(SupplierPayment.created_at.desc())
+        .offset((params.page - 1) * params.page_size)
+        .limit(params.page_size)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+
+    items = [SupplierPaymentSchema.model_validate(p) for p in rows]
+    return make_paginated(items, params.page, params.page_size, total)
+
+
+@router.post("/supplier-payments", response_model=SupplierPaymentSchema, status_code=201, summary="Buat Pembayaran Supplier", description="Mencatat pembayaran ke supplier (draft, posting melalui engine)")
+async def create_supplier_payment(
+    body: SupplierPaymentCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    supplier = await session.execute(
+        select(Supplier).where(Supplier.id == body.supplier_id, Supplier.tenant_id == tenant.id)
+    )
+    if not supplier.scalar_one_or_none():
+        raise NotFoundError(message="Supplier tidak ditemukan")
+
+    payment_amount = to_money(body.amount)
+    if payment_amount <= ZERO:
+        raise ValidationError(message="Jumlah pembayaran harus > 0")
+
+    now = datetime.now(timezone.utc)
+    payment = SupplierPayment(
+        id=new_uuid(),
+        tenant_id=tenant.id,
+        payment_number=await _next_supplier_payment_number(session, tenant.id),
+        supplier_id=body.supplier_id,
+        payment_date=body.payment_date,
+        amount=payment_amount,
+        method=body.method or "",
+        reference=body.reference or "",
+        status="draft",
+        branch_id=body.branch_id,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(payment)
+    await session.commit()
+    await session.refresh(payment)
+    return SupplierPaymentSchema.model_validate(payment)
+
+
+@router.post("/supplier-payments/{payment_id}/post", response_model=SupplierPaymentSchema, summary="Posting Pembayaran Supplier", description="Memposting pembayaran supplier ke buku besar (Hutang/Kas) melalui Central Posting Engine")
+async def post_supplier_payment(
+    payment_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    p = await session.execute(
+        select(SupplierPayment).where(
+            SupplierPayment.id == payment_id,
+            SupplierPayment.tenant_id == tenant.id,
+        ).with_for_update()
+    )
+    payment = p.scalar_one_or_none()
+    if not payment:
+        raise NotFoundError(message="Pembayaran tidak ditemukan")
+    if payment.status != "draft":
+        raise ValidationError(message="Hanya pembayaran draft yang dapat diposting")
+    if payment.journal_entry_id:
+        raise ValidationError(message="Pembayaran ini sudah diposting ke buku besar")
+
+    await post_supplier_payment_journal(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=str(user.id),
+        payment=payment,
+    )
+
+    payment.status = "posted"
+    payment.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="supplier_payment.post",
+        module="purchasing",
+        object_type="supplier_payment",
+        object_id=str(payment.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"paymentNumber": payment.payment_number, "journalEntryId": str(payment.journal_entry_id)},
+    )
+    await session.commit()
+    await session.refresh(payment)
+    return SupplierPaymentSchema.model_validate(payment)
+
+
+@router.post("/supplier-payments/{payment_id}/void", response_model=SupplierPaymentSchema, summary="Void Pembayaran Supplier", description="Membatalkan pembayaran supplier (reversal jurnal)")
+async def void_supplier_payment(
+    payment_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    p = await session.execute(
+        select(SupplierPayment).where(
+            SupplierPayment.id == payment_id,
+            SupplierPayment.tenant_id == tenant.id,
+        ).with_for_update()
+    )
+    payment = p.scalar_one_or_none()
+    if not payment:
+        raise NotFoundError(message="Pembayaran tidak ditemukan")
+    if payment.status == "voided":
+        raise ValidationError(message="Pembayaran sudah dibatalkan")
+
+    if payment.journal_entry_id:
+        journal = (
+            await session.execute(
+                select(JournalEntry).where(
+                    JournalEntry.id == payment.journal_entry_id,
+                    JournalEntry.tenant_id == tenant.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if journal:
+            await reverse_posted_journal(
+                session=session,
+                tenant_id=tenant.id,
+                journal_id=str(journal.id),
+                description_prefix="Void",
+            )
+
+    payment.status = "voided"
+    payment.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="supplier_payment.void",
+        module="purchasing",
+        object_type="supplier_payment",
+        object_id=str(payment.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"paymentNumber": payment.payment_number, "status": payment.status},
+    )
+    await session.commit()
+    await session.refresh(payment)
+    return SupplierPaymentSchema.model_validate(payment)

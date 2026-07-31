@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Path, Query
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kepin.api.dependencies import (
@@ -11,13 +11,21 @@ from kepin.api.dependencies import (
     get_session,
     get_tenant_context,
     get_tenant_membership,
+    get_current_user,
 )
 from kepin.api.errors import NotFoundError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
-from kepin.db.models import Membership, Notification
+from kepin.db.models import Membership, Notification, User
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+def _visible_notifications(ctx: TenantContext, membership: Membership, user: User):
+    conditions = [Notification.tenant_id == ctx.id]
+    if membership.role_name != "tenant_owner":
+        conditions.append(or_(Notification.user_id.is_(None), Notification.user_id == user.id))
+    return and_(*conditions)
 
 
 class NotificationResponse(ApiSchema):
@@ -34,17 +42,19 @@ class NotificationResponse(ApiSchema):
 @router.get("", response_model=PaginatedResponse[NotificationResponse])
 async def list_notifications(
     ctx: TenantContext = Depends(get_tenant_context),
-    _m: Membership = Depends(get_tenant_membership),
+    membership: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
 ):
-    total_q = select(func.count(Notification.id)).where(Notification.tenant_id == ctx.id)
+    visible = _visible_notifications(ctx, membership, user)
+    total_q = select(func.count(Notification.id)).where(visible)
     total = (await session.execute(total_q)).scalar() or 0
 
     stmt = (
         select(Notification)
-        .where(Notification.tenant_id == ctx.id)
+        .where(visible)
         .order_by(Notification.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -58,13 +68,15 @@ async def list_notifications(
 async def get_notification(
     notification_id: str = Path(...),
     ctx: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     n = (
         await session.execute(
             select(Notification).where(
                 Notification.id == notification_id,
-                Notification.tenant_id == ctx.id,
+                _visible_notifications(ctx, membership, user),
             )
         )
     ).scalar_one_or_none()
@@ -77,13 +89,15 @@ async def get_notification(
 async def mark_notification_read(
     notification_id: str = Path(...),
     ctx: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     n = (
         await session.execute(
             select(Notification).where(
                 Notification.id == notification_id,
-                Notification.tenant_id == ctx.id,
+                _visible_notifications(ctx, membership, user),
             )
         )
     ).scalar_one_or_none()
@@ -98,20 +112,15 @@ async def mark_notification_read(
 @router.post("/read-all")
 async def mark_all_notifications_read(
     ctx: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     now = datetime.now(timezone.utc)
-    await session.execute(
-        select(Notification)
-        .where(
-            Notification.tenant_id == ctx.id,
-            Notification.read_at.is_(None),
-        )
-    )
     stmt = (
         select(Notification)
         .where(
-            Notification.tenant_id == ctx.id,
+            _visible_notifications(ctx, membership, user),
             Notification.read_at.is_(None),
         )
     )
@@ -126,13 +135,15 @@ async def mark_all_notifications_read(
 async def delete_notification(
     notification_id: str = Path(...),
     ctx: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     n = (
         await session.execute(
             select(Notification).where(
                 Notification.id == notification_id,
-                Notification.tenant_id == ctx.id,
+                _visible_notifications(ctx, membership, user),
             )
         )
     ).scalar_one_or_none()

@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams, require_superadmin
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
@@ -26,7 +26,7 @@ from kepin.db.models import (
 )
 
 
-router = APIRouter(tags=["Platform"])
+router = APIRouter(tags=["Platform"], dependencies=[Depends(require_superadmin)])
 
 
 # ── Schemas ──────────────────────────────────────────────────────────

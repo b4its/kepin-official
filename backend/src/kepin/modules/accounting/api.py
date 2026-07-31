@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Header, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, text
+from sqlalchemy import delete, select, func, and_, or_, text
 from uuid import UUID
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
+from kepin.api.dependencies import get_current_user, get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str
-from kepin.db.models import Account, AccountBalance, JournalEntry, JournalLine, Membership, Transaction, BankAccount, BankTransaction, ReconciliationMatch
+from kepin.core.posting import post_journal as posting_engine_post, post_direct_journal
+from kepin.core.audit import record_audit
+from kepin.core import closing
+from kepin.db.models import Account, AccountBalance, AccountingPeriod, FiscalYear, JournalEntry, JournalLine, Membership, Transaction, User, BankAccount, BankTransaction, ReconciliationMatch
 
 
 router = APIRouter(tags=["Accounting"])
@@ -91,6 +94,7 @@ class TransactionCreate(ApiSchema):
     description: str = ""
     amount: str
     account_id: str
+    counter_account_id: str | None = None
     branch_id: str | None = None
     reference: str = ""
 
@@ -171,6 +175,38 @@ class ReconciliationCreate(ApiSchema):
     note: str = ""
 
 
+class BankAccountSchema(ApiSchema):
+    id: str
+    account_id: str
+    account_name: str | None = None
+    bank_name: str
+    masked_number: str = ""
+    status: str = "active"
+
+
+class BankAccountCreate(ApiSchema):
+    account_id: str
+    bank_name: str
+    masked_number: str = ""
+
+
+class BankTransactionSchema(ApiSchema):
+    id: str
+    bank_account_id: str
+    external_id: str
+    transaction_date: date
+    description: str = ""
+    amount: str
+
+
+class BankTransactionCreate(ApiSchema):
+    bank_account_id: str
+    external_id: str
+    transaction_date: date
+    description: str = ""
+    amount: str
+
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
 
@@ -237,6 +273,7 @@ async def list_accounts(
 async def create_account(
     body: AccountCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     dup = (
@@ -275,6 +312,7 @@ async def create_account(
 async def get_account(
     account_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     account = (
@@ -294,6 +332,7 @@ async def update_account(
     body: AccountUpdate,
     account_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     account = (
@@ -336,6 +375,7 @@ async def update_account(
 async def delete_account(
     account_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     account = (
@@ -372,6 +412,7 @@ async def delete_account(
 async def get_account_balance(
     account_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     account = (
@@ -473,6 +514,7 @@ async def list_transactions(
 async def create_transaction(
     body: TransactionCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     now = datetime.now(timezone.utc)
@@ -486,6 +528,7 @@ async def create_transaction(
         description=body.description,
         amount=to_money(body.amount),
         account_id=body.account_id,
+        counter_account_id=body.counter_account_id,
         status="draft",
         reference=body.reference,
         version=1,
@@ -502,6 +545,7 @@ async def create_transaction(
 async def get_transaction(
     transaction_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     txn = (
@@ -514,6 +558,20 @@ async def get_transaction(
     ).scalar_one_or_none()
     if not txn:
         raise NotFoundError(message="Transaksi tidak ditemukan")
+    if txn.status != "posted":
+        raise ValidationError(message="Hanya transaksi internal yang sudah posted dapat direkonsiliasi")
+
+    existing = (
+        await session.execute(
+            select(ReconciliationMatch).where(
+                ReconciliationMatch.tenant_id == tenant.id,
+                ReconciliationMatch.bank_transaction_id == bank_txn.id,
+                ReconciliationMatch.status.in_(["candidate", "confirmed"]),
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise ConflictError(message="Transaksi bank sudah memiliki match aktif")
     return TransactionSchema.model_validate(txn)
 
 
@@ -522,6 +580,7 @@ async def update_transaction(
     body: TransactionUpdate,
     transaction_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     txn = (
@@ -555,6 +614,7 @@ async def update_transaction(
 async def delete_transaction(
     transaction_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     txn = (
@@ -576,19 +636,22 @@ async def delete_transaction(
 
 @router.post(
     "/transactions/{transaction_id}/post", response_model=TransactionSchema,
-    summary="Posting Transaksi", description="Memposting transaksi dan membuat jurnal otomatis"
+    summary="Posting Transaksi", description="Memposting transaksi melalui Central Posting Engine (validasi period, idempotency)"
 )
 async def post_transaction(
     transaction_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    x_idempotency_key: str | None = Header(None, alias="X-Idempotency-Key"),
 ):
     txn = (
         await session.execute(
             select(Transaction).where(
                 Transaction.id == transaction_id,
                 Transaction.tenant_id == tenant.id,
-            )
+            ).with_for_update()
         )
     ).scalar_one_or_none()
     if not txn:
@@ -611,8 +674,7 @@ async def post_transaction(
         journal_date=txn.transaction_date,
         reference=txn.reference or txn.transaction_number,
         description=txn.description,
-        status="posted",
-        posted_at=now,
+        status="draft",
         version=1,
         created_at=now,
         updated_at=now,
@@ -664,11 +726,33 @@ async def post_transaction(
         )
 
     session.add_all([line1, line2])
+    await session.flush()
+
+    await posting_engine_post(
+        session=session,
+        tenant_id=tenant.id,
+        journal_id=str(journal.id),
+        user_id=str(user.id),
+        idempotency_key=x_idempotency_key,
+        request_hash=repr({"transaction_id": transaction_id, "type": txn.type, "amount": money_str(amount)}),
+    )
+
     txn.journal_entry_id = journal.id
     txn.status = "posted"
     txn.updated_at = now
     txn.version = (txn.version or 1) + 1
 
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="transaction.post",
+        module="accounting",
+        object_type="transaction",
+        object_id=str(txn.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"transactionNumber": txn.transaction_number, "journalEntryId": str(journal.id)},
+    )
     await session.commit()
     await session.refresh(txn)
     return TransactionSchema.model_validate(txn)
@@ -681,6 +765,7 @@ async def post_transaction(
 async def void_transaction(
     transaction_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     txn = (
@@ -734,6 +819,7 @@ async def void_transaction(
         description=f"Pembatalan: {txn.description}",
         status="posted",
         posted_at=now,
+        reversed_entry_id=original_journal.id,
         version=1,
         created_at=now,
         updated_at=now,
@@ -866,6 +952,7 @@ async def list_journals(
 async def create_journal(
     body: JournalCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     if not body.lines:
@@ -893,6 +980,9 @@ async def create_journal(
     total_credit = Decimal("0.00")
     db_lines = []
     for i, raw in enumerate(body.lines):
+        account_id = raw.get("account_id") or raw.get("accountId")
+        if not account_id:
+            raise ValidationError(message=f"Baris jurnal {i + 1} belum memilih akun")
         debit = to_money(raw.get("debit", 0))
         credit = to_money(raw.get("credit", 0))
         total_debit += debit
@@ -902,7 +992,7 @@ async def create_journal(
                 id=new_uuid(),
                 tenant_id=tenant.id,
                 journal_entry_id=journal.id,
-                account_id=raw["account_id"],
+                account_id=account_id,
                 line_number=i + 1,
                 description=raw.get("description", ""),
                 debit=debit,
@@ -941,6 +1031,7 @@ async def create_journal(
 async def get_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     journal = (
@@ -976,6 +1067,7 @@ async def update_journal(
     body: JournalUpdate,
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     journal = (
@@ -1014,6 +1106,9 @@ async def update_journal(
         total_debit = Decimal("0.00")
         total_credit = Decimal("0.00")
         for i, raw in enumerate(lines_data):
+            account_id = raw.get("account_id") or raw.get("accountId")
+            if not account_id:
+                raise ValidationError(message=f"Baris jurnal {i + 1} belum memilih akun")
             debit = to_money(raw.get("debit", 0))
             credit = to_money(raw.get("credit", 0))
             total_debit += debit
@@ -1023,7 +1118,7 @@ async def update_journal(
                     id=new_uuid(),
                     tenant_id=tenant.id,
                     journal_entry_id=journal.id,
-                    account_id=raw["account_id"],
+                    account_id=account_id,
                     line_number=i + 1,
                     description=raw.get("description", ""),
                     debit=debit,
@@ -1061,6 +1156,7 @@ async def update_journal(
 async def delete_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     journal = (
@@ -1076,74 +1172,64 @@ async def delete_journal(
     if journal.status != "draft":
         raise ValidationError(message="Hanya jurnal draft yang dapat dihapus")
 
-    lines = (
-        await session.execute(
-            select(JournalLine).where(
-                JournalLine.journal_entry_id == journal.id,
-                JournalLine.tenant_id == tenant.id,
-            )
+    await session.execute(
+        delete(JournalLine).where(
+            JournalLine.journal_entry_id == journal.id,
+            JournalLine.tenant_id == tenant.id,
         )
-    ).scalars().all()
-    for line in lines:
-        await session.delete(line)
-
-    await session.delete(journal)
+    )
+    await session.execute(delete(JournalEntry).where(JournalEntry.id == journal.id))
     await session.commit()
 
 
-@router.post("/journals/{journal_id}/post", response_model=JournalSchema, summary="Posting Jurnal", description="Memposting jurnal (divalidasi balance)")
+@router.post("/journals/{journal_id}/post", response_model=JournalSchema, summary="Posting Jurnal", description="Memposting jurnal melalui Central Posting Engine (validasi balance, period, idempotency)")
 async def post_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    x_idempotency_key: str | None = Header(None, alias="X-Idempotency-Key"),
 ):
-    journal = (
-        await session.execute(
-            select(JournalEntry).where(
-                JournalEntry.id == journal_id,
-                JournalEntry.tenant_id == tenant.id,
-            )
-        )
-    ).scalar_one_or_none()
-    if not journal:
-        raise NotFoundError(message="Jurnal tidak ditemukan")
-    if journal.status != "draft":
-        raise ValidationError(message="Hanya jurnal draft yang dapat diposting")
+    result =     await posting_engine_post(
+        session=session,
+        tenant_id=tenant.id,
+        journal_id=journal_id,
+        user_id=str(user.id),
+        idempotency_key=x_idempotency_key,
+        request_hash=repr({"journal_id": journal_id}),
+    )
 
-    lines = await _get_journal_lines(session, journal_id, tenant.id)
-    if not lines:
-        raise ValidationError(message="Jurnal tidak memiliki baris")
-
-    total_debit = sum(l.debit for l in lines)
-    total_credit = sum(l.credit for l in lines)
-    if total_debit != total_credit:
-        raise ValidationError(
-            message=f"Jurnal tidak balanced (debit: {money_str(total_debit)}, "
-            f"kredit: {money_str(total_credit)})"
-        )
-
-    now = datetime.now(timezone.utc)
-    journal.status = "posted"
-    journal.posted_at = now
-    journal.updated_at = now
-    journal.version = (journal.version or 1) + 1
-
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="journal.post",
+        module="accounting",
+        object_type="journal_entry",
+        object_id=str(result.journal_entry.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={
+            "journalNumber": result.journal_entry.journal_number,
+            "journalDate": result.journal_entry.journal_date.isoformat(),
+        },
+    )
     await session.commit()
-    await session.refresh(journal)
+    await session.refresh(result.journal_entry)
 
     return JournalSchema(
-        id=str(journal.id),
-        journal_number=journal.journal_number,
-        journal_date=journal.journal_date.isoformat(),
-        reference=journal.reference,
-        description=journal.description,
-        status=journal.status,
-        posted_at=journal.posted_at.isoformat() if journal.posted_at else None,
-        branch_id=str(journal.branch_id) if journal.branch_id else None,
-        version=journal.version,
-        lines=[JournalLineSchema.model_validate(l) for l in lines],
-        created_at=journal.created_at,
-        updated_at=journal.updated_at,
+        id=str(result.journal_entry.id),
+        journal_number=result.journal_entry.journal_number,
+        journal_date=result.journal_entry.journal_date.isoformat(),
+        reference=result.journal_entry.reference,
+        description=result.journal_entry.description,
+        status=result.journal_entry.status,
+        posted_at=result.journal_entry.posted_at.isoformat() if result.journal_entry.posted_at else None,
+        branch_id=str(result.journal_entry.branch_id) if result.journal_entry.branch_id else None,
+        version=result.journal_entry.version,
+        lines=[JournalLineSchema.model_validate(l) for l in result.lines],
+        created_at=result.journal_entry.created_at,
+        updated_at=result.journal_entry.updated_at,
     )
 
 
@@ -1151,6 +1237,7 @@ async def post_journal(
 async def reverse_journal(
     journal_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     original = (
@@ -1166,6 +1253,19 @@ async def reverse_journal(
     if original.status != "posted":
         raise ValidationError(
             message="Hanya jurnal posted yang dapat di-reverse"
+        )
+
+    existing_reversal = (
+        await session.execute(
+            select(JournalEntry.id).where(
+                JournalEntry.reversed_entry_id == original.id,
+                JournalEntry.tenant_id == tenant.id,
+            )
+        )
+    ).first()
+    if existing_reversal:
+        raise ValidationError(
+            message="Jurnal ini sudah memiliki reversal"
         )
 
     original_lines = await _get_journal_lines(
@@ -1208,10 +1308,23 @@ async def reverse_journal(
         )
     session.add_all(reversal_lines)
 
-    original.status = "reversed"
     original.updated_at = now
     original.version = (original.version or 1) + 1
 
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="journal.reverse",
+        module="accounting",
+        object_type="journal_entry",
+        object_id=str(original.id),
+        actor_id=None,
+        actor_name="",
+        after={
+            "reversalJournalId": str(reversal.id),
+            "reversalNumber": reversal.journal_number,
+        },
+    )
     await session.commit()
     await session.refresh(reversal)
 
@@ -1237,6 +1350,161 @@ async def reverse_journal(
 # ═══════════════════════════════════════════════════════════════════════
 
 
+@router.get("/bank-accounts", response_model=list[BankAccountSchema], summary="Daftar Rekening Bank")
+async def list_bank_accounts(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    rows = (
+        await session.execute(
+            select(BankAccount, Account.name)
+            .join(Account, Account.id == BankAccount.account_id)
+            .where(BankAccount.tenant_id == tenant.id, Account.tenant_id == tenant.id)
+            .order_by(BankAccount.bank_name)
+        )
+    ).all()
+    return [
+        BankAccountSchema(
+            id=str(bank.id),
+            account_id=str(bank.account_id),
+            account_name=account_name,
+            bank_name=bank.bank_name,
+            masked_number=bank.masked_number,
+            status=bank.status,
+        )
+        for bank, account_name in rows
+    ]
+
+
+@router.post("/bank-accounts", response_model=BankAccountSchema, status_code=201, summary="Tambah Rekening Bank")
+async def create_bank_account(
+    body: BankAccountCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    account = (
+        await session.execute(
+            select(Account).where(Account.id == body.account_id, Account.tenant_id == tenant.id, Account.status == "active")
+        )
+    ).scalar_one_or_none()
+    if not account:
+        raise NotFoundError(message="Akun GL bank tidak ditemukan")
+    if account.type != "asset":
+        raise ValidationError(message="Rekening bank harus menggunakan akun aset")
+
+    bank = BankAccount(
+        id=new_uuid(),
+        tenant_id=tenant.id,
+        account_id=account.id,
+        bank_name=body.bank_name.strip(),
+        masked_number=body.masked_number.strip(),
+        status="active",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    if not bank.bank_name:
+        raise ValidationError(message="Nama bank wajib diisi")
+    session.add(bank)
+    await session.commit()
+    await session.refresh(bank)
+    return BankAccountSchema(
+        id=str(bank.id),
+        account_id=str(bank.account_id),
+        account_name=account.name,
+        bank_name=bank.bank_name,
+        masked_number=bank.masked_number,
+        status=bank.status,
+    )
+
+
+@router.get("/bank-transactions", response_model=PaginatedResponse[BankTransactionSchema], summary="Daftar Transaksi Bank")
+async def list_bank_transactions(
+    params: ListParams = Depends(),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+    bank_account_id: str | None = Query(None, alias="bankAccountId"),
+):
+    filters = [BankTransaction.tenant_id == tenant.id]
+    if bank_account_id:
+        filters.append(BankTransaction.bank_account_id == bank_account_id)
+    total = (await session.execute(select(func.count()).select_from(BankTransaction).where(and_(*filters)))).scalar() or 0
+    rows = (
+        await session.execute(
+            select(BankTransaction)
+            .where(and_(*filters))
+            .order_by(BankTransaction.transaction_date.desc(), BankTransaction.created_at.desc())
+            .offset((params.page - 1) * params.page_size)
+            .limit(params.page_size)
+        )
+    ).scalars().all()
+    items = [
+        BankTransactionSchema(
+            id=str(row.id),
+            bank_account_id=str(row.bank_account_id),
+            external_id=row.external_id,
+            transaction_date=row.transaction_date,
+            description=row.description,
+            amount=money_str(row.amount),
+        )
+        for row in rows
+    ]
+    return make_paginated(items, params.page, params.page_size, total)
+
+
+@router.post("/bank-transactions", response_model=BankTransactionSchema, status_code=201, summary="Impor Transaksi Bank")
+async def create_bank_transaction(
+    body: BankTransactionCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    bank = (
+        await session.execute(
+            select(BankAccount).where(
+                BankAccount.id == body.bank_account_id,
+                BankAccount.tenant_id == tenant.id,
+                BankAccount.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    if not bank:
+        raise NotFoundError(message="Rekening bank aktif tidak ditemukan")
+    if not body.external_id.strip():
+        raise ValidationError(message="External ID transaksi bank wajib diisi")
+    amount = to_money(body.amount)
+    if amount == Decimal("0"):
+        raise ValidationError(message="Jumlah transaksi bank tidak boleh nol")
+    transaction = BankTransaction(
+        id=new_uuid(),
+        tenant_id=tenant.id,
+        bank_account_id=bank.id,
+        external_id=body.external_id.strip(),
+        transaction_date=body.transaction_date,
+        description=body.description.strip(),
+        amount=amount,
+        raw_payload={},
+        created_at=datetime.now(timezone.utc),
+    )
+    session.add(transaction)
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise ConflictError(message="External ID transaksi bank sudah pernah diimpor")
+    await session.refresh(transaction)
+    return BankTransactionSchema(
+        id=str(transaction.id),
+        bank_account_id=str(transaction.bank_account_id),
+        external_id=transaction.external_id,
+        transaction_date=transaction.transaction_date,
+        description=transaction.description,
+        amount=money_str(transaction.amount),
+    )
+
+
 @router.get(
     "/reconciliation", response_model=PaginatedResponse[ReconciliationSchema],
     summary="Daftar Rekonsiliasi", description="Mengembalikan daftar rekonsiliasi bank"
@@ -1244,6 +1512,7 @@ async def reverse_journal(
 async def list_reconciliation(
     params: ListParams = Depends(),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     status: str | None = Query(None),
 ):
@@ -1294,6 +1563,7 @@ async def list_reconciliation(
 async def create_reconciliation_match(
     body: ReconciliationCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     bank_txn = (
@@ -1353,6 +1623,7 @@ async def create_reconciliation_match(
 async def confirm_reconciliation_match(
     match_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     match = (
@@ -1394,6 +1665,7 @@ async def confirm_reconciliation_match(
 async def delete_reconciliation_match(
     match_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     match = (
@@ -1409,3 +1681,199 @@ async def delete_reconciliation_match(
 
     await session.delete(match)
     await session.commit()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  FISCAL YEAR & ACCOUNTING PERIODS
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class FiscalYearSchema(ApiSchema):
+    id: str
+    name: str
+    start_date: date
+    end_date: date
+    status: str
+    periods: list[dict] = []
+
+
+class PeriodSchema(ApiSchema):
+    id: str
+    name: str
+    start_date: date
+    end_date: date
+    status: str
+    closing_journal_id: str | None = None
+
+
+@router.get("/fiscal-years", response_model=list[FiscalYearSchema], summary="Daftar Tahun Buku", description="Mengembalikan daftar tahun buku beserta periodenya")
+async def list_fiscal_years(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    years = (
+        (
+            await session.execute(
+                select(FiscalYear)
+                .where(FiscalYear.tenant_id == tenant.id)
+                .order_by(FiscalYear.start_date.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    items = []
+    for fy in years:
+        periods = (
+            (
+                await session.execute(
+                    select(AccountingPeriod)
+                    .where(AccountingPeriod.fiscal_year_id == fy.id)
+                    .order_by(AccountingPeriod.start_date)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        items.append(
+            FiscalYearSchema(
+                id=str(fy.id),
+                name=fy.name,
+                start_date=fy.start_date,
+                end_date=fy.end_date,
+                status=fy.status,
+                periods=[
+                    {
+                        "id": str(p.id),
+                        "name": p.name,
+                        "startDate": p.start_date.isoformat(),
+                        "endDate": p.end_date.isoformat(),
+                        "status": p.status,
+                    }
+                    for p in periods
+                ],
+            )
+        )
+    return items
+
+
+@router.post("/periods/{period_id}/close", response_model=PeriodSchema, summary="Tutup Periode", description="Menutup periode akuntansi (status menjadi closed, laba/rugi ditutup ke Laba Ditahan)")
+async def close_period(
+    period_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    period = (
+        await session.execute(
+            select(AccountingPeriod).where(
+                AccountingPeriod.id == period_id,
+                AccountingPeriod.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not period:
+        raise NotFoundError(message="Periode tidak ditemukan")
+    if period.status == "closed":
+        raise ValidationError(message="Periode sudah ditutup")
+    if period.status == "locked":
+        raise ValidationError(message="Periode terkunci dan tidak dapat ditutup")
+
+    result = await closing.close_period(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=str(user.id),
+        period=period,
+    )
+
+    period.status = "closed"
+    period.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="period.close",
+        module="accounting",
+        object_type="accounting_period",
+        object_id=str(period.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={
+            "name": period.name,
+            "status": period.status,
+            "closingJournalId": str(result.journal_entry.id) if result else None,
+        },
+    )
+    await session.commit()
+    await session.refresh(period)
+
+    return PeriodSchema(
+        id=str(period.id),
+        name=period.name,
+        start_date=period.start_date,
+        end_date=period.end_date,
+        status=period.status,
+        closing_journal_id=str(period.closing_journal_id) if period.closing_journal_id else None,
+    )
+
+
+@router.post("/periods/{period_id}/reopen", response_model=PeriodSchema, summary="Buka Kembali Periode", description="Membuka kembali periode akuntansi (khusus tenant_owner)")
+async def reopen_period(
+    period_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    period = (
+        await session.execute(
+            select(AccountingPeriod).where(
+                AccountingPeriod.id == period_id,
+                AccountingPeriod.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not period:
+        raise NotFoundError(message="Periode tidak ditemukan")
+    if period.status == "open":
+        raise ValidationError(message="Periode sudah terbuka")
+    if period.status == "locked":
+        raise ValidationError(message="Periode terkunci dan tidak dapat dibuka kembali")
+
+    reversal = await closing.reopen_period(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=str(user.id),
+        period=period,
+    )
+
+    period.status = "open"
+    period.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="period.reopen",
+        module="accounting",
+        object_type="accounting_period",
+        object_id=str(period.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={
+            "name": period.name,
+            "status": period.status,
+            "reversedClosingJournalId": str(reversal.id) if reversal else None,
+        },
+    )
+    await session.commit()
+    await session.refresh(period)
+
+    return PeriodSchema(
+        id=str(period.id),
+        name=period.name,
+        start_date=period.start_date,
+        end_date=period.end_date,
+        status=period.status,
+        closing_journal_id=str(period.closing_journal_id) if period.closing_journal_id else None,
+    )

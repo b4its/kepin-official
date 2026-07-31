@@ -14,9 +14,10 @@
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
-  let form = $state({ name: '', email: '', phone: '', address: '' });
+  let form = $state({ code: '', name: '', email: '', phone: '', address: '' });
 
   const exportColumns = [
+    { key: 'code', label: 'Kode' },
     { key: 'name', label: 'Nama' },
     { key: 'email', label: 'Email' },
     { key: 'phone', label: 'Telepon' },
@@ -25,20 +26,20 @@
   ];
 
   function openCreate() {
-    form = { name: '', email: '', phone: '', address: '' };
+    form = { code: '', name: '', email: '', phone: '', address: '' };
     editingIndex = null;
     showModal = true;
   }
 
   function openEdit(i: number) {
     const item = $customers[i];
-    form = { name: item.name, email: item.email, phone: item.phone, address: item.address };
+    form = { code: item.code || '', name: item.name, email: item.email, phone: item.phone, address: item.address };
     editingIndex = i;
     showModal = true;
   }
 
   async function save() {
-    const data = { name: form.name, email: form.email, phone: form.phone, address: form.address };
+    const data = { code: form.code, name: form.name, email: form.email, phone: form.phone, address: form.address };
     if (editingIndex !== null) {
       await updateCustomer($customers[editingIndex].id, data);
       showToast('Pelanggan berhasil diperbarui', 'success');
@@ -67,6 +68,7 @@
 
 <DataTable
   columns={[
+    { key: 'code', label: 'Kode', sortable: true },
     { key: 'name', label: 'Nama', sortable: true },
     { key: 'email', label: 'Email' },
     { key: 'phone', label: 'Telepon' },
@@ -84,6 +86,10 @@
 
 <Modal title={editingIndex !== null ? 'Edit Pelanggan' : 'Pelanggan Baru'} open={showModal} onclose={() => showModal = false}>
   <form onsubmit={save} class="space-y-4">
+    <div>
+      <label class="label-text">Kode</label>
+      <input type="text" bind:value={form.code} class="input-field mt-1" placeholder="cth: CUS-001" required />
+    </div>
     <div>
       <label class="label-text">Nama</label>
       <input type="text" bind:value={form.name} class="input-field mt-1" required />

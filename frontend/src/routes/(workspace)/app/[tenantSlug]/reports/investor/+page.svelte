@@ -1,41 +1,41 @@
 <script lang="ts">
-  import { transactions, accounts } from '$lib/stores/data';
+  import { page } from '$app/stores';
+  import { tenantApi } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
-  import DateRangeFilter from '$lib/components/filters/DateRangeFilter.svelte';
   import BarChart from '$lib/components/charts/BarChart.svelte';
   import PieChart from '$lib/components/charts/PieChart.svelte';
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import type { Preset } from '$lib/utils/dateRange';
-  import { Download, Share2 } from '@lucide/svelte';
+  import { showToast } from '$lib/stores/toast';
+  import { formatIDR } from '$lib/utils/currency';
+  import { Download, RefreshCw, Share2 } from '@lucide/svelte';
 
-  let startDate = $state('');
-  let endDate = $state('');
+  type InvestorReport = {
+    metadata: { period?: { startDate?: string; endDate?: string }; generated_at?: string; generatedAt?: string };
+    metrics: { revenue: string; grossMargin: string; burnRate: string; cashPosition: string; runway: string | null };
+    series: { month: string; revenue: string; expense: string }[];
+    composition: { name: string; amount: string }[];
+  };
+
+  const slug = $derived($page.params.tenantSlug || '');
+  let report = $state<InvestorReport | null>(null);
+  let loading = $state(false);
+  let error = $state('');
   let showExport = $state(false);
 
-  function onRangeChange(preset: Preset, start: string, end: string) {
-    startDate = start;
-    endDate = end;
-  }
+  const revenue = $derived(toNumber(report?.metrics.revenue));
+  const grossMargin = $derived(toNumber(report?.metrics.grossMargin));
+  const burnRate = $derived(toNumber(report?.metrics.burnRate));
+  const cashPosition = $derived(toNumber(report?.metrics.cashPosition));
+  const runway = $derived(report?.metrics.runway === null || report?.metrics.runway === undefined ? null : toNumber(report.metrics.runway));
+  const marginPercent = $derived(revenue > 0 ? grossMargin / revenue * 100 : 0);
 
-  $effect(() => {
-    const now = new Date();
-    const end = now.toISOString().slice(0, 10);
-    const start = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-    if (!startDate) { startDate = start; endDate = end; }
-  });
-
-  const filtered = $derived(
-    $transactions.filter(t => t.date >= startDate && t.date <= endDate)
-  );
-
-  const totalRevenue = $derived(filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
-  const totalExpense = $derived(filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
-  const grossMargin = $derived(totalRevenue > 0 ? ((totalRevenue - totalExpense) / totalRevenue * 100) : 0);
-  const cashBalance = $derived($accounts.find(a => a.code === '101')?.balance ?? 0);
-  const burnRate = $derived(totalExpense);
-  const runway = $derived(burnRate > 0 ? cashBalance / burnRate : 0);
+  const chart = $derived(() => ({
+    labels: (report?.series ?? []).map((row) => row.month.slice(0, 7)),
+    revenue: (report?.series ?? []).map((row) => toNumber(row.revenue)),
+    expense: (report?.series ?? []).map((row) => toNumber(row.expense)),
+  }));
 
   const exportColumns = [
     { key: 'label', label: 'Keterangan' },
@@ -43,61 +43,94 @@
   ];
 
   const exportRows = $derived([
-    { label: 'Periode', value: `${startDate} s/d ${endDate}` },
-    { label: '─── RINGKASAN EKSEKUTIF ───', value: '' },
-    { label: 'Total Pendapatan', value: `Rp ${totalRevenue.toLocaleString('id-ID')}` },
-    { label: 'Total Beban', value: `Rp ${totalExpense.toLocaleString('id-ID')}` },
-    { label: 'Laba Bersih', value: `Rp ${(totalRevenue - totalExpense).toLocaleString('id-ID')}` },
-    { label: 'Gross Margin', value: `${grossMargin.toFixed(1)}%` },
-    { label: 'Burn Rate', value: `Rp ${burnRate.toLocaleString('id-ID')}` },
-    { label: 'Cash Position', value: `Rp ${cashBalance.toLocaleString('id-ID')}` },
-    { label: 'Runway', value: `${runway.toFixed(1)} bulan` },
-    { label: '─── KOMPOSISI BIAYA ───', value: '' },
-    { label: 'Biaya Operasional', value: 'Rp 8.500.000' },
-    { label: 'Biaya Stok', value: 'Rp 12.000.000' },
-    { label: 'Gaji', value: 'Rp 5.000.000' },
-    { label: 'Marketing', value: 'Rp 2.800.000' },
-    { label: 'Lainnya', value: 'Rp 1.800.000' },
+    { label: 'Periode', value: `${report?.metadata.period?.startDate ?? '-'} s/d ${report?.metadata.period?.endDate ?? '-'}` },
+    { label: 'Total Pendapatan 6 Bulan', value: formatIDR(revenue) },
+    { label: 'Gross Margin', value: formatIDR(grossMargin) },
+    { label: 'Gross Margin %', value: `${marginPercent.toFixed(1)}%` },
+    { label: 'Burn Rate', value: formatIDR(burnRate) },
+    { label: 'Cash Position', value: formatIDR(cashPosition) },
+    { label: 'Runway', value: runway === null ? '-' : `${runway.toFixed(1)} bulan` },
+    ...(report?.composition ?? []).map((row) => ({ label: `Beban - ${row.name}`, value: formatIDR(toNumber(row.amount)) })),
   ]);
+
+  function toNumber(value: string | number | null | undefined): number {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  async function loadReport() {
+    if (!slug) return;
+    loading = true;
+    error = '';
+    try {
+      report = await tenantApi.getReports(slug, 'investor') as InvestorReport;
+    } catch (err: any) {
+      error = err?.message || 'Gagal memuat investor report';
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function shareReport() {
+    const text = `Investor Report ${slug}: revenue ${formatIDR(revenue)}, gross margin ${formatIDR(grossMargin)}`;
+    if (navigator.share) {
+      await navigator.share({ title: 'Investor Report KePin', text }).catch(() => undefined);
+    } else {
+      await navigator.clipboard?.writeText(text);
+      showToast('Ringkasan investor report disalin', 'success');
+    }
+  }
+
+  $effect(() => {
+    if (slug) void loadReport();
+  });
 </script>
 
-<PageHeader title="Investor Report" description="Laporan untuk investor dan due diligence" breadcrumbs={[{ label: 'Laporan' }, { label: 'Investor' }]}>
+<PageHeader title="Investor Report" description="Laporan investor dari backend, tanpa angka dummy" breadcrumbs={[{ label: 'Laporan' }, { label: 'Investor' }]}> 
   {#snippet actions()}
-    <Button variant="secondary"><Share2 class="w-4 h-4" /> Bagikan</Button>
-    <Button onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
+    <Button variant="secondary" onclick={shareReport} disabled={!report || loading}><Share2 class="w-4 h-4" /> Bagikan</Button>
+    <Button variant="secondary" onclick={loadReport} loading={loading}><RefreshCw class="w-4 h-4" /> Refresh</Button>
+    <Button onclick={() => showExport = true} disabled={!report || loading || Boolean(error)}><Download class="w-4 h-4" /> Ekspor</Button>
   {/snippet}
 </PageHeader>
 
-<div class="mb-6">
-  <DateRangeFilter onChange={onRangeChange} />
-</div>
+{#if error}
+  <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+{/if}
 
 <div class="card p-5 mb-6">
   <h2 class="text-xl font-bold mb-1">Executive Summary</h2>
-  <p class="text-sm text-[hsl(var(--muted-foreground))] mb-4">Periode: {startDate} s/d {endDate} | Dibuat: {new Date().toLocaleDateString('id-ID')}</p>
+  <p class="text-sm text-[hsl(var(--muted-foreground))] mb-4">
+    Periode: {report?.metadata.period?.startDate ?? '-'} s/d {report?.metadata.period?.endDate ?? '-'}
+  </p>
   <p class="text-sm leading-relaxed">
-    Pendapatan <strong>Rp {totalRevenue.toLocaleString('id-ID')}</strong> dengan beban <strong>Rp {totalExpense.toLocaleString('id-ID')}</strong> pada periode ini. Gross margin tercatat <strong>{grossMargin.toFixed(1)}%</strong>. Posisi kas sehat dengan runway <strong>{runway.toFixed(1)} bulan</strong>.
+    Pendapatan 6 bulan <strong>{formatIDR(revenue)}</strong>, gross margin <strong>{formatIDR(grossMargin)}</strong> ({marginPercent.toFixed(1)}%), cash position <strong>{formatIDR(cashPosition)}</strong>, dan runway <strong>{runway === null ? '-' : `${runway.toFixed(1)} bulan`}</strong>.
   </p>
 </div>
 
 <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-  <MetricCard label="Pendapatan" value={totalRevenue} format="currency" />
-  <MetricCard label="Gross Margin" value={grossMargin} previousValue={grossMargin * 0.95} format="percent" />
-  <MetricCard label="Burn Rate" value={burnRate} format="currency" />
-  <MetricCard label="Cash Position" value={cashBalance} format="currency" />
-  <MetricCard label="Runway" value={runway} format="number" unit=" bulan" />
+  <MetricCard label="Pendapatan 6B" value={revenue} loading={loading} format="currency" />
+  <MetricCard label="Gross Margin" value={grossMargin} loading={loading} format="currency" />
+  <MetricCard label="Margin %" value={marginPercent} loading={loading} format="percent" />
+  <MetricCard label="Cash Position" value={cashPosition} loading={loading} format="currency" />
+  <MetricCard label="Runway" value={runway} loading={loading} format="number" unit=" bulan" />
 </div>
 
 <div class="grid lg:grid-cols-2 gap-6">
   <div class="card p-5">
-    <h3 class="font-semibold mb-4">Pendapatan vs Beban</h3>
-    <BarChart labels={['Pendapatan', 'Beban', 'Laba']} datasets={[
-      { label: 'Rp', data: [totalRevenue, totalExpense, totalRevenue - totalExpense], color: '#059669' },
+    <h3 class="font-semibold mb-4">Pendapatan vs Beban Bulanan</h3>
+    <BarChart labels={chart().labels} datasets={[
+      { label: 'Pendapatan', data: chart().revenue, color: '#059669' },
+      { label: 'Beban', data: chart().expense, color: '#dc2626' },
     ]} height={220} yFormat="currency" />
   </div>
   <div class="card p-5">
-    <h3 class="font-semibold mb-4">Komposisi Biaya</h3>
-    <PieChart labels={['Operasional', 'Stok', 'Gaji', 'Marketing', 'Lainnya']} values={[8500000, 12000000, 5000000, 2800000, 1800000]} height={220} donut={true} />
+    <h3 class="font-semibold mb-4">Komposisi Beban</h3>
+    {#if (report?.composition ?? []).length > 0}
+      <PieChart labels={(report?.composition ?? []).map((row) => row.name)} values={(report?.composition ?? []).map((row) => toNumber(row.amount))} height={220} donut={true} />
+    {:else}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Belum ada beban pada periode investor report.</p>
+    {/if}
   </div>
 </div>
 
@@ -105,7 +138,7 @@
   open={showExport}
   onclose={() => showExport = false}
   title="Investor Report"
-  subtitle={`Periode ${startDate} s/d ${endDate}`}
+  subtitle={`Periode ${report?.metadata.period?.startDate ?? '-'} s/d ${report?.metadata.period?.endDate ?? '-'}`}
   columns={exportColumns}
   rows={exportRows}
   filename="investor-report"

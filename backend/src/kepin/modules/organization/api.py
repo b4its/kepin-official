@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, text
 from uuid import UUID
@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
@@ -22,10 +22,49 @@ from kepin.db.models import (
     TenantSidebarSetting,
     User,
     Subscription,
+    Integration,
 )
+from kepin.modules.auth.api import PLANS
 
 
 router = APIRouter(tags=["Organization"])
+
+
+def _normalize_role(role: str) -> str:
+    if role in ("owner", "tenant_owner"):
+        return "tenant_owner"
+    if role in ("staff", "employee"):
+        return "employee"
+    raise ValidationError(message="Role tidak valid")
+
+
+async def _active_owner_count(session: AsyncSession, tenant_id: str) -> int:
+    return (
+        await session.execute(
+            select(func.count(Membership.id)).where(
+                Membership.tenant_id == tenant_id,
+                Membership.role_name == "tenant_owner",
+                Membership.status == "active",
+            )
+        )
+    ).scalar_one()
+
+
+async def _assert_owner_can_change(
+    session: AsyncSession,
+    tenant: TenantContext,
+    target: Membership,
+    new_role: str | None = None,
+) -> None:
+    tenant_row = (
+        await session.execute(select(Tenant).where(Tenant.id == tenant.id))
+    ).scalar_one()
+    if str(target.user_id) == str(tenant_row.owner_id):
+        raise HTTPException(status_code=403, detail="Pemilik utama tenant harus dipindahkan melalui transfer ownership")
+    if target.role_name == "tenant_owner" and new_role != "tenant_owner":
+        owners = await _active_owner_count(session, tenant.id)
+        if owners <= 1:
+            raise ValidationError(message="Tenant harus memiliki minimal satu tenant_owner aktif")
 
 
 # ── Schemas ──────────────────────────────────────────────────────────
@@ -119,6 +158,16 @@ class IntegrationResponse(ApiSchema):
     last_synced_at: datetime | None = None
 
 
+class IntegrationCreate(ApiSchema):
+    provider: str
+    display_name: str
+
+
+class IntegrationUpdate(ApiSchema):
+    display_name: str | None = None
+    status: str | None = None
+
+
 class BillingResponse(ApiSchema):
     tenant_id: str
     plan_code: str
@@ -137,6 +186,7 @@ async def get_organization(
     _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
+    tenant_row = (await session.execute(select(Tenant).where(Tenant.id == tenant.id))).scalar_one()
     org = (
         await session.execute(
             select(OrganizationSetting).where(OrganizationSetting.tenant_id == tenant.id)
@@ -144,14 +194,24 @@ async def get_organization(
     ).scalar_one_or_none()
     if not org:
         raise NotFoundError(message="Pengaturan organisasi tidak ditemukan")
-    return OrganizationSettingResponse.model_validate(org)
+    return OrganizationSettingResponse(
+        tenant_id=str(org.tenant_id),
+        tenant_name=tenant_row.name,
+        legal_name=org.legal_name,
+        tax_id=org.tax_id,
+        timezone=org.timezone,
+        currency=org.currency,
+        fiscal_year_start=str(org.fiscal_year_start_month),
+        created_at=org.created_at,
+        updated_at=org.updated_at,
+    )
 
 
 @router.patch("/organization", response_model=OrganizationSettingResponse, summary="Update Pengaturan", description="Memperbarui pengaturan organisasi tenant")
 async def update_organization(
     body: OrganizationSettingUpdate,
     tenant: TenantContext = Depends(get_tenant_context),
-    _m: Membership = Depends(get_tenant_membership),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     org = (
@@ -162,14 +222,31 @@ async def update_organization(
     if not org:
         raise NotFoundError(message="Pengaturan organisasi tidak ditemukan")
 
+    tenant_row = (await session.execute(select(Tenant).where(Tenant.id == tenant.id))).scalar_one()
     patch = body.model_dump(exclude_unset=True)
     for field, value in patch.items():
-        setattr(org, field, value)
+        if field == "tenant_name":
+            tenant_row.name = value
+            tenant_row.updated_at = datetime.now(timezone.utc)
+        elif field == "fiscal_year_start":
+            org.fiscal_year_start_month = int(value)
+        elif hasattr(org, field):
+            setattr(org, field, value)
     org.updated_at = datetime.now(timezone.utc)
 
     await session.commit()
     await session.refresh(org)
-    return OrganizationSettingResponse.model_validate(org)
+    return OrganizationSettingResponse(
+        tenant_id=str(org.tenant_id),
+        tenant_name=tenant_row.name,
+        legal_name=org.legal_name,
+        tax_id=org.tax_id,
+        timezone=org.timezone,
+        currency=org.currency,
+        fiscal_year_start=str(org.fiscal_year_start_month),
+        created_at=org.created_at,
+        updated_at=org.updated_at,
+    )
 
 
 @router.get("/branches", response_model=list[BranchResponse], summary="Daftar Cabang", description="Mengembalikan daftar cabang tenant")
@@ -192,6 +269,7 @@ async def list_branches(
 async def create_branch(
     body: BranchCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     dup = (
@@ -227,6 +305,7 @@ async def create_branch(
 async def get_branch(
     branch_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     branch = (
@@ -247,6 +326,7 @@ async def update_branch(
     body: BranchUpdate,
     branch_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     branch = (
@@ -274,6 +354,7 @@ async def update_branch(
 async def delete_branch(
     branch_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     branch = (
@@ -331,7 +412,7 @@ async def list_members(
 async def add_member(
     body: MemberCreate,
     tenant: TenantContext = Depends(get_tenant_context),
-    _m: Membership = Depends(get_tenant_membership),
+    _m: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     user = (
@@ -364,7 +445,7 @@ async def add_member(
         raise ConflictError(message="User sudah menjadi anggota tenant ini")
 
     now = datetime.now(timezone.utc)
-    role = "tenant_owner" if body.role == "owner" else "employee"
+    role = _normalize_role(body.role)
     membership = Membership(
         id=new_uuid(),
         tenant_id=tenant.id,
@@ -395,7 +476,7 @@ async def update_member_role(
     body: MemberUpdate,
     membership_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
-    _m: Membership = Depends(get_tenant_membership),
+    actor: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     membership = (
@@ -409,7 +490,11 @@ async def update_member_role(
     if not membership:
         raise NotFoundError(message="Anggota tidak ditemukan")
 
-    role = "tenant_owner" if body.role == "owner" else "employee"
+    if str(membership.id) == str(actor.id):
+        raise HTTPException(status_code=403, detail="Tidak dapat mengubah peran sendiri")
+
+    role = _normalize_role(body.role)
+    await _assert_owner_can_change(session, tenant, membership, role)
     membership.role_name = role
     membership.updated_at = datetime.now(timezone.utc)
 
@@ -435,7 +520,7 @@ async def update_member_role(
 async def remove_member(
     membership_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
-    _m: Membership = Depends(get_tenant_membership),
+    actor: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
     membership = (
@@ -448,12 +533,17 @@ async def remove_member(
     ).scalar_one_or_none()
     if not membership:
         raise NotFoundError(message="Anggota tidak ditemukan")
+    if str(membership.id) == str(actor.id):
+        raise HTTPException(status_code=403, detail="Tidak dapat menghapus keanggotaan sendiri")
+    await _assert_owner_can_change(session, tenant, membership, None)
     await session.delete(membership)
     await session.commit()
 
 
 @router.get("/roles", response_model=list[RoleResponse], summary="Daftar Peran", description="Mengembalikan daftar peran yang tersedia")
-async def list_roles():
+async def list_roles(
+    _m: Membership = Depends(get_tenant_membership),
+):
     return [
         {"id": "tenant_owner", "name": "Pemilik"},
         {"id": "employee", "name": "Karyawan"},
@@ -463,9 +553,104 @@ async def list_roles():
 @router.get("/integrations", response_model=list[IntegrationResponse], summary="Daftar Integrasi", description="Mengembalikan daftar integrasi tenant")
 async def list_integrations(
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
-    return []
+    rows = (
+        await session.execute(
+            select(Integration)
+            .where(Integration.tenant_id == tenant.id)
+            .order_by(Integration.display_name, Integration.provider)
+        )
+    ).scalars().all()
+    return [
+        IntegrationResponse(
+            id=str(row.id),
+            provider=row.provider,
+            display_name=row.display_name,
+            status=row.status,
+            last_synced_at=row.last_synced_at,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/integrations", response_model=IntegrationResponse, status_code=201, summary="Tambah Integrasi")
+async def create_integration(
+    body: IntegrationCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    provider = body.provider.strip().lower()
+    display_name = body.display_name.strip()
+    if not provider or not display_name:
+        raise ValidationError(message="Provider dan nama integrasi wajib diisi")
+
+    integration = Integration(
+        id=new_uuid(),
+        tenant_id=tenant.id,
+        provider=provider,
+        display_name=display_name,
+        status="disconnected",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    session.add(integration)
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise ConflictError(message="Provider dan nama integrasi sudah digunakan")
+    await session.refresh(integration)
+    return IntegrationResponse(
+        id=str(integration.id),
+        provider=integration.provider,
+        display_name=integration.display_name,
+        status=integration.status,
+        last_synced_at=integration.last_synced_at,
+    )
+
+
+@router.patch("/integrations/{integration_id}", response_model=IntegrationResponse, summary="Update Integrasi")
+async def update_integration(
+    body: IntegrationUpdate,
+    integration_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    integration = (
+        await session.execute(
+            select(Integration).where(
+                Integration.id == integration_id,
+                Integration.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not integration:
+        raise NotFoundError(message="Integrasi tidak ditemukan")
+
+    patch = body.model_dump(exclude_unset=True)
+    if "display_name" in patch:
+        display_name = patch["display_name"].strip()
+        if not display_name:
+            raise ValidationError(message="Nama integrasi wajib diisi")
+        integration.display_name = display_name
+    if "status" in patch:
+        if patch["status"] not in {"active", "disconnected", "error"}:
+            raise ValidationError(message="Status integrasi tidak valid")
+        integration.status = patch["status"]
+    integration.updated_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(integration)
+    return IntegrationResponse(
+        id=str(integration.id),
+        provider=integration.provider,
+        display_name=integration.display_name,
+        status=integration.status,
+        last_synced_at=integration.last_synced_at,
+    )
 
 
 @router.get("/billing", response_model=BillingResponse, summary="Informasi Tagihan", description="Mengembalikan informasi langganan dan tagihan tenant")
@@ -491,16 +676,17 @@ async def get_billing(
             tenant_id=tenant.id,
             plan_code="free",
             status="none",
-            features=[],
+            features=PLANS["free"]["features"],
         )
 
+    plan = PLANS.get(sub.plan_code, PLANS["free"])
     return BillingResponse(
         tenant_id=tenant.id,
         plan_code=sub.plan_code,
         status=sub.status,
         start_date=sub.current_period_start.date() if sub.current_period_start else None,
         end_date=sub.current_period_end.date() if sub.current_period_end else None,
-        features=[],
+        features=plan["features"],
     )
 
 
@@ -526,13 +712,9 @@ async def get_sidebar_settings(
 async def update_sidebar_settings(
     body: dict,
     tenant: TenantContext = Depends(get_tenant_context),
-    membership: Membership = Depends(get_tenant_membership),
+    membership: Membership = Depends(require_tenant_owner),
     session: AsyncSession = Depends(get_session),
 ):
-    if membership.role_name != "tenant_owner":
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Hanya tenant_owner yang dapat mengubah pengaturan sidebar")
-
     enabled_items: dict = body.get("enabledItems", {})
     now = datetime.now(timezone.utc)
 

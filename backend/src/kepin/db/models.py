@@ -77,7 +77,14 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(32), default="")
     avatar_url: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(24), default="active")
+    is_superadmin: Mapped[bool] = mapped_column(default=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    mfa_recovery_codes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mfa_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    password_reset_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=datetime.now
     )
@@ -368,7 +375,7 @@ class AccountBalance(Base):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     account_id: Mapped[uuid.UUID] = mapped_column(Uuid)
-    branch_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    branch_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     period_date: Mapped[date] = mapped_column(Date)
     debit_total: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
     credit_total: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
@@ -641,6 +648,30 @@ class CustomerPaymentAllocation(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 2))
 
 
+class SupplierPayment(Base):
+    __tablename__ = "supplier_payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), index=True)
+    branch_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("branches.id"), nullable=True)
+    payment_number: Mapped[str] = mapped_column(String(40))
+    supplier_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("suppliers.id"), index=True)
+    payment_date: Mapped[date] = mapped_column(Date)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 2))
+    method: Mapped[str] = mapped_column(String(40), default="")
+    reference: Mapped[str] = mapped_column(String(80), default="")
+    status: Mapped[str] = mapped_column(String(24), default="draft")
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("journal_entries.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=datetime.now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=datetime.now, default=datetime.now
+    )
+
+
 # ---------------------------------------------------------------------------
 # Purchasing
 # ---------------------------------------------------------------------------
@@ -725,6 +756,9 @@ class GoodsReceipt(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(24), default="completed")
     notes: Mapped[str] = mapped_column(Text, default="")
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("journal_entries.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=datetime.now
     )
@@ -841,9 +875,99 @@ class StockMovement(Base):
     reason: Mapped[str] = mapped_column(String(255), default="")
     reference_type: Mapped[str] = mapped_column(String(40), default="")
     reference_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("journal_entries.id"), nullable=True, index=True
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=datetime.now
+    )
+
+
+# ---------------------------------------------------------------------------
+# Accounting Kernel (Idempotency, Fiscal Year, Periods)
+# ---------------------------------------------------------------------------
+
+
+class IdempotencyKey(Base):
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "idempotency_key", name="uq_idempotency_key_tenant"),
+        UniqueConstraint("tenant_id", "id", name="uq_idempotency_key_tenant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"))
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    operation: Mapped[str] = mapped_column(String(40))
+    source_type: Mapped[str] = mapped_column(String(40), default="")
+    source_id: Mapped[str] = mapped_column(String(80), default="")
+    request_hash: Mapped[str] = mapped_column(String(128), default="")
+    status: Mapped[str] = mapped_column(
+        String(24),
+        CheckConstraint("status IN ('completed', 'failed')", name="ck_idempotency_status"),
+        default="completed",
+    )
+    result_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=datetime.now
+    )
+
+
+class FiscalYear(Base):
+    __tablename__ = "fiscal_years"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_fiscal_year_tenant_id"),
+        UniqueConstraint("tenant_id", "name", name="uq_fiscal_year_name_tenant"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"))
+    name: Mapped[str] = mapped_column(String(80))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(
+        String(24),
+        CheckConstraint("status IN ('open', 'closed')", name="ck_fiscal_year_status"),
+        default="open",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=datetime.now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=datetime.now, default=datetime.now
+    )
+
+
+class AccountingPeriod(Base):
+    __tablename__ = "accounting_periods"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_accounting_period_tenant_id"),
+        UniqueConstraint("tenant_id", "fiscal_year_id", "name", name="uq_period_name_fiscal_year"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"))
+    fiscal_year_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("fiscal_years.id"))
+    name: Mapped[str] = mapped_column(String(40))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(
+        String(24),
+        CheckConstraint(
+            "status IN ('open', 'soft_closed', 'closed', 'locked')",
+            name="ck_accounting_period_status",
+        ),
+        default="open",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=datetime.now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=datetime.now, default=datetime.now
+    )
+    closing_journal_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("journal_entries.id"), nullable=True
     )
 
 

@@ -24,6 +24,8 @@ from kepin.db.models import (
     Account,
     Branch,
     Invoice,
+    JournalEntry,
+    JournalLine,
     Membership,
     Product,
     StockBalance,
@@ -128,10 +130,19 @@ async def get_dashboard(
     expense = (await session.execute(expense_stmt)).scalar() or Decimal("0")
 
     gross_profit = income - expense
-    cash_stmt = select(
-        func.coalesce(func.sum(StockBalance.average_cost * StockBalance.quantity), 0)
-    ).where(
-        StockBalance.tenant_id == tid,
+    cash_stmt = (
+        select(
+            func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+        .join(Account, Account.id == JournalLine.account_id)
+        .where(
+            JournalEntry.tenant_id == tid,
+            JournalEntry.status == "posted",
+            Account.tenant_id == tid,
+            Account.code.in_(["1-1002", "1-1003"]),
+        )
     )
     cash_balance = (await session.execute(cash_stmt)).scalar() or Decimal("0")
 

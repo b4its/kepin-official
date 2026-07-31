@@ -102,7 +102,8 @@
 
   function goToLanding() {
     closeProfile();
-    window.location.href = '/';
+      window.location.href = `/`;
+
   }
 </script>
 

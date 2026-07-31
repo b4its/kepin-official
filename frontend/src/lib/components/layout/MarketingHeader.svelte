@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { Menu, X } from '@lucide/svelte';
+  import { Menu, X, Building2 } from '@lucide/svelte';
   import ThemeMenu from '$lib/components/layout/ThemeMenu.svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
   import { landingAnchors } from '$lib/config/navigation';
 
   let mobileOpen = $state(false);
   let scrolled = $state(false);
+  let linkHref = $state('');
+  let linkText = $state('');
 
   function onScroll() {
     scrolled = window.scrollY > 20;
@@ -13,6 +15,23 @@
 
   $effect(() => {
     window.addEventListener('scroll', onScroll);
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('kepin_token');
+      if (token) {
+        const user = JSON.parse(localStorage.getItem('kepin_session') || '{}');
+        const tenants = JSON.parse(localStorage.getItem('kepin_tenants') || '[]');
+        if (user.isSuperadmin) {
+          linkHref = '/admin';
+          linkText = 'Panel';
+        } else if (tenants.length > 0) {
+          linkHref = `/app/${tenants[0].slug}`;
+          linkText = tenants[0].name || 'Dashboard';
+        } else {
+          linkHref = '/auth/onboarding';
+          linkText = 'Lengkapi Profil';
+        }
+      }
+    }
     return () => window.removeEventListener('scroll', onScroll);
   });
 </script>
@@ -42,12 +61,19 @@
 
       <div class="flex items-center gap-2 sm:gap-3">
         <ThemeMenu />
-        <a href="/auth/login" class="btn-ghost btn-sm hidden sm:inline-flex">
-          Masuk
-        </a>
-        <a href="/auth/register" class="btn-primary btn-sm">
-          Coba Gratis
-        </a>
+        {#if linkHref}
+          <a href={linkHref} class="btn-primary btn-sm hidden sm:inline-flex">
+            <Building2 class="w-4 h-4" />
+            {linkText}
+          </a>
+        {:else}
+          <a href="/auth/login" class="btn-ghost btn-sm hidden sm:inline-flex">
+            Masuk
+          </a>
+          <a href="/auth/register" class="btn-primary btn-sm">
+            Coba Gratis
+          </a>
+        {/if}
         <button
           class="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-md hover:bg-[hsl(var(--accent))]"
           onclick={() => mobileOpen = !mobileOpen}
@@ -76,12 +102,18 @@
           </a>
         {/each}
         <hr class="my-2 border-[var(--color-line)]">
-        <a href="/auth/login" class="block px-3 py-2 text-sm font-medium text-[var(--color-muted)] hover:text-[var(--color-ink)]">
-          Masuk
-        </a>
-        <a href="/auth/register" class="block px-3 py-2 text-sm font-medium text-[hsl(var(--primary))]">
-          Coba Gratis
-        </a>
+        {#if linkHref}
+          <a href={linkHref} class="block px-3 py-2 text-sm font-medium text-[hsl(var(--primary))]">
+            <Building2 class="w-4 h-4 inline" /> {linkText}
+          </a>
+        {:else}
+          <a href="/auth/login" class="block px-3 py-2 text-sm font-medium text-[var(--color-muted)] hover:text-[var(--color-ink)]">
+            Masuk
+          </a>
+          <a href="/auth/register" class="block px-3 py-2 text-sm font-medium text-[hsl(var(--primary))]">
+            Coba Gratis
+          </a>
+        {/if}
       </div>
     </div>
   {/if}

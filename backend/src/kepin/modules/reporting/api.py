@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query
-from sqlalchemy import and_, case, func, or_, select, text
+from sqlalchemy import and_, case, func, literal_column, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kepin.api.dependencies import (
@@ -22,16 +22,26 @@ from kepin.db.models import (
     Account,
     Customer,
     CustomerPayment,
+    GoodsReceipt,
+    GoodsReceiptLine,
     Invoice,
     JournalEntry,
     JournalLine,
     Membership,
     Product,
+    PurchaseOrder,
     StockBalance,
+    Supplier,
+    SupplierPayment,
     Transaction,
 )
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
+
+
+def _not_closing_journal():
+    """Filter jurnal penutup (CLS-*) dan reversal-nya (REV-CLS-*) dari laporan laba/rugi."""
+    return ~JournalEntry.journal_number.like("CLS-%"), ~JournalEntry.journal_number.like("REV-CLS-%")
 
 
 class ReportMetadata(ApiSchema):
@@ -67,7 +77,7 @@ async def get_summary(
         await session.execute(
             select(
                 func.coalesce(
-                    func.sum(case((Account.type == "income", JournalLine.debit - JournalLine.credit), else_=0)), 0
+                    func.sum(case((Account.type == "income", JournalLine.credit - JournalLine.debit), else_=0)), 0
                 ).label("income"),
                 func.coalesce(
                     func.sum(case((Account.type == "expense", JournalLine.debit - JournalLine.credit), else_=0)), 0
@@ -79,6 +89,8 @@ async def get_summary(
             .where(
                 JournalEntry.tenant_id == ctx.id,
                 JournalEntry.status == "posted",
+                JournalEntry.journal_number.not_like("CLS-%"),
+                JournalEntry.journal_number.not_like("REV-CLS-%"),
                 JournalEntry.journal_date.between(start, end),
             )
         )
@@ -91,9 +103,9 @@ async def get_summary(
     bar = (
         await session.execute(
             select(
-                func.date_trunc("day", JournalEntry.journal_date).label("dt"),
+                func.date_trunc(literal_column("'day'"), JournalEntry.journal_date).label("dt"),
                 func.coalesce(
-                    func.sum(case((Account.type == "income", JournalLine.debit - JournalLine.credit), else_=0)), 0
+                    func.sum(case((Account.type == "income", JournalLine.credit - JournalLine.debit), else_=0)), 0
                 ).label("income"),
                 func.coalesce(
                     func.sum(case((Account.type == "expense", JournalLine.debit - JournalLine.credit), else_=0)), 0
@@ -105,10 +117,12 @@ async def get_summary(
             .where(
                 JournalEntry.tenant_id == ctx.id,
                 JournalEntry.status == "posted",
+                JournalEntry.journal_number.not_like("CLS-%"),
+                JournalEntry.journal_number.not_like("REV-CLS-%"),
                 JournalEntry.journal_date.between(start, end),
             )
-            .group_by(func.date_trunc("day", JournalEntry.journal_date))
-            .order_by(func.date_trunc("day", JournalEntry.journal_date))
+            .group_by(func.date_trunc(literal_column("'day'"), JournalEntry.journal_date))
+            .order_by(func.date_trunc(literal_column("'day'"), JournalEntry.journal_date))
         )
     ).all()
 
@@ -126,6 +140,8 @@ async def get_summary(
             .where(
                 JournalEntry.tenant_id == ctx.id,
                 JournalEntry.status == "posted",
+                JournalEntry.journal_number.not_like("CLS-%"),
+                JournalEntry.journal_number.not_like("REV-CLS-%"),
                 Account.type == "expense",
                 JournalEntry.journal_date.between(start, end),
             )
@@ -173,6 +189,8 @@ async def get_profit_loss(
             .where(
                 JournalEntry.tenant_id == ctx.id,
                 JournalEntry.status == "posted",
+                JournalEntry.journal_number.not_like("CLS-%"),
+                JournalEntry.journal_number.not_like("REV-CLS-%"),
                 Account.type.in_(["income", "expense"]),
                 JournalEntry.journal_date.between(start, end),
             )
@@ -185,10 +203,11 @@ async def get_profit_loss(
     total_income = Decimal("0")
     total_expense = Decimal("0")
     for row in rows:
-        net = row.debit_total - row.credit_total
         if row.type == "income":
+            net = row.credit_total - row.debit_total
             total_income += net
         else:
+            net = row.debit_total - row.credit_total
             total_expense += net
         pl_rows.append({
             "code": row.code,
@@ -207,6 +226,88 @@ async def get_profit_loss(
             "netProfit": str(total_income - total_expense),
         },
         "rows": pl_rows,
+    }
+
+
+@router.get("/trial-balance")
+async def get_trial_balance(
+    ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+    params: PeriodParams = Depends(),
+    include_closing: bool = Query(False, alias="includeClosing", description="Sertakan jurnal penutup (CLS-*)"),
+):
+    start, end = params.resolve()
+    metadata = _build_metadata(ctx, start, end)
+
+    conditions = [
+        JournalEntry.tenant_id == ctx.id,
+        JournalEntry.status == "posted",
+    ]
+    if not include_closing:
+        conditions.append(JournalEntry.journal_number.not_like("CLS-%"))
+        conditions.append(JournalEntry.journal_number.not_like("REV-CLS-%"))
+
+    rows = (
+        await session.execute(
+            select(
+                Account.code,
+                Account.name,
+                Account.type,
+                Account.normal_balance,
+                func.coalesce(
+                    func.sum(case((JournalEntry.journal_date < start, JournalLine.debit), else_=0)), 0
+                ).label("opening_debit"),
+                func.coalesce(
+                    func.sum(case((JournalEntry.journal_date < start, JournalLine.credit), else_=0)), 0
+                ).label("opening_credit"),
+                func.coalesce(
+                    func.sum(case((JournalEntry.journal_date.between(start, end), JournalLine.debit), else_=0)), 0
+                ).label("period_debit"),
+                func.coalesce(
+                    func.sum(case((JournalEntry.journal_date.between(start, end), JournalLine.credit), else_=0)), 0
+                ).label("period_credit"),
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+            .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
+            .where(and_(*conditions), JournalEntry.journal_date <= end)
+            .group_by(Account.code, Account.name, Account.type, Account.normal_balance)
+            .order_by(Account.code)
+        )
+    ).all()
+
+    tb_rows = []
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+    for code, name, atype, normal_balance, op_d, op_c, p_d, p_c in rows:
+        opening = (op_d or Decimal("0")) - (op_c or Decimal("0"))
+        closing = opening + (p_d or Decimal("0")) - (p_c or Decimal("0"))
+        debit = closing if closing >= 0 else Decimal("0")
+        credit = -closing if closing < 0 else Decimal("0")
+        total_debit += debit
+        total_credit += credit
+        tb_rows.append({
+            "code": code,
+            "name": name,
+            "type": atype,
+            "normalBalance": normal_balance,
+            "openingBalance": str(opening),
+            "periodDebit": str(p_d or Decimal("0")),
+            "periodCredit": str(p_c or Decimal("0")),
+            "closingBalance": str(closing),
+            "debit": str(debit),
+            "credit": str(credit),
+        })
+
+    return {
+        "metadata": metadata.model_dump(mode="json"),
+        "summary": {
+            "totalDebit": str(total_debit),
+            "totalCredit": str(total_credit),
+            "balanced": total_debit == total_credit,
+        },
+        "rows": tb_rows,
     }
 
 
@@ -487,6 +588,187 @@ async def get_receivable_aging(
     }
 
 
+@router.get("/payable-aging")
+async def get_payable_aging(
+    ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    """Aging hutang per supplier berbasis goods receipt (jurnal-linked) vs pembayaran supplier."""
+    today = date.today()
+
+    received_rows = (
+        await session.execute(
+            select(
+                PurchaseOrder.supplier_id.label("supplier_id"),
+                Supplier.name.label("supplier_name"),
+                func.sum(GoodsReceiptLine.quantity * GoodsReceiptLine.unit_cost).label("received"),
+                func.max(GoodsReceipt.received_at).label("last_receipt"),
+            )
+            .select_from(GoodsReceiptLine)
+            .join(GoodsReceipt, GoodsReceipt.id == GoodsReceiptLine.goods_receipt_id)
+            .join(PurchaseOrder, PurchaseOrder.id == GoodsReceipt.purchase_order_id)
+            .join(Supplier, and_(Supplier.id == PurchaseOrder.supplier_id, Supplier.tenant_id == ctx.id))
+            .where(
+                GoodsReceipt.tenant_id == ctx.id,
+                GoodsReceipt.journal_entry_id.is_not(None),
+            )
+            .group_by(PurchaseOrder.supplier_id, Supplier.name)
+        )
+    ).all()
+
+    paid_rows = (
+        await session.execute(
+            select(
+                SupplierPayment.supplier_id.label("supplier_id"),
+                Supplier.name.label("supplier_name"),
+                func.sum(SupplierPayment.amount).label("paid"),
+            )
+            .select_from(SupplierPayment)
+            .join(Supplier, and_(Supplier.id == SupplierPayment.supplier_id, Supplier.tenant_id == ctx.id))
+            .where(
+                SupplierPayment.tenant_id == ctx.id,
+                SupplierPayment.status == "posted",
+                SupplierPayment.journal_entry_id.is_not(None),
+            )
+            .group_by(SupplierPayment.supplier_id, Supplier.name)
+        )
+    ).all()
+
+    combined: dict[str, dict] = {}
+    for row in received_rows:
+        combined.setdefault(str(row.supplier_id), {
+            "supplierId": str(row.supplier_id),
+            "supplierName": row.supplier_name,
+            "received": Decimal("0"),
+            "paid": Decimal("0"),
+            "lastReceipt": None,
+        })
+        combined[str(row.supplier_id)]["received"] = row.received or Decimal("0")
+        combined[str(row.supplier_id)]["lastReceipt"] = row.last_receipt
+    for row in paid_rows:
+        combined.setdefault(str(row.supplier_id), {
+            "supplierId": str(row.supplier_id),
+            "supplierName": row.supplier_name,
+            "received": Decimal("0"),
+            "paid": Decimal("0"),
+            "lastReceipt": None,
+        })
+        combined[str(row.supplier_id)]["paid"] = row.paid or Decimal("0")
+
+    items = []
+    grand = Decimal("0")
+    for data in combined.values():
+        outstanding = data["received"] - data["paid"]
+        grand += outstanding
+        if data["lastReceipt"] is not None:
+            days = (today - data["lastReceipt"].date()).days
+        else:
+            days = 0
+        if days <= 0:
+            bucket = "current"
+        elif days <= 30:
+            bucket = "1_30"
+        elif days <= 60:
+            bucket = "31_60"
+        elif days <= 90:
+            bucket = "61_90"
+        else:
+            bucket = "90_plus"
+        items.append({
+            "supplierId": data["supplierId"],
+            "supplierName": data["supplierName"],
+            "received": str(data["received"]),
+            "paid": str(data["paid"]),
+            "outstanding": str(outstanding),
+            "bucket": bucket,
+            "daysSinceReceipt": max(0, days),
+        })
+
+    items.sort(key=lambda i: i["supplierName"])
+    return {
+        "metadata": {
+            "tenantName": ctx.slug,
+            "asOf": today.isoformat(),
+            "currency": "IDR",
+            "timezone": ctx.timezone,
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+        },
+        "rows": items,
+        "grandTotal": str(grand),
+    }
+
+
+@router.get("/stock-valuation")
+async def get_stock_valuation(
+    ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    """Nilai persediaan: qty x average cost per produk + cross-check dengan GL Persediaan."""
+    rows = (
+        await session.execute(
+            select(
+                Product.sku,
+                Product.name,
+                StockBalance.quantity,
+                StockBalance.average_cost,
+            )
+            .select_from(StockBalance)
+            .join(Product, and_(Product.id == StockBalance.product_id, Product.tenant_id == ctx.id))
+            .where(StockBalance.tenant_id == ctx.id)
+            .order_by(Product.sku)
+        )
+    ).all()
+
+    items = []
+    total_value = Decimal("0")
+    for sku, name, qty, avg_cost in rows:
+        value = (qty or Decimal("0")) * (avg_cost or Decimal("0"))
+        total_value += value
+        items.append({
+            "sku": sku,
+            "productName": name,
+            "quantity": str(qty or Decimal("0")),
+            "averageCost": str(avg_cost or Decimal("0")),
+            "value": str(value),
+        })
+
+    gl_value = Decimal("0")
+    gl_rows = (
+        await session.execute(
+            select(Account.code, func.sum(JournalLine.debit - JournalLine.credit))
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+            .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
+            .where(
+                JournalEntry.tenant_id == ctx.id,
+                JournalEntry.status == "posted",
+                Account.code == "1-3001",
+            )
+            .group_by(Account.code)
+        )
+    ).all()
+    if gl_rows:
+        gl_value = gl_rows[0][1] or Decimal("0")
+
+    return {
+        "metadata": {
+            "tenantName": ctx.slug,
+            "asOf": date.today().isoformat(),
+            "currency": "IDR",
+            "timezone": ctx.timezone,
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+        },
+        "summary": {
+            "totalValue": str(total_value),
+            "glInventoryValue": str(gl_value),
+            "glDelta": str(total_value - gl_value),
+        },
+        "rows": items,
+    }
+
+
 @router.get("/investor")
 async def get_investor_report(
     ctx: TenantContext = Depends(get_tenant_context),
@@ -534,9 +816,9 @@ async def get_investor_report(
     monthly = (
         await session.execute(
             select(
-                func.date_trunc("month", JournalEntry.journal_date).label("month"),
+                func.date_trunc(literal_column("'month'"), JournalEntry.journal_date).label("month"),
                 func.coalesce(
-                    func.sum(case((Account.type == "income", JournalLine.debit - JournalLine.credit), else_=0)), 0
+                    func.sum(case((Account.type == "income", JournalLine.credit - JournalLine.debit), else_=0)), 0
                 ).label("revenue"),
                 func.coalesce(
                     func.sum(case((Account.type == "expense", JournalLine.debit - JournalLine.credit), else_=0)), 0
@@ -548,11 +830,13 @@ async def get_investor_report(
             .where(
                 JournalEntry.tenant_id == ctx.id,
                 JournalEntry.status == "posted",
+                JournalEntry.journal_number.not_like("CLS-%"),
+                JournalEntry.journal_number.not_like("REV-CLS-%"),
                 JournalEntry.journal_date >= six_months_ago,
                 JournalEntry.journal_date <= today,
             )
-            .group_by(func.date_trunc("month", JournalEntry.journal_date))
-            .order_by(func.date_trunc("month", JournalEntry.journal_date))
+            .group_by(func.date_trunc(literal_column("'month'"), JournalEntry.journal_date))
+            .order_by(func.date_trunc(literal_column("'month'"), JournalEntry.journal_date))
         )
     ).all()
 
@@ -570,6 +854,8 @@ async def get_investor_report(
             .where(
                 JournalEntry.tenant_id == ctx.id,
                 JournalEntry.status == "posted",
+                JournalEntry.journal_number.not_like("CLS-%"),
+                JournalEntry.journal_number.not_like("REV-CLS-%"),
                 Account.type == "expense",
                 JournalEntry.journal_date >= six_months_ago,
                 JournalEntry.journal_date <= today,

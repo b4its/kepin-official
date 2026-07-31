@@ -3,6 +3,7 @@ import { PUBLIC_API_URL } from '$env/static/public';
 export type ApiError = {
   code: string;
   message: string;
+  status?: number;
   detail?: string;
   fieldErrors?: Record<string, string[]>;
   requestId?: string;
@@ -40,7 +41,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ code: 'UNKNOWN', message: 'Unknown error' }));
-    throw error as ApiError;
+    throw {
+      ...error,
+      status: response.status,
+      message: error.message || error.detail || `HTTP ${response.status}`,
+    } as ApiError;
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

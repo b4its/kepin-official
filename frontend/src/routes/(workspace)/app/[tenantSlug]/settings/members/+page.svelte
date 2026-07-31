@@ -4,53 +4,82 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
-  import { members, createMember, updateMember, deleteMember } from '$lib/stores/data';
+  import { members, createMember, updateMember, deleteMember, currentRole } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
 
   let showModal = $state(false);
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
-  let form = $state({ name: '', email: '', role: 'Staff', status: 'active' });
+  let form = $state({ name: '', email: '', role: 'employee', status: 'active' });
+  const isOwner = $derived($currentRole === 'tenant_owner');
+  const rows = $derived($members.map((m: any, index) => ({
+    index,
+    id: m.id,
+    name: m.user?.name || m.userName || '-',
+    email: m.user?.email || m.userEmail || '-',
+    role: m.role || m.roleName || '-',
+    status: m.status || 'active',
+  })));
 
   function openCreate() {
-    form = { name: '', email: '', role: 'Staff', status: 'active' };
+    if (!isOwner) return;
+    form = { name: '', email: '', role: 'employee', status: 'active' };
     editingIndex = null;
     showModal = true;
   }
 
   function openEdit(i: number) {
+    if (!isOwner) return;
     const m = $members[i];
-    form = { name: m.user.name, email: m.user.email, role: m.role, status: m.status };
+    form = { name: m.user?.name || '', email: m.user?.email || '', role: m.role || m.roleName || 'employee', status: m.status };
     editingIndex = i;
     showModal = true;
   }
 
   async function save() {
-    if (editingIndex !== null) {
-      await updateMember(editingIndex, form as any);
-      showToast('Anggota berhasil diperbarui', 'success');
-    } else {
-      await createMember(form as any);
-      showToast('Anggota berhasil diundang', 'success');
+    if (!isOwner) return;
+    try {
+      if (editingIndex !== null) {
+        await updateMember(editingIndex, form as any);
+        showToast('Anggota berhasil diperbarui', 'success');
+      } else {
+        await createMember(form as any);
+        showToast('Anggota berhasil diundang', 'success');
+      }
+      showModal = false;
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menyimpan anggota', 'error');
     }
-    showModal = false;
   }
 
   async function confirmDelete() {
+    if (!isOwner) return;
     if (deleteIndex !== null) {
-      await deleteMember(deleteIndex);
+      try {
+        await deleteMember(deleteIndex);
+        showToast('Anggota berhasil dihapus', 'success');
+      } catch (err: any) {
+        showToast(err?.message || 'Gagal menghapus anggota', 'error');
+      }
       deleteIndex = null;
-      showToast('Anggota berhasil dihapus', 'success');
     }
   }
 </script>
 
 <PageHeader title="Anggota Tim" description="Kelola anggota workspace" breadcrumbs={[{ label: 'Pengaturan' }, { label: 'Anggota' }]}>
   {#snippet actions()}
-    <Button onclick={openCreate}>+ Undang Anggota</Button>
+    {#if isOwner}
+      <Button onclick={openCreate}>+ Undang Anggota</Button>
+    {/if}
   {/snippet}
 </PageHeader>
+
+{#if !isOwner}
+  <div class="card p-4 mb-6 text-sm text-[hsl(var(--muted-foreground))]">
+    Hanya <strong>tenant_owner</strong> yang dapat mengundang, mengubah role, atau menghapus anggota. Daftar anggota ditampilkan read-only.
+  </div>
+{/if}
 
 <DataTable
   columns={[
@@ -59,39 +88,39 @@
     { key: 'role', label: 'Peran' },
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
-  data={$members}
-  total={$members.length}
+  data={rows}
+  total={rows.length}
   searchable={true}
 >
   {#snippet rowActions(item: any, i: number)}
-    <button onclick={() => openEdit(i)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
-    <button onclick={() => deleteIndex = i} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
+    {#if isOwner}
+      <button onclick={() => openEdit(item.index)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
+      <button onclick={() => deleteIndex = item.index} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
+    {/if}
   {/snippet}
 </DataTable>
 
 <Modal title={editingIndex !== null ? 'Edit Anggota' : 'Undang Anggota'} open={showModal} onclose={() => showModal = false}>
   <form onsubmit={save} class="space-y-4">
     <div>
-      <label class="label-text">Nama</label>
-      <input type="text" bind:value={form.name} class="input-field mt-1" required />
+      <label class="label-text" for="member-name">Nama</label>
+      <input id="member-name" type="text" bind:value={form.name} class="input-field mt-1" required />
     </div>
     <div>
-      <label class="label-text">Email</label>
-      <input type="email" bind:value={form.email} class="input-field mt-1" required />
+      <label class="label-text" for="member-email">Email</label>
+      <input id="member-email" type="email" bind:value={form.email} class="input-field mt-1" required />
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
-        <label class="label-text">Peran</label>
-        <select bind:value={form.role} class="input-field mt-1">
-          <option value="Owner">Owner</option>
-          <option value="Admin">Admin</option>
-          <option value="Finance">Finance</option>
-          <option value="Staff">Staff</option>
+        <label class="label-text" for="member-role">Peran</label>
+        <select id="member-role" bind:value={form.role} class="input-field mt-1">
+          <option value="tenant_owner">Owner</option>
+          <option value="employee">Employee</option>
         </select>
       </div>
       <div>
-        <label class="label-text">Status</label>
-        <select bind:value={form.status} class="input-field mt-1">
+        <label class="label-text" for="member-status">Status</label>
+        <select id="member-status" bind:value={form.status} class="input-field mt-1">
           <option value="active">Aktif</option>
           <option value="inactive">Nonaktif</option>
         </select>

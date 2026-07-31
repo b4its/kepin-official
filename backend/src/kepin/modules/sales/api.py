@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Header, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, text
 from uuid import UUID
@@ -8,19 +8,28 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, ListParams, PeriodParams
+from kepin.api.dependencies import get_current_user, get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str, to_quantity, ZERO
+from kepin.core.audit import record_audit
+from kepin.core.subledger import (
+    post_customer_payment_journal,
+    post_invoice_journal,
+    restore_stock_for_invoice,
+    reverse_posted_journal,
+)
 from kepin.db.models import (
     Customer,
     Invoice,
     InvoiceLine,
     CustomerPayment,
     CustomerPaymentAllocation,
+    JournalEntry,
     Membership,
     Product,
+    User,
 )
 
 router = APIRouter(tags=["Sales"])
@@ -118,6 +127,7 @@ class InvoiceSchema(ApiSchema):
     balance_due: str
     notes: str = ""
     branch_id: str | None = None
+    journal_entry_id: str | None = None
     lines: list[InvoiceLineSchema] = []
     version: int = 1
     created_at: datetime | None = None
@@ -134,6 +144,7 @@ class CustomerPaymentSchema(ApiSchema):
     status: str
     customer_id: str
     branch_id: str | None = None
+    journal_entry_id: str | None = None
     created_at: datetime | None = None
 
 
@@ -186,6 +197,7 @@ def _build_invoice_schema(invoice: Invoice, lines: list[InvoiceLine]) -> Invoice
         balance_due=money_str(invoice.balance_due),
         notes=invoice.notes or "",
         branch_id=str(invoice.branch_id) if invoice.branch_id else None,
+        journal_entry_id=str(invoice.journal_entry_id) if invoice.journal_entry_id else None,
         lines=[_build_invoice_line_schema(l) for l in lines],
         version=invoice.version,
         created_at=invoice.created_at,
@@ -298,6 +310,7 @@ async def list_customers(
 async def create_customer(
     body: CustomerCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     dup = await session.execute(
@@ -331,6 +344,7 @@ async def create_customer(
 async def get_customer(
     customer_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     c = await session.execute(
@@ -347,6 +361,7 @@ async def update_customer(
     body: CustomerUpdate,
     customer_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     c = await session.execute(
@@ -373,6 +388,7 @@ async def update_customer(
 async def delete_customer(
     customer_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     c = await session.execute(
@@ -446,6 +462,7 @@ async def list_invoices(
 async def create_invoice(
     body: InvoiceCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     customer = await session.execute(
@@ -520,6 +537,7 @@ async def create_invoice(
 async def get_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     inv = await session.execute(
@@ -538,6 +556,7 @@ async def update_invoice(
     body: InvoiceUpdate,
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     inv = await session.execute(
@@ -603,6 +622,7 @@ async def update_invoice(
 async def delete_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     inv = await session.execute(
@@ -626,6 +646,7 @@ async def delete_invoice(
 async def send_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     inv = await session.execute(
@@ -650,6 +671,7 @@ async def send_invoice(
 async def cancel_invoice(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     inv = await session.execute(
@@ -670,10 +692,130 @@ async def cancel_invoice(
     return _build_invoice_schema(invoice, lines)
 
 
+@router.post("/invoices/{invoice_id}/post", response_model=InvoiceSchema, summary="Posting Invoice", description="Memposting invoice ke buku besar (Piutang/Pendapatan/PPN + HPP/Persediaan) melalui Central Posting Engine")
+async def post_invoice(
+    invoice_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    inv = await session.execute(
+        select(Invoice).where(
+            Invoice.id == invoice_id,
+            Invoice.tenant_id == tenant.id,
+        ).with_for_update()
+    )
+    invoice = inv.scalar_one_or_none()
+    if not invoice:
+        raise NotFoundError(message="Faktur tidak ditemukan")
+    if invoice.status not in ("draft", "sent"):
+        raise ValidationError(message="Hanya faktur draft/sent yang bisa diposting")
+    if invoice.journal_entry_id:
+        raise ValidationError(message="Faktur ini sudah diposting ke buku besar")
+
+    lines = await _get_invoice_lines(session, invoice_id)
+    if not lines:
+        raise ValidationError(message="Faktur tidak memiliki line items")
+
+    await post_invoice_journal(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=str(user.id),
+        invoice=invoice,
+        lines=lines,
+    )
+
+    invoice.status = "posted"
+    invoice.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="invoice.post",
+        module="sales",
+        object_type="invoice",
+        object_id=str(invoice.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"invoiceNumber": invoice.invoice_number, "journalEntryId": str(invoice.journal_entry_id)},
+    )
+    await session.commit()
+    await session.refresh(invoice)
+
+    lines = await _get_invoice_lines(session, invoice_id)
+    return _build_invoice_schema(invoice, lines)
+
+
+@router.post("/invoices/{invoice_id}/reverse", response_model=InvoiceSchema, summary="Reverse Invoice", description="Membatalkan invoice yang sudah diposting (reversal jurnal + restorasi stok)")
+async def reverse_invoice(
+    invoice_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    inv = await session.execute(
+        select(Invoice).where(
+            Invoice.id == invoice_id,
+            Invoice.tenant_id == tenant.id,
+        ).with_for_update()
+    )
+    invoice = inv.scalar_one_or_none()
+    if not invoice:
+        raise NotFoundError(message="Faktur tidak ditemukan")
+    if invoice.status != "posted":
+        raise ValidationError(message="Hanya faktur posted yang bisa di-reverse")
+    if not invoice.journal_entry_id:
+        raise ValidationError(message="Faktur tidak memiliki jurnal untuk di-reverse")
+    if invoice.paid_amount > ZERO:
+        raise ValidationError(
+            message="Faktur sudah memiliki pembayaran; batalkan pembayaran terlebih dahulu"
+        )
+
+    journal = (
+        await session.execute(
+            select(JournalEntry).where(
+                JournalEntry.id == invoice.journal_entry_id,
+                JournalEntry.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not journal:
+        raise NotFoundError(message="Jurnal invoice tidak ditemukan")
+
+    await reverse_posted_journal(
+        session=session,
+        tenant_id=tenant.id,
+        journal_id=str(journal.id),
+        description_prefix="Retur",
+    )
+    await restore_stock_for_invoice(session, tenant.id, invoice)
+
+    invoice.status = "cancelled"
+    invoice.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="invoice.reverse",
+        module="sales",
+        object_type="invoice",
+        object_id=str(invoice.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"invoiceNumber": invoice.invoice_number, "status": invoice.status},
+    )
+    await session.commit()
+    await session.refresh(invoice)
+
+    lines = await _get_invoice_lines(session, invoice_id)
+    return _build_invoice_schema(invoice, lines)
+
+
 @router.get("/invoices/{invoice_id}/pdf", summary="Download PDF Invoice", description="Mengunduh invoice dalam format PDF")
 async def get_invoice_pdf(
     invoice_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     _ = invoice_id, tenant, session
@@ -710,10 +852,11 @@ async def list_customer_payments(
     return make_paginated(items, params.page, params.page_size, total)
 
 
-@router.post("/customer-payments", response_model=CustomerPaymentSchema, status_code=201, summary="Buat Pembayaran", description="Mencatat pembayaran dari pelanggan")
+@router.post("/customer-payments", response_model=CustomerPaymentSchema, status_code=201, summary="Buat Pembayaran", description="Mencatat pembayaran dari pelanggan (status draft, posting melalui engine)")
 async def create_customer_payment(
     body: CustomerPaymentCreate,
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
     customer = await session.execute(
@@ -790,10 +933,6 @@ async def create_customer_payment(
             else:
                 invoice.status = "partial"
 
-        payment.status = "posted"
-    else:
-        payment.status = "posted"
-
     payment.updated_at = now
     await session.commit()
     await session.refresh(payment)
@@ -801,10 +940,60 @@ async def create_customer_payment(
     return CustomerPaymentSchema.model_validate(payment)
 
 
-@router.post("/customer-payments/{payment_id}/void", response_model=CustomerPaymentSchema, summary="Void Pembayaran", description="Membatalkan pembayaran")
+@router.post("/customer-payments/{payment_id}/post", response_model=CustomerPaymentSchema, summary="Posting Pembayaran", description="Memposting pembayaran ke buku besar (Kas/Piutang) melalui Central Posting Engine")
+async def post_customer_payment(
+    payment_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    p = await session.execute(
+        select(CustomerPayment).where(
+            CustomerPayment.id == payment_id,
+            CustomerPayment.tenant_id == tenant.id,
+        ).with_for_update()
+    )
+    payment = p.scalar_one_or_none()
+    if not payment:
+        raise NotFoundError(message="Pembayaran tidak ditemukan")
+    if payment.status != "draft":
+        raise ValidationError(message="Hanya pembayaran draft yang dapat diposting")
+    if payment.journal_entry_id:
+        raise ValidationError(message="Pembayaran ini sudah diposting ke buku besar")
+
+    await post_customer_payment_journal(
+        session=session,
+        tenant_id=tenant.id,
+        user_id=str(user.id),
+        payment=payment,
+    )
+
+    payment.status = "posted"
+    payment.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="customer_payment.post",
+        module="sales",
+        object_type="customer_payment",
+        object_id=str(payment.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"paymentNumber": payment.payment_number, "journalEntryId": str(payment.journal_entry_id)},
+    )
+    await session.commit()
+    await session.refresh(payment)
+
+    return CustomerPaymentSchema.model_validate(payment)
+
+
+@router.post("/customer-payments/{payment_id}/void", response_model=CustomerPaymentSchema, summary="Void Pembayaran", description="Membatalkan pembayaran (reversal jurnal + restore alokasi)")
 async def void_customer_payment(
     payment_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     p = await session.execute(
@@ -818,6 +1007,23 @@ async def void_customer_payment(
         raise NotFoundError(message="Pembayaran tidak ditemukan")
     if payment.status == "voided":
         raise ValidationError(message="Pembayaran sudah dibatalkan")
+
+    if payment.journal_entry_id:
+        journal = (
+            await session.execute(
+                select(JournalEntry).where(
+                    JournalEntry.id == payment.journal_entry_id,
+                    JournalEntry.tenant_id == tenant.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if journal:
+            await reverse_posted_journal(
+                session=session,
+                tenant_id=tenant.id,
+                journal_id=str(journal.id),
+                description_prefix="Void",
+            )
 
     allocs = await session.execute(
         select(CustomerPaymentAllocation).where(
@@ -849,6 +1055,17 @@ async def void_customer_payment(
 
     payment.status = "voided"
     payment.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="customer_payment.void",
+        module="sales",
+        object_type="customer_payment",
+        object_id=str(payment.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"paymentNumber": payment.payment_number, "status": payment.status},
+    )
     await session.commit()
     await session.refresh(payment)
 

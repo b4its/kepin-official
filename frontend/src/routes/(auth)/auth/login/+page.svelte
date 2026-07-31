@@ -17,10 +17,21 @@
     loading = true;
     const result = await login(email, password);
     loading = false;
-    if (result.success) {
+    if (result.mfaRequired) {
+      window.location.href = '/auth/mfa';
+    } else if (result.success) {
       showToast('Login berhasil', 'success');
-      const targetSlug = result.tenantSlug || 'toko-maju';
-      window.location.href = `/app/${targetSlug}`;
+      if (result.isSuperadmin) {
+        window.location.href = '/admin';
+      } else {
+        const hasTenants = (JSON.parse(localStorage.getItem('kepin_tenants') || '[]')).length > 0;
+        if (hasTenants) {
+          const targetSlug = result.tenantSlug || JSON.parse(localStorage.getItem('kepin_tenants') || '[]')[0]?.slug || 'toko-maju';
+          window.location.href = `/app/${targetSlug}`;
+        } else {
+          window.location.href = '/auth/onboarding';
+        }
+      }
     } else {
       error = result.error || 'Login gagal';
       showToast(error, 'error');

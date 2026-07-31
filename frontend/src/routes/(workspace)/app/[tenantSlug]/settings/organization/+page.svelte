@@ -1,91 +1,133 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { tenantApi } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
+  import { RefreshCw } from '@lucide/svelte';
 
-  let companyName = $state('Toko Maju Jaya');
-  let legalName = $state('UD Toko Maju Jaya');
-  let sector = $state('Ritel');
-  let timezone = $state('Asia/Jakarta');
+  type Organization = {
+    tenantId: string;
+    tenantName?: string | null;
+    legalName?: string | null;
+    timezone?: string | null;
+    currency?: string | null;
+    fiscalYearStart?: string | null;
+  };
 
+  const slug = $derived($page.params.tenantSlug || '');
+  let org = $state<Organization | null>(null);
+  let loading = $state(false);
+  let saving = $state(false);
+  let error = $state('');
   let showModal = $state(false);
-  let editForm = $state({ companyName: '', legalName: '', sector: '', timezone: '' });
+  let editForm = $state({ tenantName: '', legalName: '', timezone: 'Asia/Jakarta', currency: 'IDR' });
+
+  async function loadOrganization() {
+    if (!slug) return;
+    loading = true;
+    error = '';
+    try {
+      org = await tenantApi.getOrganization(slug) as Organization;
+    } catch (err: any) {
+      error = err?.message || 'Gagal memuat organisasi';
+    } finally {
+      loading = false;
+    }
+  }
 
   function openEdit() {
-    editForm = { companyName, legalName, sector, timezone };
+    editForm = {
+      tenantName: org?.tenantName || '',
+      legalName: org?.legalName || '',
+      timezone: org?.timezone || 'Asia/Jakarta',
+      currency: org?.currency || 'IDR',
+    };
     showModal = true;
   }
 
-  function save() {
-    companyName = editForm.companyName;
-    legalName = editForm.legalName;
-    sector = editForm.sector;
-    timezone = editForm.timezone;
-    showModal = false;
-    showToast('Profil organisasi berhasil diperbarui', 'success');
+  async function save() {
+    saving = true;
+    try {
+      org = await tenantApi.updateOrganization(slug, editForm) as Organization;
+      showModal = false;
+      showToast('Profil organisasi berhasil diperbarui', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal memperbarui organisasi', 'error');
+    } finally {
+      saving = false;
+    }
   }
+
+  $effect(() => { if (slug) void loadOrganization(); });
 </script>
 
-<PageHeader title="Organisasi" description="Profil dan pengaturan organisasi" breadcrumbs={[{ label: 'Pengaturan' }, { label: 'Organisasi' }]}>
+<PageHeader title="Organisasi" description="Profil organisasi dari backend" breadcrumbs={[{ label: 'Pengaturan' }, { label: 'Organisasi' }]}> 
   {#snippet actions()}
-    <Button onclick={openEdit}>Edit Profil</Button>
+    <Button variant="secondary" onclick={loadOrganization} loading={loading}><RefreshCw class="w-4 h-4" /> Refresh</Button>
+    <Button onclick={openEdit} disabled={!org || loading}>Edit Profil</Button>
   {/snippet}
 </PageHeader>
+
+{#if error}
+  <div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+{/if}
 
 <div class="card p-6 max-w-2xl space-y-4">
   <div class="grid sm:grid-cols-2 gap-4">
     <div>
       <p class="label-text mb-1">Nama Tampilan</p>
-      <p class="text-sm">{companyName}</p>
+      <p class="text-sm">{org?.tenantName ?? '-'}</p>
     </div>
     <div>
       <p class="label-text mb-1">Nama Legal</p>
-      <p class="text-sm">{legalName}</p>
-    </div>
-    <div>
-      <p class="label-text mb-1">Sektor</p>
-      <p class="text-sm">{sector}</p>
+      <p class="text-sm">{org?.legalName ?? '-'}</p>
     </div>
     <div>
       <p class="label-text mb-1">Zona Waktu</p>
-      <p class="text-sm">{timezone}</p>
+      <p class="text-sm">{org?.timezone ?? '-'}</p>
+    </div>
+    <div>
+      <p class="label-text mb-1">Currency</p>
+      <p class="text-sm">{org?.currency ?? '-'}</p>
     </div>
   </div>
+</div>
+
+<div class="card p-6 max-w-2xl mt-6 text-sm text-[hsl(var(--muted-foreground))]">
+  Kode bergabung tidak lagi dibaca dari localStorage. Fitur tampil/regenerate kode perlu endpoint tenant-scoped yang eksplisit agar tidak membocorkan join code.
 </div>
 
 <Modal title="Edit Profil Organisasi" open={showModal} onclose={() => showModal = false}>
   <form onsubmit={save} class="space-y-4">
     <div class="grid sm:grid-cols-2 gap-4">
       <div>
-        <label class="label-text">Nama Tampilan</label>
-        <input type="text" bind:value={editForm.companyName} class="input-field mt-1" required />
+        <label class="label-text" for="org-name">Nama Tampilan</label>
+        <input id="org-name" type="text" bind:value={editForm.tenantName} class="input-field mt-1" required />
       </div>
       <div>
-        <label class="label-text">Nama Legal</label>
-        <input type="text" bind:value={editForm.legalName} class="input-field mt-1" required />
+        <label class="label-text" for="org-legal">Nama Legal</label>
+        <input id="org-legal" type="text" bind:value={editForm.legalName} class="input-field mt-1" required />
       </div>
       <div>
-        <label class="label-text">Sektor</label>
-        <select bind:value={editForm.sector} class="input-field mt-1">
-          <option value="Ritel">Ritel</option>
-          <option value="F&B">F&B</option>
-          <option value="Manufaktur">Manufaktur</option>
-          <option value="Jasa">Jasa</option>
-        </select>
-      </div>
-      <div>
-        <label class="label-text">Zona Waktu</label>
-        <select bind:value={editForm.timezone} class="input-field mt-1">
+        <label class="label-text" for="org-timezone">Zona Waktu</label>
+        <select id="org-timezone" bind:value={editForm.timezone} class="input-field mt-1">
           <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
           <option value="Asia/Makassar">Asia/Makassar (WITA)</option>
           <option value="Asia/Jayapura">Asia/Jayapura (WIT)</option>
         </select>
       </div>
+      <div>
+        <label class="label-text" for="org-currency">Currency</label>
+        <select id="org-currency" bind:value={editForm.currency} class="input-field mt-1">
+          <option value="IDR">IDR</option>
+        </select>
+      </div>
     </div>
     <div class="flex justify-end gap-2 pt-2">
       <Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button>
-      <Button type="submit">Simpan Perubahan</Button>
+      <Button type="submit" loading={saving}>Simpan Perubahan</Button>
     </div>
   </form>
 </Modal>

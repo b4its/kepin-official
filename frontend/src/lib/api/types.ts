@@ -42,7 +42,9 @@ export type Branch = {
   id: string;
   name: string;
   code: string;
+  address: string;
   isMain: boolean;
+  status: 'active' | 'inactive';
 };
 
 export type Account = {
@@ -62,6 +64,7 @@ export type Transaction = {
   type: 'income' | 'expense' | 'transfer';
   amount: number;
   accountId: string;
+  counterAccountId?: string;
   branchId: string;
   status: 'posted' | 'draft' | 'voided';
   reference?: string;
@@ -121,6 +124,7 @@ export type InvoiceLine = {
 
 export type Customer = {
   id: string;
+  code: string;
   name: string;
   email: string;
   phone: string;
@@ -130,6 +134,7 @@ export type Customer = {
 
 export type Supplier = {
   id: string;
+  code: string;
   name: string;
   email: string;
   phone: string;
@@ -168,11 +173,13 @@ export type StockMovement = {
 
 export type Notification = {
   id: string;
+  title: string;
   message: string;
   createdAt: string;
   read: boolean;
   type: 'info' | 'warning' | 'success' | 'error';
   link?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type AuditEvent = {
@@ -185,6 +192,7 @@ export type AuditEvent = {
   objectType: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
+  requestId?: string;
   correlationId?: string;
-  integrityVerified?: boolean;
+  integrityHash?: string;
 };

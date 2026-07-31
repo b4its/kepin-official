@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Inbox, CheckCheck } from '@lucide/svelte';
+  import { page } from '$app/stores';
   import { notifications, markAllNotifRead } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import { showToast } from '$lib/stores/toast';
@@ -7,11 +8,7 @@
   import type { Notification } from '$lib/api/types';
   import Button from '$lib/components/ui/Button.svelte';
 
-  let tenantSlug = '';
-  if (typeof window !== 'undefined') {
-    const parts = window.location.pathname.split('/');
-    tenantSlug = parts[2] || '';
-  }
+  const tenantSlug = $derived($page.params.tenantSlug || '');
 
   function goTo(id: string) {
     window.location.href = `/app/${tenantSlug}/notifications/${id}`;
@@ -25,12 +22,21 @@
     success: 'bg-green-500/10 text-green-500',
     error: 'bg-red-500/10 text-red-500',
   };
+
+  async function markAll() {
+    try {
+      await markAllNotifRead();
+      showToast('Semua notifikasi ditandai dibaca', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal menandai notifikasi', 'error');
+    }
+  }
 </script>
 
 <PageHeader title="Notifikasi" description="Pemberitahuan dan aktivitas terbaru" breadcrumbs={[{ label: 'Notifikasi' }]}>
   {#snippet actions()}
     {#if unreadCount > 0}
-      <Button variant="secondary" onclick={async () => { await markAllNotifRead(); showToast('Semua notifikasi ditandai dibaca', 'success'); }}>
+      <Button variant="secondary" onclick={markAll}>
         <CheckCheck class="w-4 h-4" />
         Tandai Dibaca
       </Button>
@@ -53,7 +59,8 @@
       >
         <div class="w-2 h-2 rounded-full mt-1.5 shrink-0 {n.read ? 'bg-transparent' : 'bg-[hsl(var(--primary))]'}" />
         <div class="flex-1 min-w-0">
-          <p class="text-sm {n.read ? '' : 'font-semibold'}">{n.message}</p>
+          <p class="text-sm {n.read ? '' : 'font-semibold'}">{n.title || n.message}</p>
+          {#if n.title && n.message}<p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{n.message}</p>{/if}
           <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{formatRelativeTime(n.createdAt)}</p>
         </div>
       </button>

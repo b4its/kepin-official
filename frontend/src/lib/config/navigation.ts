@@ -19,6 +19,7 @@ import {
   Activity,
   Bell,
   LayoutDashboard,
+  KeyRound,
   type Icon,
 } from '@lucide/svelte';
 
@@ -71,6 +72,7 @@ export const clientNavigation: NavigationGroup[] = [
     key: 'group_pembelian',
     items: [
       { key: 'purchasing_orders', label: 'Pesanan', href: '/purchasing/orders', icon: ShoppingCart },
+      { key: 'purchasing_payments', label: 'Pembayaran', href: '/purchasing/payments', icon: CreditCard },
       { key: 'purchasing_suppliers', label: 'Pemasok', href: '/purchasing/suppliers', icon: Building2 },
     ],
   },
@@ -108,6 +110,7 @@ export const clientNavigation: NavigationGroup[] = [
       { key: 'audit_trail', label: 'Audit Trail', href: '/audit', icon: Shield },
       { key: 'notifications', label: 'Notifikasi', href: '/notifications', icon: Bell },
       { key: 'settings_org', label: 'Pengaturan', href: '/settings/organization', icon: Settings, pinned: true },
+      { key: 'settings_security', label: 'Keamanan Akun', href: '/settings/security', icon: KeyRound, pinned: true },
     ],
   },
 ];

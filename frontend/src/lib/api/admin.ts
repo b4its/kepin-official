@@ -1,6 +1,6 @@
 import { api } from './client';
 
-export async function getAdminDashboard() { return api('/platform/dashboard'); }
+export async function getAdminDashboard(params?: string) { return api(`/platform/dashboard${params || ''}`); }
 export async function getAdminTenants(params?: string) { return api(`/platform/tenants${params || ''}`); }
 export async function createAdminTenant(data: any) { return api('/platform/tenants', { method: 'POST', body: JSON.stringify(data) }); }
 export async function suspendTenant(id: string) { return api(`/platform/tenants/${id}/suspend`, { method: 'POST' }); }
