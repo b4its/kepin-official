@@ -19,6 +19,7 @@ const PAGES = [
   { route: `/app/${TENANT}/notifications`, label: 'Notifikasi' },
   { route: `/app/${TENANT}/audit`, label: 'Audit Trail' },
   { route: `/app/${TENANT}/settings/organization`, label: 'Pengaturan' },
+  { route: `/app/${TENANT}/settings/security`, label: 'Keamanan' },
   { route: `/app/${TENANT}/settings/branches`, label: 'Cabang' },
   { route: `/app/${TENANT}/settings/members`, label: 'Anggota' },
   { route: `/app/${TENANT}/settings/roles`, label: 'Role' },
