@@ -6,11 +6,15 @@
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"admin-setup\",\"name\":\"Admin KePin\",\"email\":\"admin@kepin.io\",\"phone\":\"\"}"
+          "value": "{\"id\":\"b5dfca14-e252-4a1b-8ec3-78b63dac57fa\",\"name\":\"Admin KePin\",\"email\":\"admin@kepin.io\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
-          "name": "kepin_users",
-          "value": "[{\"id\":\"admin-setup\",\"name\":\"Admin KePin\",\"email\":\"admin@kepin.io\",\"phone\":\"\",\"password\":\"admin123\"}]"
+          "name": "kepin_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNWRmY2ExNC1lMjUyLTRhMWItOGVjMy03OGI2M2RhYzU3ZmEiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1NTM2Mjc2LCJleHAiOjE3ODU2MjI2NzZ9.goFzvOm9mX7PJDxGDHDNVZ2MIMdvnXVuNlzNMWrpA7s"
+        },
+        {
+          "name": "kepin_tenants",
+          "value": "[]"
         }
       ]
     }

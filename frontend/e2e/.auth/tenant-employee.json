@@ -6,11 +6,15 @@
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"employee-setup\",\"name\":\"Ani Lestari\",\"email\":\"ani@tokomaju.com\",\"phone\":\"\"}"
+          "value": "{\"id\":\"d095472b-ef41-4040-b566-f685da15c299\",\"name\":\"Ani Lestari\",\"email\":\"ani@tokomaju.com\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
-          "name": "kepin_users",
-          "value": "[{\"id\":\"employee-setup\",\"name\":\"Ani Lestari\",\"email\":\"ani@tokomaju.com\",\"phone\":\"\",\"password\":\"ani123\"}]"
+          "name": "kepin_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMDk1NDcyYi1lZjQxLTQwNDAtYjU2Ni1mNjg1ZGExNWMyOTkiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1NTM2Mjg1LCJleHAiOjE3ODU2MjI2ODV9.Hh9UYTAVx0h6mwOZGU0VvCNz8jb9mtYWxqJXMj7xKp0"
+        },
+        {
+          "name": "kepin_tenants",
+          "value": "[{\"slug\":\"toko-maju\",\"role\":\"employee\"}]"
         }
       ]
     }

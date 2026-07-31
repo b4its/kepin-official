@@ -6,11 +6,15 @@
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"owner-setup\",\"name\":\"Budi Santoso\",\"email\":\"budi@tokomaju.com\",\"phone\":\"\"}"
+          "value": "{\"id\":\"a1304fe4-b6f2-42b6-8cae-baf00d2ce5dd\",\"name\":\"Budi Santoso\",\"email\":\"budi@tokomaju.com\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
-          "name": "kepin_users",
-          "value": "[{\"id\":\"owner-setup\",\"name\":\"Budi Santoso\",\"email\":\"budi@tokomaju.com\",\"phone\":\"\",\"password\":\"budi123\"}]"
+          "name": "kepin_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMTMwNGZlNC1iNmYyLTQyYjYtOGNhZS1iYWYwMGQyY2U1ZGQiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1NTM2MjgwLCJleHAiOjE3ODU2MjI2ODB9.r2AoyyhrKTpWt0u3ztSvXpui7nviTmqL3-5-fmvimv8"
+        },
+        {
+          "name": "kepin_tenants",
+          "value": "[{\"slug\":\"toko-maju\",\"role\":\"tenant_owner\"}]"
         }
       ]
     }

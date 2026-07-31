@@ -6,11 +6,15 @@
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"no-org-setup\",\"name\":\"No Org User\",\"email\":\"e2e.1785176480826-6lkxsa@test.example\",\"phone\":\"\"}"
+          "value": "{\"id\":\"ad8ead13-cbeb-0b6d-697d-7c9a0a6138e6\",\"name\":\"No Org User\",\"email\":\"e2e.1785536289447-2j85bm@test.example\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
-          "name": "kepin_users",
-          "value": "[{\"id\":\"no-org-setup\",\"name\":\"No Org User\",\"email\":\"e2e.1785176480826-6lkxsa@test.example\",\"phone\":\"\",\"password\":\"test123\"}]"
+          "name": "kepin_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZDhlYWQxMy1jYmViLTBiNmQtNjk3ZC03YzlhMGE2MTM4ZTYiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1NTM2MjkwLCJleHAiOjE3ODU2MjI2OTB9.tcD9nXI3hYotbJbqa4xi2eRVdx7KTi_zq2WJy8UaiBY"
+        },
+        {
+          "name": "kepin_tenants",
+          "value": "[]"
         }
       ]
     }

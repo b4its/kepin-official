@@ -558,20 +558,6 @@ async def get_transaction(
     ).scalar_one_or_none()
     if not txn:
         raise NotFoundError(message="Transaksi tidak ditemukan")
-    if txn.status != "posted":
-        raise ValidationError(message="Hanya transaksi internal yang sudah posted dapat direkonsiliasi")
-
-    existing = (
-        await session.execute(
-            select(ReconciliationMatch).where(
-                ReconciliationMatch.tenant_id == tenant.id,
-                ReconciliationMatch.bank_transaction_id == bank_txn.id,
-                ReconciliationMatch.status.in_(["candidate", "confirmed"]),
-            )
-        )
-    ).scalar_one_or_none()
-    if existing:
-        raise ConflictError(message="Transaksi bank sudah memiliki match aktif")
     return TransactionSchema.model_validate(txn)
 
 

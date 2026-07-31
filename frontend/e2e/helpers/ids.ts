@@ -14,7 +14,7 @@ export const DEMO_OWNER = {
 
 export const DEMO_EMPLOYEE = {
   email: 'ani@tokomaju.com',
-  password: 'ani123',
+  password: 'ani12345',
   tenant: 'toko-maju',
 };
 
