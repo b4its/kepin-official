@@ -1310,6 +1310,7 @@ async def reverse_journal(
 
     original.updated_at = now
     original.version = (original.version or 1) + 1
+    original.status = "reversed"
 
     await record_audit(
         session=session,

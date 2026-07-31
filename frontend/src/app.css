@@ -379,6 +379,19 @@ html.light {
   color: var(--color-ink);
 }
 
+@utility badge-reversed {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  background-color: var(--color-kepin-yellow);
+  color: var(--color-ink);
+}
+
 @utility badge-danger {
   display: inline-flex;
   align-items: center;
