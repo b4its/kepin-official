@@ -263,6 +263,7 @@ async def list_tenants(
 @router.post("/tenants", response_model=TenantResponse, status_code=201, summary="Buat Tenant", description="Membuat tenant baru beserta pengaturan organisasi, cabang utama, dan langganan")
 async def create_tenant(
     body: TenantCreate,
+    user: User = Depends(require_superadmin),
     session: AsyncSession = Depends(get_session),
 ):
     dup = (await session.execute(select(Tenant).where(Tenant.slug == body.slug))).scalar_one_or_none()
@@ -272,7 +273,7 @@ async def create_tenant(
     now = datetime.now(timezone.utc)
     tenant = Tenant(
         id=new_uuid(),
-        owner_id="00000000-0000-0000-0000-000000000000",
+        owner_id=user.id,
         name=body.name,
         slug=body.slug,
         join_code="",
@@ -285,6 +286,8 @@ async def create_tenant(
         updated_at=now,
     )
     session.add(tenant)
+    # autoflush=False: flush tenant first so children can reference its id.
+    await session.flush()
 
     org = OrganizationSetting(
         tenant_id=tenant.id,
@@ -311,7 +314,7 @@ async def create_tenant(
     sub = Subscription(
         id=new_uuid(),
         tenant_id=tenant.id,
-        plan_code="trial",
+        plan_code="free",
         status="active",
         started_at=now,
         current_period_start=now,
@@ -359,7 +362,50 @@ async def update_tenant(
     return TenantResponse.model_validate(t)
 
 
-@router.delete("/tenants/{tenant_id}", status_code=204, summary="Hapus Tenant", description="Menghapus tenant dari sistem")
+# Child tables referencing tenants.id, in dependency order (leaves first) so
+# FK constraints hold while deleting a tenant.
+_TENANT_CHILD_TABLES = [
+    "account_balances",
+    "stock_balances",
+    "journal_lines",
+    "invoice_lines",
+    "customer_payment_allocations",
+    "goods_receipt_lines",
+    "purchase_order_lines",
+    "stock_movements",
+    "customer_payments",
+    "goods_receipts",
+    "purchase_orders",
+    "invoices",
+    "accounting_periods",
+    "fiscal_years",
+    "journal_entries",
+    "transactions",
+    "bank_transactions",
+    "reconciliation_matches",
+    "bank_accounts",
+    "accounts",
+    "supplier_payments",
+    "customers",
+    "suppliers",
+    "products",
+    "inventory_locations",
+    "branches",
+    "idempotency_keys",
+    "document_counters",
+    "notifications",
+    "tenant_audit_events",
+    "integrations",
+    "export_jobs",
+    "subscription_events",
+    "subscriptions",
+    "memberships",
+    "tenant_sidebar_settings",
+    "organization_settings",
+]
+
+
+@router.delete("/tenants/{tenant_id}", status_code=204, summary="Hapus Tenant", description="Menghapus tenant beserta seluruh datanya")
 async def delete_tenant(
     tenant_id: str = Path(...),
     session: AsyncSession = Depends(get_session),
@@ -367,7 +413,10 @@ async def delete_tenant(
     t = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
     if not t:
         raise NotFoundError(message="Tenant tidak ditemukan")
-    await session.delete(t)
+
+    for table in _TENANT_CHILD_TABLES:
+        await session.execute(text(f"DELETE FROM {table} WHERE tenant_id = :tid"), {"tid": t.id})
+    await session.execute(text("DELETE FROM tenants WHERE id = :tid"), {"tid": t.id})
     await session.commit()
 
 
@@ -493,7 +542,15 @@ async def delete_user(
     u = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if not u:
         raise NotFoundError(message="User tidak ditemukan")
-    await session.delete(u)
+
+    owned = (
+        await session.execute(select(func.count(Tenant.id)).where(Tenant.owner_id == u.id))
+    ).scalar() or 0
+    if owned:
+        raise ConflictError(message="User masih memiliki tenant. Pindahkan kepemilikan sebelum menghapus.")
+
+    await session.execute(text("DELETE FROM memberships WHERE user_id = :uid"), {"uid": u.id})
+    await session.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": u.id})
     await session.commit()
 
 
@@ -597,6 +654,7 @@ async def create_incident(
         description=body.description,
         severity=body.severity,
         status="open",
+        started_at=now,
         created_at=now,
         updated_at=now,
     )
