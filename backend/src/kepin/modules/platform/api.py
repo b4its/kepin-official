@@ -7,6 +7,7 @@ from uuid import UUID
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
+from pydantic import Field
 
 from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, ListParams, PeriodParams, require_superadmin
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
@@ -107,8 +108,8 @@ class SubscriptionEventResponse(ApiSchema):
     subscription_id: str
     event_type: str
     buyer_user_id: str | None = None
-    buyer_name_snapshot: str = ""
-    buyer_email_snapshot: str = ""
+    buyer_name: str = Field(default="", validation_alias="buyer_name_snapshot")
+    buyer_email: str = Field(default="", validation_alias="buyer_email_snapshot")
     plan_code: str = ""
     amount: Decimal = Decimal("0")
     occurred_at: datetime | None = None
@@ -631,10 +632,10 @@ async def list_subscription_events(
 
     items = []
     for ev, tenant_name, tenant_slug in rows:
-        d = SubscriptionEventResponse.model_validate(ev).model_dump(by_alias=True)
-        d["tenantName"] = tenant_name
-        d["tenantSlug"] = tenant_slug
-        items.append(SubscriptionEventResponse.model_validate(d))
+        data = SubscriptionEventResponse.model_validate(ev).model_dump()
+        data["tenant_name"] = tenant_name
+        data["tenant_slug"] = tenant_slug
+        items.append(SubscriptionEventResponse.model_construct(**data))
     return make_paginated(items, params.page, params.page_size, total)
 
 
