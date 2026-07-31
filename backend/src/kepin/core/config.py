@@ -34,6 +34,18 @@ class Settings(BaseSettings):
     sql_echo: bool = False
     log_level: str = "INFO"
 
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str = "noreply@kepin.io"
+    smtp_tls: bool = True
+    public_app_url: str = "http://localhost:5173"
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host)
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

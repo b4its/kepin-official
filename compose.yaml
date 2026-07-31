@@ -33,8 +33,16 @@ services:
       AUTHORIZATION_ENABLED: "false"
       SQL_ECHO: "false"
       LOG_LEVEL: INFO
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: "1025"
+      SMTP_TLS: "false"
+      SMTP_FROM: noreply@kepin.io
+      PUBLIC_APP_URL: http://localhost:5173
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/alembic:/app/alembic:ro
     depends_on:
       db:
         condition: service_healthy

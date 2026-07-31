@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from kepin.api.dependencies import get_current_user, get_session
 from kepin.api.errors import ConflictError, NotFoundError
 from kepin.core.auth import create_token, decode_token, generate_join_code, hash_password, verify_password
+from kepin.core.email import send_reset_email
 from kepin.core.periods import ensure_fiscal_year
 from kepin.core.totp import (
     generate_base32_secret,
@@ -338,9 +339,9 @@ def _hash_reset_token(token: str) -> str:
 async def forgot_password(body: ForgotPasswordRequest, session: AsyncSession = Depends(get_session)):
     """Mengirim token reset password ke email terdaftar (anti-enumerasi).
 
-    Belum ada infrastruktur SMTP, sehingga token dikembalikan dalam response
-    sebagai ``devResetToken`` agar alur bisa diuji end-to-end. Saat email
-    service tersedia, pengiriman token lewat email menggantikan ini.
+    Jika SMTP dikonfigurasi (``SMTP_HOST``), token dikirim lewat email dan
+    ``devResetToken`` tidak disertakan. Saat SMTP tidak tersedia, token
+    dikembalikan sebagai ``devResetToken`` agar alur bisa diuji end-to-end.
     """
     result = await session.execute(select(User).where(User.email == body.email.strip().lower()))
     user = result.scalar_one_or_none()
@@ -351,6 +352,10 @@ async def forgot_password(body: ForgotPasswordRequest, session: AsyncSession = D
         user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
         await session.flush()
         await session.commit()
+        if send_reset_email(user.email, token):
+            return ForgotPasswordResponse(
+                message="Jika email terdaftar, tautan reset akan dikirim."
+            )
         return ForgotPasswordResponse(
             message="Jika email terdaftar, tautan reset akan dikirim.",
             dev_reset_token=token,
