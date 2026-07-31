@@ -7,19 +7,12 @@ const TENANT = 'toko-maju';
 async function seedAndLogin(page: any) {
   await page.goto(WEB + '/auth/login');
   await page.waitForLoadState('networkidle');
-  await page.evaluate(() => {
-    localStorage.clear();
-    localStorage.setItem('kepin_users', JSON.stringify([
-      { id: 'e2e-emp', name: 'Ani Lestari', email: 'ani@tokomaju.com', phone: '', password: 'ani123' },
-    ]));
-  });
-  await page.waitForTimeout(300);
 
   // Login via UI
   await page.locator('#email').fill('ani@tokomaju.com');
-  await page.locator('#password').fill('ani123');
+  await page.locator('#password').fill('ani12345');
   await page.locator('button[type="submit"]').click();
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2500);
 }
 
 test.describe('EMPLOYEE: Limited Access + All Accessible Features', () => {
@@ -34,7 +27,7 @@ test.describe('EMPLOYEE: Limited Access + All Accessible Features', () => {
     // EMPLOYEE-ACCESSIBLE PAGES
     // ════════════════════════════════════════════════════════════
     const accessiblePages = [
-      { path: '', label: 'Dashboard', features: ['Pendapatan', 'Pengeluaran', 'Laba', 'Saldo Kas'] },
+      { path: '', label: 'Dashboard', features: ['Pendapatan', 'Pengeluaran', 'Laba Bersih', 'Kas & Bank'] },
       { path: '/inventory/products', label: 'Products', features: ['Total Produk', 'Stok Kritis'] },
       { path: '/inventory/movements', label: 'Stock Movements', features: [] },
       { path: '/sales/invoices', label: 'Invoices', features: ['Piutang', 'Jatuh Tempo'] },

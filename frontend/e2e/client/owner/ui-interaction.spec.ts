@@ -73,4 +73,38 @@ test.describe('Owner UI Interaction', () => {
     const body = await page.locator('body').innerText();
     expect(body.length).toBeGreaterThan(10);
   });
+
+  test('organization edit modal round-trips website and phone', async ({ page }) => {
+    const testSite = `https://e2e-${Date.now().toString(36)}.example.com`;
+    const testPhone = `021-${Date.now().toString().slice(-6)}`;
+
+    await page.goto(`/app/${TENANT}/settings/organization`);
+    await page.waitForLoadState('networkidle');
+
+    const editBtn = page.locator('button').filter({ hasText: /edit profil/i }).first();
+    await expect(editBtn).toBeVisible();
+    await editBtn.click();
+
+    const modal = page.locator('[role="dialog"], .modal, .MuiModal-root').first();
+    await expect(modal).toBeVisible();
+
+    const websiteInput = page.locator('#org-website');
+    await websiteInput.fill(testSite);
+    const phoneInput = page.locator('#org-phone');
+    await phoneInput.fill(testPhone);
+
+    await page.locator('button').filter({ hasText: /simpan perubahan/i }).first().click();
+    await expect(modal).not.toBeVisible({ timeout: 10_000 });
+
+    const body = await page.locator('body').innerText();
+    expect(body).toContain(testSite);
+    expect(body).toContain(testPhone);
+
+    await editBtn.click();
+    await expect(modal).toBeVisible();
+    await page.locator('#org-website').fill('');
+    await page.locator('#org-phone').fill('');
+    await page.locator('button').filter({ hasText: /simpan perubahan/i }).first().click();
+    await expect(modal).not.toBeVisible({ timeout: 10_000 });
+  });
 });

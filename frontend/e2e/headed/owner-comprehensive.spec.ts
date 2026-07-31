@@ -108,7 +108,7 @@ test.describe('OWNER: Comprehensive Workspace CRUD', () => {
     // ════ 1. DASHBOARD ════
     console.log('\n═══ 1. DASHBOARD ═══');
     await go(page, '');
-    await checkMetrics(page, ['Pendapatan', 'Pengeluaran', 'Laba', 'Saldo Kas']);
+    await checkMetrics(page, ['Pendapatan', 'Pengeluaran', 'Laba Bersih', 'Kas & Bank']);
 
     // ════ 2. SALES > CUSTOMERS ════
     console.log('\n═══ 2. SALES > CUSTOMERS ═══');
@@ -269,7 +269,7 @@ test.describe('OWNER: Comprehensive Workspace CRUD', () => {
     // ════ 12. REPORTS ════
     console.log('\n═══ 12. REPORTS ═══');
     await go(page, '/reports');
-    await checkMetrics(page, ['Pendapatan', 'Beban', 'Laba Bersih', 'Saldo Kas']);
+    await checkMetrics(page, ['Pendapatan', 'Beban', 'Laba Bersih', 'Total Aset']);
     await click(page, /ekspor/i);
     await dismiss(page);
     console.log('   ✅ Reports loaded');
@@ -277,7 +277,7 @@ test.describe('OWNER: Comprehensive Workspace CRUD', () => {
     // ════ 13. REPORTS > INVESTOR ════
     console.log('\n═══ 13. INVESTOR REPORT ═══');
     await go(page, '/reports/investor');
-    await checkMetrics(page, ['Pendapatan', 'Gross Margin', 'Burn Rate', 'Cash Position', 'Runway']);
+    await checkMetrics(page, ['Pendapatan', 'Gross Margin', 'Margin %', 'Cash Position', 'Runway']);
     console.log('   ✅ Investor report loaded');
 
     // ════ 14. INSIGHTS ════

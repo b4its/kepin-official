@@ -119,6 +119,7 @@ test.describe('AUTH: All Authentication Pages', () => {
     // 5. MFA PAGE
     // ════════════════════════════════════════════════════════════
     console.log('\n═════════ 5. MFA ═════════');
+    await page.evaluate(() => localStorage.setItem('kepin_mfa_token', 'e2e-dummy-mfa-token'));
     await page.goto(WEB + '/auth/mfa');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);

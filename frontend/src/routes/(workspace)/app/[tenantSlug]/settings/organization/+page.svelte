@@ -11,6 +11,11 @@
     tenantId: string;
     tenantName?: string | null;
     legalName?: string | null;
+    taxId?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    website?: string | null;
     timezone?: string | null;
     currency?: string | null;
     fiscalYearStart?: string | null;
@@ -22,7 +27,7 @@
   let saving = $state(false);
   let error = $state('');
   let showModal = $state(false);
-  let editForm = $state({ tenantName: '', legalName: '', timezone: 'Asia/Jakarta', currency: 'IDR' });
+  let editForm = $state({ tenantName: '', legalName: '', taxId: '', address: '', phone: '', email: '', website: '', timezone: 'Asia/Jakarta', currency: 'IDR' });
 
   async function loadOrganization() {
     if (!slug) return;
@@ -41,6 +46,11 @@
     editForm = {
       tenantName: org?.tenantName || '',
       legalName: org?.legalName || '',
+      taxId: org?.taxId || '',
+      address: org?.address || '',
+      phone: org?.phone || '',
+      email: org?.email || '',
+      website: org?.website || '',
       timezone: org?.timezone || 'Asia/Jakarta',
       currency: org?.currency || 'IDR',
     };
@@ -85,6 +95,26 @@
       <p class="text-sm">{org?.legalName ?? '-'}</p>
     </div>
     <div>
+      <p class="label-text mb-1">NPWP</p>
+      <p class="text-sm">{org?.taxId ?? '-'}</p>
+    </div>
+    <div>
+      <p class="label-text mb-1">Telepon</p>
+      <p class="text-sm">{org?.phone ?? '-'}</p>
+    </div>
+    <div>
+      <p class="label-text mb-1">Email</p>
+      <p class="text-sm">{org?.email ?? '-'}</p>
+    </div>
+    <div>
+      <p class="label-text mb-1">Website</p>
+      <p class="text-sm">{org?.website ?? '-'}</p>
+    </div>
+    <div>
+      <p class="label-text mb-1">Alamat</p>
+      <p class="text-sm">{org?.address ?? '-'}</p>
+    </div>
+    <div>
       <p class="label-text mb-1">Zona Waktu</p>
       <p class="text-sm">{org?.timezone ?? '-'}</p>
     </div>
@@ -109,6 +139,26 @@
       <div>
         <label class="label-text" for="org-legal">Nama Legal</label>
         <input id="org-legal" type="text" bind:value={editForm.legalName} class="input-field mt-1" required />
+      </div>
+      <div>
+        <label class="label-text" for="org-tax">NPWP</label>
+        <input id="org-tax" type="text" bind:value={editForm.taxId} class="input-field mt-1" />
+      </div>
+      <div>
+        <label class="label-text" for="org-phone">Telepon</label>
+        <input id="org-phone" type="text" bind:value={editForm.phone} class="input-field mt-1" />
+      </div>
+      <div>
+        <label class="label-text" for="org-email">Email</label>
+        <input id="org-email" type="email" bind:value={editForm.email} class="input-field mt-1" />
+      </div>
+      <div>
+        <label class="label-text" for="org-website">Website</label>
+        <input id="org-website" type="url" bind:value={editForm.website} class="input-field mt-1" />
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label-text" for="org-address">Alamat</label>
+        <textarea id="org-address" bind:value={editForm.address} class="input-field mt-1" rows="2"></textarea>
       </div>
       <div>
         <label class="label-text" for="org-timezone">Zona Waktu</label>
