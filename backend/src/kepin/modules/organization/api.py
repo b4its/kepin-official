@@ -177,6 +177,18 @@ class BillingResponse(ApiSchema):
     features: list[str] = []
 
 
+class BillingHistoryItemResponse(ApiSchema):
+    id: str
+    plan_code: str
+    plan_name: str
+    price: str
+    currency: str
+    status: str
+    start_date: date | None = None
+    end_date: date | None = None
+    created_at: datetime
+
+
 # ── Endpoints ────────────────────────────────────────────────────────
 
 
@@ -688,6 +700,36 @@ async def get_billing(
         end_date=sub.current_period_end.date() if sub.current_period_end else None,
         features=plan["features"],
     )
+
+
+@router.get("/billing-history", response_model=list[BillingHistoryItemResponse], summary="Riwayat Langganan", description="Mengembalikan riwayat langganan tenant (semua status, terbaru di atas)")
+async def get_billing_history(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    rows = (
+        await session.execute(
+            select(Subscription)
+            .where(Subscription.tenant_id == tenant.id)
+            .order_by(Subscription.created_at.desc())
+        )
+    ).scalars().all()
+
+    return [
+        BillingHistoryItemResponse(
+            id=str(s.id),
+            plan_code=s.plan_code,
+            plan_name=PLANS.get(s.plan_code, PLANS["free"])["name"],
+            price=str(s.amount),
+            currency=s.currency,
+            status=s.status,
+            start_date=s.current_period_start.date() if s.current_period_start else None,
+            end_date=s.current_period_end.date() if s.current_period_end else None,
+            created_at=s.created_at,
+        )
+        for s in rows
+    ]
 
 
 # ── Sidebar Settings ──────────────────────────────────────────────────────
