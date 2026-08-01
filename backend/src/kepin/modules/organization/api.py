@@ -8,8 +8,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, ListParams, PeriodParams
+from kepin.api.dependencies import get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, get_current_user, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
+from kepin.core.audit import record_audit
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str
@@ -631,6 +632,7 @@ async def create_integration(
     body: IntegrationCreate,
     tenant: TenantContext = Depends(get_tenant_context),
     _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     provider = body.provider.strip().lower()
@@ -654,6 +656,18 @@ async def create_integration(
         await session.rollback()
         raise ConflictError(message="Provider dan nama integrasi sudah digunakan")
     await session.refresh(integration)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="integration.created",
+        module="organization",
+        object_type="integration",
+        object_id=str(integration.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"provider": integration.provider, "displayName": integration.display_name, "status": integration.status},
+    )
+    await session.commit()
     return IntegrationResponse(
         id=str(integration.id),
         provider=integration.provider,
@@ -670,6 +684,7 @@ async def update_integration(
     integration_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
     _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     integration = (
@@ -683,6 +698,7 @@ async def update_integration(
     if not integration:
         raise NotFoundError(message="Integrasi tidak ditemukan")
 
+    before = {"displayName": integration.display_name, "status": integration.status}
     patch = body.model_dump(exclude_unset=True)
     if "display_name" in patch:
         display_name = patch["display_name"].strip()
@@ -696,6 +712,19 @@ async def update_integration(
     integration.updated_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(integration)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="integration.updated",
+        module="organization",
+        object_type="integration",
+        object_id=str(integration.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        before=before,
+        after={"displayName": integration.display_name, "status": integration.status},
+    )
+    await session.commit()
     return IntegrationResponse(
         id=str(integration.id),
         provider=integration.provider,
@@ -716,6 +745,7 @@ async def delete_integration(
     integration_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
     _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     integration = (
@@ -728,6 +758,17 @@ async def delete_integration(
     ).scalar_one_or_none()
     if not integration:
         raise NotFoundError(message="Integrasi tidak ditemukan")
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="integration.deleted",
+        module="organization",
+        object_type="integration",
+        object_id=str(integration.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        before={"provider": integration.provider, "displayName": integration.display_name},
+    )
     await session.delete(integration)
     await session.commit()
     return Response(status_code=204)
@@ -745,6 +786,7 @@ async def sync_integration(
     integration_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
     _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     integration = (
@@ -825,6 +867,18 @@ async def sync_integration(
         await session.commit()
         raise ConflictError(message="Sinkronisasi gagal: duplikat external ID dalam satu batch")
 
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="integration.synced",
+        module="organization",
+        object_type="integration",
+        object_id=str(integration.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"provider": integration.provider, "imported": imported, "skipped": skipped},
+    )
+    await session.commit()
     return IntegrationSyncResponse(
         integration=IntegrationResponse(
             id=str(integration.id),
