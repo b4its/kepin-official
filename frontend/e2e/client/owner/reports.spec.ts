@@ -49,6 +49,19 @@ test.describe('Owner Reports & Export', () => {
     expect(errors).toEqual([]);
   });
 
+  test('export modal shows selected report detail', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Jenis laporan untuk ekspor').selectOption('trial');
+    await page.getByRole('button', { name: /ekspor/i }).first().click();
+    await expect(page.locator('h2', { hasText: 'Neraca Saldo' })).toBeVisible();
+    await expect(page.getByText('Debit Periode', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Kredit Akhir', { exact: true }).first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test('investor report page loads', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });

@@ -159,24 +159,143 @@
     };
   });
 
-  const exportColumns = [
-    { key: 'section', label: 'Bagian' },
-    { key: 'label', label: 'Keterangan' },
-    { key: 'value', label: 'Nilai' },
-  ];
+  const exportKinds = [
+    { value: 'summary', label: 'Ringkasan' },
+    { value: 'trial', label: 'Neraca Saldo' },
+    { value: 'profit-loss', label: 'Laba Rugi' },
+    { value: 'balance-sheet', label: 'Neraca' },
+    { value: 'cash-flow', label: 'Arus Kas' },
+    { value: 'aging', label: 'Aging' },
+    { value: 'stock', label: 'Valuasi Stok' },
+  ] as const;
 
-  const exportRows = $derived([
-    { section: 'Periode', label: 'Rentang', value: `${startDate} s/d ${endDate}` },
-    { section: 'Ringkasan', label: 'Pendapatan', value: formatIDR(totalIncome) },
-    { section: 'Ringkasan', label: 'Beban', value: formatIDR(totalExpense) },
-    { section: 'Ringkasan', label: 'Laba Bersih', value: formatIDR(netProfit) },
-    { section: 'Neraca', label: 'Total Aset', value: formatIDR(totalAssets) },
-    { section: 'Neraca', label: 'Kewajiban + Ekuitas', value: formatIDR(liabilitiesPlusEquity) },
-    { section: 'Aging', label: 'Piutang Outstanding', value: formatIDR(arOutstanding) },
-    { section: 'Aging', label: 'Hutang Outstanding', value: formatIDR(apOutstanding) },
-    { section: 'Inventaris', label: 'Delta GL vs Stock', value: formatIDR(stockGlDelta) },
-    { section: 'Arus Kas', label: 'Net Arus Kas', value: formatIDR(cashNet) },
-  ]);
+  let exportKind = $state<(typeof exportKinds)[number]['value']>('summary');
+
+  const EXPORT_COLUMNS: Record<string, { key: string; label: string }[]> = {
+    summary: [
+      { key: 'section', label: 'Bagian' },
+      { key: 'label', label: 'Keterangan' },
+      { key: 'value', label: 'Nilai' },
+    ],
+    trial: [
+      { key: 'code', label: 'Kode' },
+      { key: 'name', label: 'Akun' },
+      { key: 'type', label: 'Tipe' },
+      { key: 'openingBalance', label: 'Saldo Awal' },
+      { key: 'periodDebit', label: 'Debit Periode' },
+      { key: 'periodCredit', label: 'Kredit Periode' },
+      { key: 'debit', label: 'Debit Akhir' },
+      { key: 'credit', label: 'Kredit Akhir' },
+    ],
+    'profit-loss': [
+      { key: 'code', label: 'Kode' },
+      { key: 'name', label: 'Akun' },
+      { key: 'type', label: 'Tipe' },
+      { key: 'debitTotal', label: 'Debit' },
+      { key: 'creditTotal', label: 'Kredit' },
+      { key: 'net', label: 'Net' },
+    ],
+    'balance-sheet': [
+      { key: 'code', label: 'Kode' },
+      { key: 'name', label: 'Akun' },
+      { key: 'type', label: 'Tipe' },
+      { key: 'balance', label: 'Saldo' },
+    ],
+    'cash-flow': [
+      { key: 'date', label: 'Tanggal' },
+      { key: 'description', label: 'Deskripsi' },
+      { key: 'accountName', label: 'Akun Kas' },
+      { key: 'type', label: 'Kategori' },
+      { key: 'inflow', label: 'Masuk' },
+      { key: 'outflow', label: 'Keluar' },
+    ],
+    aging: [
+      { key: 'section', label: 'Bagian' },
+      { key: 'label', label: 'Keterangan' },
+      { key: 'value', label: 'Nilai' },
+    ],
+    stock: [
+      { key: 'sku', label: 'SKU' },
+      { key: 'productName', label: 'Produk' },
+      { key: 'quantity', label: 'Qty' },
+      { key: 'averageCost', label: 'Avg Cost' },
+      { key: 'value', label: 'Nilai' },
+    ],
+  };
+
+  const EXPORT_COLUMN_RENDER: Record<string, { key: string; render: (row: any) => string }[]> = {
+    trial: [
+      { key: 'openingBalance', render: (r) => money(r.openingBalance) },
+      { key: 'periodDebit', render: (r) => money(r.periodDebit) },
+      { key: 'periodCredit', render: (r) => money(r.periodCredit) },
+      { key: 'debit', render: (r) => money(r.debit) },
+      { key: 'credit', render: (r) => money(r.credit) },
+    ],
+    'profit-loss': [
+      { key: 'debitTotal', render: (r) => money(r.debitTotal) },
+      { key: 'creditTotal', render: (r) => money(r.creditTotal) },
+      { key: 'net', render: (r) => money(r.net) },
+    ],
+    'balance-sheet': [{ key: 'balance', render: (r) => money(r.balance) }],
+    'cash-flow': [
+      { key: 'inflow', render: (r) => (toNumber(r.inflow) > 0 ? money(r.inflow) : '-') },
+      { key: 'outflow', render: (r) => (toNumber(r.outflow) > 0 ? money(r.outflow) : '-') },
+    ],
+    stock: [
+      { key: 'quantity', render: (r) => formatNumber(toNumber(r.quantity)) },
+      { key: 'averageCost', render: (r) => money(r.averageCost) },
+      { key: 'value', render: (r) => money(r.value) },
+    ],
+  };
+
+  const exportColumns = $derived(
+    EXPORT_COLUMNS[exportKind].map((col) => {
+      const renderCol = EXPORT_COLUMN_RENDER[exportKind]?.find((c) => c.key === col.key);
+      return renderCol ? { ...col, render: renderCol.render } : col;
+    })
+  );
+
+  const exportRows = $derived(() => {
+    switch (exportKind) {
+      case 'trial':
+        return trialBalance?.rows ?? [];
+      case 'profit-loss':
+        return profitLoss?.rows ?? [];
+      case 'balance-sheet':
+        return balanceSheet?.rows ?? [];
+      case 'cash-flow':
+        return cashFlow?.rows ?? [];
+      case 'stock':
+        return stockValuation?.rows ?? [];
+      case 'aging': {
+        const rows: any[] = [];
+        for (const [bucket, data] of Object.entries(receivableAging?.buckets ?? {})) {
+          rows.push({ section: 'Piutang', label: `Bucket ${bucket}`, value: money(data.total) });
+        }
+        rows.push({ section: 'Piutang', label: 'Total Piutang', value: money(receivableAging?.grandTotal) });
+        for (const row of payableAging?.rows ?? []) {
+          rows.push({ section: 'Hutang', label: `${row.supplierName} (${row.bucket})`, value: money(row.outstanding) });
+        }
+        rows.push({ section: 'Hutang', label: 'Total Hutang', value: money(payableAging?.grandTotal) });
+        return rows;
+      }
+      case 'summary':
+      default:
+        return [
+          { section: 'Periode', label: 'Rentang', value: `${startDate} s/d ${endDate}` },
+          { section: 'Ringkasan', label: 'Pendapatan', value: formatIDR(totalIncome) },
+          { section: 'Ringkasan', label: 'Beban', value: formatIDR(totalExpense) },
+          { section: 'Ringkasan', label: 'Laba Bersih', value: formatIDR(netProfit) },
+          { section: 'Neraca', label: 'Total Aset', value: formatIDR(totalAssets) },
+          { section: 'Neraca', label: 'Kewajiban + Ekuitas', value: formatIDR(liabilitiesPlusEquity) },
+          { section: 'Aging', label: 'Piutang Outstanding', value: formatIDR(arOutstanding) },
+          { section: 'Aging', label: 'Hutang Outstanding', value: formatIDR(apOutstanding) },
+          { section: 'Inventaris', label: 'Delta GL vs Stock', value: formatIDR(stockGlDelta) },
+          { section: 'Arus Kas', label: 'Net Arus Kas', value: formatIDR(cashNet) },
+        ];
+    }
+  });
+
 
   function toNumber(value: string | number | null | undefined): number {
     const parsed = Number(value ?? 0);
@@ -298,6 +417,15 @@
 
 <PageHeader title="Laporan Keuangan" description="Trial balance, closing period, aging, dan valuasi stok dari GL live">
   {#snippet actions()}
+    <select
+      bind:value={exportKind}
+      class="input-field w-44"
+      aria-label="Jenis laporan untuk ekspor"
+    >
+      {#each exportKinds as kind}
+        <option value={kind.value}>{kind.label}</option>
+      {/each}
+    </select>
     <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
     <Button variant="secondary" onclick={() => tenantSlug && loadReports(tenantSlug, startDate, endDate, includeClosing)} loading={loading}>
       <RefreshCw class="w-4 h-4" /> Refresh
@@ -618,9 +746,9 @@
 <ExportModal
   open={showExport}
   onclose={() => showExport = false}
-  title="Laporan Keuangan"
+  title={`Laporan Keuangan — ${exportKinds.find((k) => k.value === exportKind)?.label}`}
   subtitle={`Periode ${startDate} s/d ${endDate}`}
   columns={exportColumns}
   rows={exportRows}
-  filename="laporan-keuangan"
+  filename={`laporan-${exportKind}`}
 />
