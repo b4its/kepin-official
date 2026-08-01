@@ -341,10 +341,32 @@ CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://frontend:3000
 AUTHORIZATION_ENABLED: "false"
 SQL_ECHO: "false"
 LOG_LEVEL: INFO
+SMTP_HOST: 127.0.0.1
+SMTP_PORT: "1025"
+SMTP_TLS: "false"
+SMTP_FROM: noreply@kepin.io
+PUBLIC_APP_URL: http://localhost:5173
 ```
 
-### Volume
+### Volume & Bind Mount
 - `pgdata` — persistent PostgreSQL data (local driver)
+- `./backend/src:/app/src:ro` — source backend live (perubahan cukup `docker restart kepin-backend`)
+- `./backend/alembic:/app/alembic:ro` — migrasi live
+- SMTP aktif di compose; untuk uji email jalankan sink di dalam container:
+  ```sh
+  docker exec kepin-backend pip install -q aiosmtpd
+  docker cp backend/tests/regression/smtp_sink.py kepin-backend:/tmp/
+  docker exec -d kepin-backend python /tmp/smtp_sink.py
+  ```
+  Tanpa sink, forgot-password fallback ke `dev_reset_token` di respons.
+
+### Perubahan Frontend → Rebuild Image
+Container `kepin-frontend` menjalankan **production build** (`node build/index.js`), bukan dev server.
+Perubahan source frontend TIDAK otomatis terlihat; wajib rebuild:
+
+```sh
+docker compose build frontend && docker compose up -d frontend
+```
 
 ---
 
@@ -363,6 +385,11 @@ LOG_LEVEL: INFO
 | `AUTHORIZATION_ENABLED` | `false` | Otorisasi aktif/nonaktif |
 | `SQL_ECHO` | `false` | Log query SQL |
 | `LOG_LEVEL` | `INFO` | Level logging |
+| `SMTP_HOST` | `127.0.0.1` | Host SMTP untuk email (reset password) |
+| `SMTP_PORT` | `1025` | Port SMTP |
+| `SMTP_TLS` | `false` | TLS SMTP |
+| `SMTP_FROM` | `noreply@kepin.io` | Pengirim email |
+| `PUBLIC_APP_URL` | `http://localhost:5173` | URL publik untuk link di email |
 
 ### Frontend
 | Variable | Contoh | Keterangan |
