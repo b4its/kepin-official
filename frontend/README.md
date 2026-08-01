@@ -1,42 +1,26 @@
-# sv
+# KePin Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit + Svelte 5 UI untuk aplikasi KePin (ERP multi-tenant).
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
+Lihat README di root repo untuk gambaran arsitektur, Docker Compose,
+dan dokumentasi lengkap. Ringkasan perintah:
 
 ```sh
-# recreate this project
-pnpm dlx sv@0.16.6 create --template minimal --types ts --install pnpm frontend
+npm install        # instal dependensi
+npm run dev        # dev server (http://localhost:5173)
+npm run build      # production build
+npm run preview    # serve hasil build
+npx playwright test         # E2E suite penuh (API + browser)
+npx playwright test --headed
+npx playwright test e2e/client/owner/ui-interaction.spec.ts
 ```
 
-## Developing
+Catatan penting:
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- **Stack Docker memakai production build** (`node build/index.js`),
+  bukan dev server. Perubahan pada source frontend tidak tampak sampai
+  container di-rebuild:
+  `docker compose build frontend && docker compose up -d frontend`.
+- Kontainer menyimpan state login Playwright di `e2e/.auth/` (di-commit).
+  Setelah mengubah kredensial demo atau helper auth, jalankan suite lalu
+  commit hasil refresh state tersebut.
