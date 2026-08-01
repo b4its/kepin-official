@@ -77,6 +77,10 @@
     rows: { month: string; income: string; expense: string; profit: string }[];
   };
 
+  type MonthlyBalanceSheet = {
+    rows: { month: string; assets: string; liabilities: string; equity: string; liabilitiesPlusEquity: string }[];
+  };
+
   type AccountingPeriod = {
     id: string;
     name: string;
@@ -117,6 +121,7 @@
   let stockValuation = $state<StockValuationReport | null>(null);
   let cashFlow = $state<CashFlowReport | null>(null);
   let monthlyProfitLoss = $state<MonthlyProfitLoss | null>(null);
+  let monthlyBalanceSheet = $state<MonthlyBalanceSheet | null>(null);
   let fiscalYears = $state<FiscalYear[]>([]);
 
   const tenantSlug = $derived($page.params.tenantSlug || '');
@@ -205,7 +210,7 @@
     const q = query({ startDate: start, endDate: end });
     const tbq = query({ startDate: start, endDate: end, includeClosing: closing });
     try {
-      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, cashFlowRes, monthlyRes, yearsRes] = await Promise.all([
+      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, cashFlowRes, monthlyRes, monthlyBsRes, yearsRes] = await Promise.all([
         api<SummaryReport>(`/tenants/${slug}/reports/summary?${q}`),
         api<ProfitLossReport>(`/tenants/${slug}/reports/profit-loss?${q}`),
         api<BalanceSheetReport>(`/tenants/${slug}/reports/balance-sheet?${q}`),
@@ -215,6 +220,7 @@
         api<StockValuationReport>(`/tenants/${slug}/reports/stock-valuation?asOf=${end}`),
         api<CashFlowReport>(`/tenants/${slug}/reports/cash-flow?${q}`),
         api<MonthlyProfitLoss>(`/tenants/${slug}/reports/profit-loss-monthly?${q}`),
+        api<MonthlyBalanceSheet>(`/tenants/${slug}/reports/balance-sheet-monthly?${q}`),
         api<FiscalYear[]>(`/tenants/${slug}/fiscal-years`),
       ]);
       if (seq !== requestSeq) return;
@@ -227,6 +233,7 @@
       stockValuation = stockRes;
       cashFlow = cashFlowRes;
       monthlyProfitLoss = monthlyRes;
+      monthlyBalanceSheet = monthlyBsRes;
       fiscalYears = yearsRes;
     } catch (err: any) {
       if (seq === requestSeq) error = err?.message || 'Gagal memuat laporan';
@@ -445,6 +452,37 @@
     searchable={true}
   />
 {:else if activeTab === 'balance-sheet'}
+  <div class="card p-5 mb-4">
+    <h3 class="mb-4 font-semibold">Neraca per Bulan</h3>
+    {#if (monthlyBalanceSheet?.rows ?? []).length > 0}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+              <th class="pb-2 pr-4 font-medium">Bulan</th>
+              <th class="pb-2 pr-4 text-right font-medium">Total Aset</th>
+              <th class="pb-2 pr-4 text-right font-medium">Kewajiban</th>
+              <th class="pb-2 pr-4 text-right font-medium">Ekuitas</th>
+              <th class="pb-2 text-right font-medium">Kewajiban + Ekuitas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each monthlyBalanceSheet?.rows ?? [] as row}
+              <tr class="border-b border-[hsl(var(--border))] last:border-0">
+                <td class="py-2 pr-4">{monthName(row.month)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.assets)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.liabilities)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.equity)}</td>
+                <td class="py-2 text-right font-semibold tabular-nums">{money(row.liabilitiesPlusEquity)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {:else}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Belum ada jurnal pada rentang ini.</p>
+    {/if}
+  </div>
   <DataTable
     columns={[
       { key: 'code', label: 'Kode', sortable: true },

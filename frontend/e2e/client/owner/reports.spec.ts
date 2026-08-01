@@ -37,6 +37,17 @@ test.describe('Owner Reports & Export', () => {
     expect(errors).toEqual([]);
   });
 
+  test('balance-sheet tab shows monthly breakdown', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Neraca', exact: true }).click();
+    await expect(page.getByText('Neraca per Bulan')).toBeVisible();
+    await expect(page.getByText('Kewajiban + Ekuitas').first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test('investor report page loads', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });

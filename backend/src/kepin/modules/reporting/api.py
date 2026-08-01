@@ -454,6 +454,87 @@ async def get_balance_sheet(
     }
 
 
+@router.get("/balance-sheet-monthly")
+async def get_balance_sheet_monthly(
+    ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+    params: PeriodParams = Depends(),
+):
+    """Neraca (saldo kumulatif) per akhir bulan dalam rentang, termasuk jurnal penutup."""
+    start, end = params.resolve()
+    metadata = _build_metadata(ctx, start, end)
+
+    rows = (
+        await session.execute(
+            select(
+                func.to_char(func.date_trunc(literal_column("'month'"), JournalEntry.journal_date), "YYYY-MM").label("month"),
+                Account.type,
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (Account.normal_balance == "debit", JournalLine.debit - JournalLine.credit),
+                            else_=JournalLine.credit - JournalLine.debit,
+                        )
+                    ),
+                    0,
+                ).label("net"),
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+            .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
+            .where(
+                JournalEntry.tenant_id == ctx.id,
+                _journal_statuses(),
+                Account.type.in_(["asset", "liability", "equity"]),
+                JournalEntry.journal_date <= end,
+            )
+            .group_by(
+                func.date_trunc(literal_column("'month'"), JournalEntry.journal_date),
+                Account.type,
+            )
+            .order_by(func.date_trunc(literal_column("'month'"), JournalEntry.journal_date))
+        )
+    ).all()
+
+    deltas: dict[str, dict[str, Decimal]] = {}
+    for month, atype, net in rows:
+        deltas.setdefault(month, {})[atype] = net
+
+    months: list[str] = []
+    running: dict[str, Decimal] = {"asset": Decimal("0"), "liability": Decimal("0"), "equity": Decimal("0")}
+    cursor = date(start.year, start.month, 1)
+    month_end = date(end.year, end.month, 1)
+    start_key = f"{cursor.year:04d}-{cursor.month:02d}"
+    for key in sorted(k for k in deltas if k < start_key):
+        for atype, net in deltas[key].items():
+            running[atype] += net
+    out = []
+    while cursor <= month_end:
+        key = f"{cursor.year:04d}-{cursor.month:02d}"
+        if key in deltas:
+            for atype, net in deltas[key].items():
+                running[atype] += net
+        months.append(key)
+        out.append({
+            "month": key,
+            "assets": str(running["asset"]),
+            "liabilities": str(running["liability"]),
+            "equity": str(running["equity"]),
+            "liabilitiesPlusEquity": str(running["liability"] + running["equity"]),
+        })
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+
+    return {
+        "metadata": metadata.model_dump(mode="json"),
+        "months": months,
+        "rows": out,
+    }
+
+
 @router.get("/cash-flow")
 async def get_cash_flow(
     ctx: TenantContext = Depends(get_tenant_context),

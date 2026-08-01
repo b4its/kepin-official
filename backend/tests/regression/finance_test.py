@@ -298,6 +298,25 @@ sc, body = jget("/reports/profit-loss-monthly?startDate=2026-01-01&endDate=2026-
 check("monthly range respected", all(m["month"] <= "2026-06" for m in body.get("rows", [])), str([m["month"] for m in body.get("rows", [])]))
 
 # ═══════════════════════════════════════════════════════════════════
+#  BALANCE-SHEET MONTHLY
+# ═══════════════════════════════════════════════════════════════════
+
+sc, body = jget("/reports/balance-sheet-monthly?startDate=2026-01-01&endDate=2026-12-31")
+check("balance-sheet-monthly 200", sc == 200, f"{sc}")
+bs_months = body.get("rows", [])
+check("balance monthly has 12 rows", len(bs_months) == 12, f"{len(bs_months)}")
+check("balance monthly sorted asc", all(bs_months[i]["month"] <= bs_months[i + 1]["month"] for i in range(len(bs_months) - 1)), str([m["month"] for m in bs_months]))
+last_bs = bs_months[-1]
+sc, body = jget("/reports/balance-sheet?startDate=2026-12-31&endDate=2026-12-31")
+bs_summary = body["summary"]
+check("balance monthly final assets match as-of", Decimal(last_bs["assets"]) == Decimal(bs_summary["totalAssets"]), f"{last_bs['assets']} vs {bs_summary['totalAssets']}")
+check("balance monthly final L+E match as-of", Decimal(last_bs["liabilitiesPlusEquity"]) == Decimal(bs_summary["liabilitiesPlusEquity"]), f"{last_bs['liabilitiesPlusEquity']} vs {bs_summary['liabilitiesPlusEquity']}")
+sc, body = jget("/reports/balance-sheet-monthly?startDate=2026-07-01&endDate=2026-07-31")
+july_rows = body.get("rows", [])
+sc, july_asof = jget("/reports/balance-sheet?startDate=2026-07-31&endDate=2026-07-31")
+check("balance monthly carries opening balance", len(july_rows) == 1 and Decimal(july_rows[0]["assets"]) == Decimal(july_asof["summary"]["totalAssets"]), str(july_rows))
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail
 # ═══════════════════════════════════════════════════════════════════
 
