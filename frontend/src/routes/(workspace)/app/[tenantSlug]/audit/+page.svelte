@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { auditEvents, loadAuditEvents } from '$lib/stores/data';
+  import { auditEvents, loadAuditEvents, tenantApi } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
@@ -13,6 +13,8 @@
   let selected = $state<any>(null);
   let loading = $state(false);
   let error = $state('');
+  let filterType = $state('');
+  let allTypes = $state<string[]>([]);
 
   const exportColumns = [
     { key: 'timestamp', label: 'Waktu' },
@@ -33,12 +35,24 @@
     loading = true;
     error = '';
     try {
-      await loadAuditEvents(slug);
+      const snapshot = filterType
+        ? null
+        : await tenantApi.getAuditEvents(slug, { pageSize: 100 });
+      await loadAuditEvents(slug, filterType ? { objectType: filterType } : undefined);
+      if (snapshot?.items && allTypes.length === 0) {
+        allTypes = [...new Set(snapshot.items.map((a: any) => a.objectType || '').filter(Boolean))].sort();
+      }
     } catch (err: any) {
       error = err?.message || 'Gagal memuat audit trail';
     } finally {
       loading = false;
     }
+  }
+
+  async function setFilter(type: string) {
+    if (type === filterType) return;
+    filterType = type;
+    await refresh();
   }
 
   $effect(() => { if (slug) void refresh(); });
@@ -52,6 +66,27 @@
 </PageHeader>
 
 {#if error}<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>{/if}
+
+{#if allTypes.length > 0}
+  <div class="mb-4 flex flex-wrap gap-2">
+    <button
+      class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+      class:bg-[hsl(var(--primary))]={filterType === ''}
+      class:text-white={filterType === ''}
+      class:bg-[hsl(var(--muted))]={filterType !== ''}
+      onclick={() => setFilter('')}
+    >Semua</button>
+    {#each allTypes as type}
+      <button
+        class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+        class:bg-[hsl(var(--primary))]={filterType === type}
+        class:text-white={filterType === type}
+        class:bg-[hsl(var(--muted))]={filterType !== type}
+        onclick={() => setFilter(type)}
+      >{type.replaceAll('_', ' ')}</button>
+    {/each}
+  </div>
+{/if}
 
 <DataTable
   columns={[

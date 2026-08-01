@@ -31,7 +31,14 @@ export async function getNotification(slug: string, id: string) { return api(`/t
 export async function markNotifRead(slug: string, id: string) { return api(`/tenants/${slug}/notifications/${id}/read`, { method: 'PATCH' }); }
 export async function markAllNotifRead(slug: string) { return api(`/tenants/${slug}/notifications/read-all`, { method: 'POST' }); }
 export async function deleteNotif(slug: string, id: string) { return api(`/tenants/${slug}/notifications/${id}`, { method: 'DELETE' }); }
-export async function getAuditEvents(slug: string) { return api(`/tenants/${slug}/audit-events`); }
+export async function getAuditEvents(slug: string, params?: { objectType?: string; action?: string; pageSize?: number }) {
+  const q = new URLSearchParams();
+  if (params?.objectType) q.set('objectType', params.objectType);
+  if (params?.action) q.set('action', params.action);
+  if (params?.pageSize) q.set('pageSize', String(params.pageSize));
+  const qs = q.toString();
+  return api(`/tenants/${slug}/audit-events${qs ? `?${qs}` : ''}`);
+}
 export async function getAccounts(slug: string) { return api(`/tenants/${slug}/accounts`); }
 export async function getAccountBalance(slug: string, id: string) { return api(`/tenants/${slug}/accounts/${id}/balance`); }
 export async function createAccount(slug: string, data: any) { return api(`/tenants/${slug}/accounts`, { method: 'POST', body: JSON.stringify(data) }); }

@@ -313,6 +313,13 @@ bactions = sorted(e.get("action") for e in bank_events)
 check("audit bank_account.update", "bank_account.update" in bactions, str(bactions))
 check("audit bank_account.delete", "bank_account.delete" in bactions, str(bactions))
 
+sc, body = jget("/audit-events?objectType=bank_account&pageSize=100")
+check("audit filter objectType 200", sc == 200, f"{sc}")
+check("audit filter only bank_account", len(body.get("items", [])) > 0 and all(i.get("objectType") == "bank_account" for i in body.get("items", [])), str(set(i.get("objectType") for i in body.get("items", []))))
+sc, body = jget("/audit-events?action=fiscal_year.close")
+check("audit filter action 200", sc == 200, f"{sc}")
+check("audit filter action fiscal_year.close", body.get("total", 0) > 0 and all(i.get("action") == "fiscal_year.close" for i in body.get("items", [])), str(body.get("total")))
+
 purge_fiscal_year()
 
 sc, body = jget(f"/{Y}")

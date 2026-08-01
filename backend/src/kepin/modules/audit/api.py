@@ -58,13 +58,21 @@ async def list_audit_events(
     session: AsyncSession = Depends(get_session),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
+    object_type: str | None = Query(None, alias="objectType"),
+    action: str | None = Query(None),
 ):
-    total_q = select(func.count(TenantAuditEvent.id)).where(TenantAuditEvent.tenant_id == ctx.id)
+    conditions = [TenantAuditEvent.tenant_id == ctx.id]
+    if object_type:
+        conditions.append(TenantAuditEvent.object_type == object_type)
+    if action:
+        conditions.append(TenantAuditEvent.action == action)
+
+    total_q = select(func.count(TenantAuditEvent.id)).where(*conditions)
     total = (await session.execute(total_q)).scalar() or 0
 
     stmt = (
         select(TenantAuditEvent)
-        .where(TenantAuditEvent.tenant_id == ctx.id)
+        .where(*conditions)
         .order_by(TenantAuditEvent.timestamp.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)

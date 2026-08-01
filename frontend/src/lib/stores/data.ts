@@ -289,9 +289,9 @@ export async function deleteNotification(id: string) { const s = _slug; if (!s) 
 
 // ── Audit Events ──
 export const auditEvents = writable<AuditEvent[]>([]);
-export async function loadAuditEvents(slug?: string) {
+export async function loadAuditEvents(slug?: string, filters?: { objectType?: string; action?: string }) {
   const s = slug || _slug; if (!s) return;
-  const res: any = await tenantApi.getAuditEvents(s);
+  const res: any = await tenantApi.getAuditEvents(s, filters);
   if (!isActiveTenant(s)) return;
   auditEvents.set(res.items?.map((a: any) => ({
     id: a.id, timestamp: a.timestamp || '', actor: a.actorName || a.actor_name || '',
