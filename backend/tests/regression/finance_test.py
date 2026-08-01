@@ -226,6 +226,10 @@ check("bank glBalance present", all(b.get("glBalance") for b in seed_banks), str
 check("bank glBalance numeric", all(Decimal(b["glBalance"]) != 0 for b in seed_banks), str([b["glBalance"] for b in seed_banks]))
 check("bank statementCount int", all(isinstance(b.get("statementCount"), int) and b.get("statementCount") >= 0 for b in banks), str([b.get("statementCount") for b in banks]))
 check("bank unmatchedCount int", all(isinstance(b.get("unmatchedCount"), int) and b.get("unmatchedCount") >= 0 for b in banks), str([b.get("unmatchedCount") for b in banks]))
+check("bank statementTotal numeric", all(Decimal(b.get("statementTotal", "0")) >= Decimal("0") or Decimal(b.get("statementTotal", "0")) <= Decimal("0") for b in banks), str([b.get("statementTotal") for b in banks]))
+check("bank unmatchedTotal numeric", all(Decimal(b.get("unmatchedTotal", "0")) >= Decimal("0") or Decimal(b.get("unmatchedTotal", "0")) <= Decimal("0") for b in banks), str([b.get("unmatchedTotal") for b in banks]))
+bca = next(b for b in banks if b["bankName"] == "BCA")
+check("BCA unmatched total equals statement total", Decimal(bca["unmatchedTotal"]) == Decimal(bca["statementTotal"]), f"{bca['unmatchedTotal']} vs {bca['statementTotal']}")
 
 # ═══════════════════════════════════════════════════════════════════
 #  CASH FLOW — bank accounts must be included

@@ -185,7 +185,9 @@ class BankAccountSchema(ApiSchema):
     status: str = "active"
     gl_balance: str = "0.00"
     statement_count: int = 0
+    statement_total: str = "0.00"
     unmatched_count: int = 0
+    unmatched_total: str = "0.00"
 
 
 class BankAccountCreate(ApiSchema):
@@ -1388,11 +1390,13 @@ async def list_bank_accounts(
         gl_balances = {str(account_id): bal for account_id, bal in gl_rows}
 
     statement_counts = {}
+    statement_totals = {}
     unmatched_counts = {}
+    unmatched_totals = {}
     if bank_ids:
         cnt_rows = (
             await session.execute(
-                select(BankTransaction.bank_account_id, func.count())
+                select(BankTransaction.bank_account_id, func.count(), func.coalesce(func.sum(BankTransaction.amount), 0))
                 .where(
                     BankTransaction.tenant_id == tenant.id,
                     BankTransaction.bank_account_id.in_(bank_ids),
@@ -1400,11 +1404,12 @@ async def list_bank_accounts(
                 .group_by(BankTransaction.bank_account_id)
             )
         ).all()
-        statement_counts = {str(bank_account_id): n for bank_account_id, n in cnt_rows}
+        statement_counts = {str(bank_account_id): n for bank_account_id, n, _ in cnt_rows}
+        statement_totals = {str(bank_account_id): total for bank_account_id, _, total in cnt_rows}
 
         unm_rows = (
             await session.execute(
-                select(BankTransaction.bank_account_id, func.count(BankTransaction.id))
+                select(BankTransaction.bank_account_id, func.count(BankTransaction.id), func.coalesce(func.sum(BankTransaction.amount), 0))
                 .outerjoin(
                     ReconciliationMatch,
                     ReconciliationMatch.bank_transaction_id == BankTransaction.id,
@@ -1417,7 +1422,8 @@ async def list_bank_accounts(
                 .group_by(BankTransaction.bank_account_id)
             )
         ).all()
-        unmatched_counts = {str(bank_account_id): n for bank_account_id, n in unm_rows}
+        unmatched_counts = {str(bank_account_id): n for bank_account_id, n, _ in unm_rows}
+        unmatched_totals = {str(bank_account_id): total for bank_account_id, _, total in unm_rows}
 
     return [
         BankAccountSchema(
@@ -1429,7 +1435,9 @@ async def list_bank_accounts(
             status=bank.status,
             gl_balance=money_str(gl_balances.get(str(bank.account_id), Decimal("0"))),
             statement_count=statement_counts.get(str(bank.id), 0),
+            statement_total=money_str(statement_totals.get(str(bank.id), Decimal("0"))),
             unmatched_count=unmatched_counts.get(str(bank.id), 0),
+            unmatched_total=money_str(unmatched_totals.get(str(bank.id), Decimal("0"))),
         )
         for bank, account_name in rows
     ]

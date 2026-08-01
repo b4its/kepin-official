@@ -10,7 +10,7 @@
   import { formatIDR } from '$lib/utils/currency';
   import { Pencil, RefreshCw, Trash2 } from '@lucide/svelte';
 
-  type BankAccount = { id: string; accountId: string; accountName?: string; bankName: string; maskedNumber: string; status: string; glBalance?: string; statementCount?: number; unmatchedCount?: number };
+  type BankAccount = { id: string; accountId: string; accountName?: string; bankName: string; maskedNumber: string; status: string; glBalance?: string; statementCount?: number; statementTotal?: string; unmatchedCount?: number; unmatchedTotal?: string };
   type BankTransaction = { id: string; bankAccountId: string; externalId: string; transactionDate: string; description: string; amount: string };
   type Match = { id: string; bankTransactionId: string; transactionId: string; confidence: string; status: string; matchedAt?: string | null; note?: string };
 
@@ -172,10 +172,10 @@
           <div class="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
             <span class="rounded bg-[hsl(var(--muted))] px-2 py-0.5 font-medium tabular-nums">Saldo Buku: {formatIDR(Number(bank.glBalance ?? 0))}</span>
             {#if (bank.statementCount ?? 0) > 0}
-              <span class="rounded bg-[hsl(var(--muted))] px-2 py-0.5 tabular-nums">{bank.statementCount} transaksi</span>
+              <span class="rounded bg-[hsl(var(--muted))] px-2 py-0.5 tabular-nums">{bank.statementCount} transaksi · {formatIDR(Number(bank.statementTotal ?? 0))}</span>
             {/if}
             {#if (bank.unmatchedCount ?? 0) > 0}
-              <span class="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700 tabular-nums">{bank.unmatchedCount} belum dicocokkan</span>
+              <span class="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700 tabular-nums">{bank.unmatchedCount} belum dicocokkan · {formatIDR(Number(bank.unmatchedTotal ?? 0))}</span>
             {/if}
           </div>
         </div>

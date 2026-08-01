@@ -190,5 +190,6 @@ test.describe('Owner UI Interaction', () => {
     await expect(page.locator('body')).toContainText(/rekening bank/i, { timeout: 10_000 });
     await expect(page.locator('body')).toContainText(/transaksi bank/i, { timeout: 10_000 });
     await expect(page.locator('body')).toContainText(/saldo buku/i, { timeout: 10_000 });
+    await expect(page.locator('body')).toContainText(/belum dicocokkan/i, { timeout: 10_000 });
   });
 });
