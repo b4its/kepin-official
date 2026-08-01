@@ -438,6 +438,25 @@ Daftar role yang tersedia.
 
 Daftar integrasi yang terpasang.
 
+#### POST `/api/v1/tenants/{tenantSlug}/integrations`
+
+Mencatat integrasi baru (status awal `disconnected`).
+
+#### PATCH `/api/v1/tenants/{tenantSlug}/integrations/{integrationId}`
+
+Update nama tampilan atau status (`active` / `disconnected` / `error`).
+
+#### DELETE `/api/v1/tenants/{tenantSlug}/integrations/{integrationId}`
+
+Hapus integrasi; transaksi bank yang sudah diimpor tetap tersimpan.
+
+#### POST `/api/v1/tenants/{tenantSlug}/integrations/{integrationId}/sync`
+
+Sinkronisasi batch transaksi bank (khusus integrasi `active`). Body berisi
+`bankAccountId` dan daftar `transactions` (`externalId`, `transactionDate`,
+`description`, `amount`). Duplikat external ID dilewati; respons
+`{ integration, imported, skipped }`.
+
 ### Billing
 
 #### GET `/api/v1/tenants/{tenantSlug}/billing`
