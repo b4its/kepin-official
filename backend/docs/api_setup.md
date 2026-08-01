@@ -107,7 +107,9 @@ Semua endpoint di bawah prefiks `/tenants/{tenantSlug}`.
 | GET/PATCH/DELETE | `/branches/{id}` | Detail/update/hapus cabang |
 | GET/POST | `/members` | CRUD anggota |
 | GET/POST | `/roles` | Daftar roles |
-| GET | `/integrations` | Daftar integrasi |
+| GET/POST | `/integrations` | CRUD integrasi |
+| PATCH/DELETE | `/integrations/{id}` | Update status/nama, hapus integrasi |
+| POST | `/integrations/{id}/sync` | Sinkronisasi batch transaksi bank (imported/skipped) |
 | GET | `/billing` | Informasi billing |
 
 #### Akuntansi
