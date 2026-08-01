@@ -1417,6 +1417,14 @@ async def list_bank_transactions(
     filters = [BankTransaction.tenant_id == tenant.id]
     if bank_account_id:
         filters.append(BankTransaction.bank_account_id == bank_account_id)
+    if params.search:
+        pattern = f"%{params.search.strip()}%"
+        filters.append(
+            or_(
+                BankTransaction.external_id.ilike(pattern),
+                BankTransaction.description.ilike(pattern),
+            )
+        )
     total = (await session.execute(select(func.count()).select_from(BankTransaction).where(and_(*filters)))).scalar() or 0
     rows = (
         await session.execute(

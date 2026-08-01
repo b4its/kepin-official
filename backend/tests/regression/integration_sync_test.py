@@ -90,7 +90,7 @@ def main():
     check("sync rejects disconnected", r.status_code == 422, r.text[:200])
     C.delete(f"tenants/{tenant}/integrations/{iid2}", headers=H)
 
-    bt = C.get(f"tenants/{tenant}/bank-transactions?pageSize=100&search=SYNCTEST", headers=H)
+    bt = C.get(f"tenants/{tenant}/bank-transactions?pageSize=100&search=SYNCTEST-{run}-", headers=H)
     if bt.status_code == 200:
         check("synced rows visible in bank-transactions", len(bt.json().get("items", [])) == 3)
 
