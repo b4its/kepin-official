@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { loginApi } from '../../fixtures/api.fixture';
 import { DEMO_OWNER } from '../../helpers/ids';
 
+const apiURL = process.env.E2E_API_URL ?? 'http://127.0.0.1:8000/api/v1';
 const TENANT = DEMO_OWNER.tenant;
 
 test.describe('Owner UI Interaction', () => {
@@ -106,5 +108,24 @@ test.describe('Owner UI Interaction', () => {
     await page.locator('#org-phone').fill('');
     await page.locator('button').filter({ hasText: /simpan perubahan/i }).first().click();
     await expect(modal).not.toBeVisible({ timeout: 10_000 });
+  });
+
+  test('notification detail page renders for a real notification', async ({ page }) => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const list = await api.get(`tenants/${TENANT}/notifications?pageSize=1`);
+    const body = await list.json();
+    await api.dispose();
+    const items = body.items || [];
+    if (items.length === 0) return;
+
+    const nid = items[0].id;
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+
+    await page.goto(`/app/${TENANT}/notifications/${nid}`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(800);
+    expect(errors).toEqual([]);
+    await expect(page.locator('body')).toContainText(/notifikasi/i, { timeout: 10_000 });
   });
 });
