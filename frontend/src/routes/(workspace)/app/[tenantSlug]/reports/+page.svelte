@@ -314,6 +314,20 @@
     return `${monthLabels[m - 1]} ${y}`;
   }
 
+  function deltaTone(prev: number | undefined, curr: number): 'up' | 'down' | 'none' {
+    if (prev === undefined) return 'none';
+    return curr >= prev ? 'up' : 'down';
+  }
+
+  function deltaLabel(prev: number | undefined, curr: number): string {
+    if (prev === undefined) return '—';
+    const diff = curr - prev;
+    if (diff === 0) return '0';
+    const sign = diff > 0 ? '+' : '';
+    const pct = prev !== 0 ? ` (${sign}${((diff / Math.abs(prev)) * 100).toFixed(0)}%)` : '';
+    return `${sign}${formatIDR(diff)}${pct}`;
+  }
+
   function query(params: Record<string, string | boolean | undefined>) {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
@@ -552,16 +566,19 @@
               <th class="pb-2 pr-4 font-medium">Bulan</th>
               <th class="pb-2 pr-4 text-right font-medium">Pendapatan</th>
               <th class="pb-2 pr-4 text-right font-medium">Beban</th>
-              <th class="pb-2 text-right font-medium">Laba Bersih</th>
+              <th class="pb-2 pr-4 text-right font-medium">Laba Bersih</th>
+              <th class="pb-2 text-right font-medium">Δ Laba vs Bulan Lalu</th>
             </tr>
           </thead>
           <tbody>
-            {#each monthlyProfitLoss?.rows ?? [] as row}
+            {#each monthlyProfitLoss?.rows ?? [] as row, i (row.month)}
+              {@const prev = (monthlyProfitLoss?.rows ?? [])[i - 1]}
               <tr class="border-b border-[hsl(var(--border))] last:border-0">
                 <td class="py-2 pr-4">{monthName(row.month)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.income)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.expense)}</td>
-                <td class="py-2 text-right font-semibold tabular-nums" class:text-emerald-600={toNumber(row.profit) >= 0} class:text-red-600={toNumber(row.profit) < 0}>{money(row.profit)}</td>
+                <td class="py-2 pr-4 text-right font-semibold tabular-nums" class:text-emerald-600={toNumber(row.profit) >= 0} class:text-red-600={toNumber(row.profit) < 0}>{money(row.profit)}</td>
+                <td class="py-2 text-right text-xs tabular-nums" class:text-emerald-600={deltaTone(prev ? toNumber(prev.profit) : undefined, toNumber(row.profit)) === 'up'} class:text-red-600={deltaTone(prev ? toNumber(prev.profit) : undefined, toNumber(row.profit)) === 'down'}>{deltaLabel(prev ? toNumber(prev.profit) : undefined, toNumber(row.profit))}</td>
               </tr>
             {/each}
           </tbody>
@@ -598,17 +615,20 @@
               <th class="pb-2 pr-4 text-right font-medium">Total Aset</th>
               <th class="pb-2 pr-4 text-right font-medium">Kewajiban</th>
               <th class="pb-2 pr-4 text-right font-medium">Ekuitas</th>
-              <th class="pb-2 text-right font-medium">Kewajiban + Ekuitas</th>
+              <th class="pb-2 pr-4 text-right font-medium">Kewajiban + Ekuitas</th>
+              <th class="pb-2 text-right font-medium">Δ Aset vs Bulan Lalu</th>
             </tr>
           </thead>
           <tbody>
-            {#each monthlyBalanceSheet?.rows ?? [] as row}
+            {#each monthlyBalanceSheet?.rows ?? [] as row, i (row.month)}
+              {@const prev = (monthlyBalanceSheet?.rows ?? [])[i - 1]}
               <tr class="border-b border-[hsl(var(--border))] last:border-0">
                 <td class="py-2 pr-4">{monthName(row.month)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.assets)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.liabilities)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.equity)}</td>
-                <td class="py-2 text-right font-semibold tabular-nums">{money(row.liabilitiesPlusEquity)}</td>
+                <td class="py-2 pr-4 text-right font-semibold tabular-nums">{money(row.liabilitiesPlusEquity)}</td>
+                <td class="py-2 text-right text-xs tabular-nums" class:text-emerald-600={deltaTone(prev ? toNumber(prev.assets) : undefined, toNumber(row.assets)) === 'up'} class:text-red-600={deltaTone(prev ? toNumber(prev.assets) : undefined, toNumber(row.assets)) === 'down'}>{deltaLabel(prev ? toNumber(prev.assets) : undefined, toNumber(row.assets))}</td>
               </tr>
             {/each}
           </tbody>
@@ -649,17 +669,20 @@
               <th class="pb-2 pr-4 text-right font-medium">Operasi</th>
               <th class="pb-2 pr-4 text-right font-medium">Investasi</th>
               <th class="pb-2 pr-4 text-right font-medium">Pendanaan</th>
-              <th class="pb-2 text-right font-medium">Net</th>
+              <th class="pb-2 pr-4 text-right font-medium">Net</th>
+              <th class="pb-2 text-right font-medium">Δ Net vs Bulan Lalu</th>
             </tr>
           </thead>
           <tbody>
-            {#each monthlyCashFlow?.rows ?? [] as row}
+            {#each monthlyCashFlow?.rows ?? [] as row, i (row.month)}
+              {@const prev = (monthlyCashFlow?.rows ?? [])[i - 1]}
               <tr class="border-b border-[hsl(var(--border))] last:border-0">
                 <td class="py-2 pr-4">{monthName(row.month)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.operating)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.investing)}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{money(row.financing)}</td>
-                <td class="py-2 text-right font-semibold tabular-nums" class:text-emerald-600={toNumber(row.net) >= 0} class:text-red-600={toNumber(row.net) < 0}>{money(row.net)}</td>
+                <td class="py-2 pr-4 text-right font-semibold tabular-nums" class:text-emerald-600={toNumber(row.net) >= 0} class:text-red-600={toNumber(row.net) < 0}>{money(row.net)}</td>
+                <td class="py-2 text-right text-xs tabular-nums" class:text-emerald-600={deltaTone(prev ? toNumber(prev.net) : undefined, toNumber(row.net)) === 'up'} class:text-red-600={deltaTone(prev ? toNumber(prev.net) : undefined, toNumber(row.net)) === 'down'}>{deltaLabel(prev ? toNumber(prev.net) : undefined, toNumber(row.net))}</td>
               </tr>
             {/each}
           </tbody>

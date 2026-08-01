@@ -24,6 +24,7 @@ test.describe('Owner Reports & Export', () => {
     await expect(page.getByText('Net Arus Kas')).toBeVisible();
     await expect(page.getByText('Arus Kas Pendanaan')).toBeVisible();
     await expect(page.getByText('Arus Kas per Bulan')).toBeVisible();
+    await expect(page.getByText('Δ Net vs Bulan Lalu')).toBeVisible();
     expect(errors).toEqual([]);
   });
 
@@ -35,6 +36,7 @@ test.describe('Owner Reports & Export', () => {
     await page.getByRole('button', { name: 'Laba Rugi' }).click();
     await expect(page.getByText('Laba Rugi per Bulan')).toBeVisible();
     await expect(page.getByText('Pendapatan', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Δ Laba vs Bulan Lalu')).toBeVisible();
     expect(errors).toEqual([]);
   });
 
@@ -46,6 +48,7 @@ test.describe('Owner Reports & Export', () => {
     await page.getByRole('button', { name: 'Neraca', exact: true }).click();
     await expect(page.getByText('Neraca per Bulan')).toBeVisible();
     await expect(page.getByText('Kewajiban + Ekuitas').first()).toBeVisible();
+    await expect(page.getByText('Δ Aset vs Bulan Lalu')).toBeVisible();
     expect(errors).toEqual([]);
   });
 
