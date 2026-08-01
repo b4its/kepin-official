@@ -7,9 +7,10 @@
   import { api } from '$lib/api/client';
   import { accounts, currentRole, tenantApi, transactions } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
+  import { formatIDR } from '$lib/utils/currency';
   import { Pencil, RefreshCw, Trash2 } from '@lucide/svelte';
 
-  type BankAccount = { id: string; accountId: string; accountName?: string; bankName: string; maskedNumber: string; status: string };
+  type BankAccount = { id: string; accountId: string; accountName?: string; bankName: string; maskedNumber: string; status: string; glBalance?: string; statementCount?: number; unmatchedCount?: number };
   type BankTransaction = { id: string; bankAccountId: string; externalId: string; transactionDate: string; description: string; amount: string };
   type Match = { id: string; bankTransactionId: string; transactionId: string; confidence: string; status: string; matchedAt?: string | null; note?: string };
 
@@ -168,6 +169,15 @@
             <span class="rounded-full px-2 py-0.5 text-xs {bank.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-600'}">{bank.status === 'active' ? 'Aktif' : 'Nonaktif'}</span>
           </div>
           <p class="text-xs text-[hsl(var(--muted-foreground))]">{bank.maskedNumber || '-'} · {bank.accountName || bank.accountId}</p>
+          <div class="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+            <span class="rounded bg-[hsl(var(--muted))] px-2 py-0.5 font-medium tabular-nums">Saldo Buku: {formatIDR(Number(bank.glBalance ?? 0))}</span>
+            {#if (bank.statementCount ?? 0) > 0}
+              <span class="rounded bg-[hsl(var(--muted))] px-2 py-0.5 tabular-nums">{bank.statementCount} transaksi</span>
+            {/if}
+            {#if (bank.unmatchedCount ?? 0) > 0}
+              <span class="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700 tabular-nums">{bank.unmatchedCount} belum dicocokkan</span>
+            {/if}
+          </div>
         </div>
         {#if isOwner}
           <div class="flex items-center gap-1">

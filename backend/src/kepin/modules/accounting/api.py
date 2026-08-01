@@ -183,6 +183,9 @@ class BankAccountSchema(ApiSchema):
     bank_name: str
     masked_number: str = ""
     status: str = "active"
+    gl_balance: str = "0.00"
+    statement_count: int = 0
+    unmatched_count: int = 0
 
 
 class BankAccountCreate(ApiSchema):
@@ -1364,6 +1367,58 @@ async def list_bank_accounts(
             .order_by(BankAccount.bank_name)
         )
     ).all()
+    bank_ids = [str(bank.id) for bank, _ in rows]
+    account_ids = [str(bank.account_id) for bank, _ in rows]
+
+    gl_balances = {}
+    if account_ids:
+        gl_rows = (
+            await session.execute(
+                select(JournalLine.account_id, func.sum(JournalLine.debit - JournalLine.credit))
+                .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+                .where(
+                    JournalLine.tenant_id == tenant.id,
+                    JournalEntry.tenant_id == tenant.id,
+                    JournalEntry.status.in_(("posted", "reversed")),
+                    JournalLine.account_id.in_(account_ids),
+                )
+                .group_by(JournalLine.account_id)
+            )
+        ).all()
+        gl_balances = {str(account_id): bal for account_id, bal in gl_rows}
+
+    statement_counts = {}
+    unmatched_counts = {}
+    if bank_ids:
+        cnt_rows = (
+            await session.execute(
+                select(BankTransaction.bank_account_id, func.count())
+                .where(
+                    BankTransaction.tenant_id == tenant.id,
+                    BankTransaction.bank_account_id.in_(bank_ids),
+                )
+                .group_by(BankTransaction.bank_account_id)
+            )
+        ).all()
+        statement_counts = {str(bank_account_id): n for bank_account_id, n in cnt_rows}
+
+        unm_rows = (
+            await session.execute(
+                select(BankTransaction.bank_account_id, func.count(BankTransaction.id))
+                .outerjoin(
+                    ReconciliationMatch,
+                    ReconciliationMatch.bank_transaction_id == BankTransaction.id,
+                )
+                .where(
+                    BankTransaction.tenant_id == tenant.id,
+                    BankTransaction.bank_account_id.in_(bank_ids),
+                    ReconciliationMatch.id.is_(None),
+                )
+                .group_by(BankTransaction.bank_account_id)
+            )
+        ).all()
+        unmatched_counts = {str(bank_account_id): n for bank_account_id, n in unm_rows}
+
     return [
         BankAccountSchema(
             id=str(bank.id),
@@ -1372,6 +1427,9 @@ async def list_bank_accounts(
             bank_name=bank.bank_name,
             masked_number=bank.masked_number,
             status=bank.status,
+            gl_balance=money_str(gl_balances.get(str(bank.account_id), Decimal("0"))),
+            statement_count=statement_counts.get(str(bank.id), 0),
+            unmatched_count=unmatched_counts.get(str(bank.id), 0),
         )
         for bank, account_name in rows
     ]

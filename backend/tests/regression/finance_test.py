@@ -1,5 +1,7 @@
 import sys
 
+from decimal import Decimal
+
 import httpx
 
 BASE = "http://127.0.0.1:8000/api/v1"
@@ -216,6 +218,15 @@ check("delete missing bank 404", sc == 404, f"{sc}")
 
 check("bank count restored", len(jget("/bank-accounts")[1]) == bank_count, f"{bank_count}")
 
+sc, body = jget("/bank-accounts")
+banks = body
+seed_banks = [b for b in banks if b["bankName"] in ("BCA", "BNI", "BRI", "Bank Mandiri", "Bank Syariah")]
+check("seed banks present", len(seed_banks) == 5, f"{len(seed_banks)}")
+check("bank glBalance present", all(b.get("glBalance") for b in seed_banks), str([b.get("glBalance") for b in seed_banks]))
+check("bank glBalance numeric", all(Decimal(b["glBalance"]) != 0 for b in seed_banks), str([b["glBalance"] for b in seed_banks]))
+check("bank statementCount int", all(isinstance(b.get("statementCount"), int) and b.get("statementCount") >= 0 for b in banks), str([b.get("statementCount") for b in banks]))
+check("bank unmatchedCount int", all(isinstance(b.get("unmatchedCount"), int) and b.get("unmatchedCount") >= 0 for b in banks), str([b.get("unmatchedCount") for b in banks]))
+
 # ═══════════════════════════════════════════════════════════════════
 #  CASH FLOW — bank accounts must be included
 # ═══════════════════════════════════════════════════════════════════
@@ -225,8 +236,6 @@ def cash_flow_net():
     assert sc == 200, f"cash-flow {sc}"
     return Decimal(body["summary"]["netCashFlow"]), len(body.get("rows", []))
 
-
-from decimal import Decimal  # noqa: E402
 
 sc, body = jget("/reports/cash-flow?startDate=2026-01-01&endDate=2026-12-31")
 check("cash-flow 200", sc == 200, f"{sc}")

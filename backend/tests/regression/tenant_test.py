@@ -48,6 +48,10 @@ def jpatch(path, payload, headers=H):
         b = {}
     return r.status_code, b
 
+def jdelete(path, headers=H):
+    r = C.delete(f"/tenants/{S}{path}", headers=headers)
+    return r.status_code, (r.json() if r.status_code != 204 else {})
+
 def jdel(path, headers=H):
     r = C.delete(f"/tenants/{S}{path}", headers=headers)
     return r.status_code, (r.json() if r.content else {})
@@ -133,13 +137,15 @@ check("branch patch", c == 200, f"({c})")
 c, b = jdel(f"/branches/{branch_id}")
 check("branch delete", c == 204, f"({c})")
 
-# ── bank account (tmp, leave residue note) ──
+# ── bank account (tmp, cleaned up) ──
 def acct(code):
     return jget(f"/accounts?search={code}&pageSize=100")[1]["items"][0]
 
 asset_acct = acct("1-1002")
 c, b = jpost("/bank-accounts", {"account_id": asset_acct["id"], "bank_name": f"TMP Bank {rid}", "masked_number": f"****{rid[-4:]}", "account_holder": "Budi"})
 check("bank-account create", c == 201, f"({c})")
+c, _ = jdelete(f"/bank-accounts/{b['id']}")
+check("bank-account delete cleanup", c == 204, f"({c})")
 
 # ── journal draft → post → reverse (tmp, GL-true) ──
 cash = acct("1-1002")
