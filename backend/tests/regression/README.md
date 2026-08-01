@@ -20,6 +20,7 @@ Skrip:
 - `smtp_test.py`              — 8 checks pengiriman email reset lewat sink SMTP.
 - `smtp_sink.py`              — aiosmtpd sink di 127.0.0.1:1025 → `/tmp/smtp_emails.log`.
 - `integration_sync_test.py`  — 13 checks lifecycle integrasi (CRUD, sync batch, dedupe, error paths).
+- `finance_test.py`           — 50+ checks manajemen keuangan: siklus tahun buku (buat/tutup/buka ulang, overlap, RBAC), rekening bank (PATCH/DELETE, guard transaksi), transaksi bank (hapus, external ID reusable), audit trail. Idempoten (purge FY uji sendiri).
 - `reconcile.py`              — verifikasi subledger ↔ GL (ap/sales payable, stok, piutang); tanpa assert, print MATCH/CHECK.
 
 Catatan `reconcile.py`: output akhir `ALL CHECKS PASS` menandakan buku seimbang.

@@ -16,6 +16,7 @@ from kepin.core.money import to_money, money_str
 from kepin.core.posting import post_journal as posting_engine_post, post_direct_journal
 from kepin.core.audit import record_audit
 from kepin.core import closing
+from kepin.core.periods import build_fiscal_year
 from kepin.db.models import Account, AccountBalance, AccountingPeriod, FiscalYear, JournalEntry, JournalLine, Membership, Transaction, User, BankAccount, BankTransaction, ReconciliationMatch
 
 
@@ -188,6 +189,12 @@ class BankAccountCreate(ApiSchema):
     account_id: str
     bank_name: str
     masked_number: str = ""
+
+
+class BankAccountUpdate(ApiSchema):
+    bank_name: str | None = None
+    masked_number: str | None = None
+    status: str | None = None
 
 
 class BankTransactionSchema(ApiSchema):
@@ -1406,6 +1413,130 @@ async def create_bank_account(
     )
 
 
+@router.patch(
+    "/bank-accounts/{bank_account_id}",
+    response_model=BankAccountSchema,
+    summary="Update Rekening Bank",
+    description="Memperbarui nama bank, nomor tersamarkan, atau status rekening.",
+)
+async def update_bank_account(
+    bank_account_id: str = Path(...),
+    body: BankAccountUpdate = ...,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    bank = (
+        await session.execute(
+            select(BankAccount).where(
+                BankAccount.id == bank_account_id,
+                BankAccount.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not bank:
+        raise NotFoundError(message="Rekening bank tidak ditemukan")
+
+    before = {
+        "bankName": bank.bank_name,
+        "maskedNumber": bank.masked_number,
+        "status": bank.status,
+    }
+    if body.bank_name is not None:
+        bank_name = body.bank_name.strip()
+        if not bank_name:
+            raise ValidationError(message="Nama bank wajib diisi")
+        bank.bank_name = bank_name
+    if body.masked_number is not None:
+        bank.masked_number = body.masked_number.strip()
+    if body.status is not None:
+        if body.status not in ("active", "inactive"):
+            raise ValidationError(message="Status rekening harus 'active' atau 'inactive'")
+        bank.status = body.status
+    bank.updated_at = datetime.now(timezone.utc)
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="bank_account.update",
+        module="accounting",
+        object_type="bank_account",
+        object_id=str(bank.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        before=before,
+        after={
+            "bankName": bank.bank_name,
+            "maskedNumber": bank.masked_number,
+            "status": bank.status,
+        },
+    )
+    await session.commit()
+    await session.refresh(bank)
+
+    account_name = (
+        await session.execute(select(Account.name).where(Account.id == bank.account_id))
+    ).scalar_one_or_none()
+    return BankAccountSchema(
+        id=str(bank.id),
+        account_id=str(bank.account_id),
+        account_name=account_name,
+        bank_name=bank.bank_name,
+        masked_number=bank.masked_number,
+        status=bank.status,
+    )
+
+
+@router.delete(
+    "/bank-accounts/{bank_account_id}",
+    status_code=204,
+    summary="Hapus Rekening Bank",
+    description="Menghapus rekening bank (hanya jika tidak memiliki transaksi bank).",
+)
+async def delete_bank_account(
+    bank_account_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    bank = (
+        await session.execute(
+            select(BankAccount).where(
+                BankAccount.id == bank_account_id,
+                BankAccount.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not bank:
+        raise NotFoundError(message="Rekening bank tidak ditemukan")
+
+    txn_count = (
+        await session.execute(
+            select(func.count())
+            .select_from(BankTransaction)
+            .where(BankTransaction.bank_account_id == bank.id)
+        )
+    ).scalar() or 0
+    if txn_count > 0:
+        raise ConflictError(message="Tidak dapat menghapus rekening yang memiliki transaksi bank")
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="bank_account.delete",
+        module="accounting",
+        object_type="bank_account",
+        object_id=str(bank.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        before={"bankName": bank.bank_name, "status": bank.status},
+    )
+    await session.delete(bank)
+    await session.commit()
+
+
 @router.get("/bank-transactions", response_model=PaginatedResponse[BankTransactionSchema], summary="Daftar Transaksi Bank")
 async def list_bank_transactions(
     params: ListParams = Depends(),
@@ -1498,6 +1629,59 @@ async def create_bank_transaction(
         description=transaction.description,
         amount=money_str(transaction.amount),
     )
+
+
+@router.delete(
+    "/bank-transactions/{bank_transaction_id}",
+    status_code=204,
+    summary="Hapus Transaksi Bank",
+    description="Menghapus transaksi bank yang salah impor (hanya jika belum dicocokkan dalam rekonsiliasi).",
+)
+async def delete_bank_transaction(
+    bank_transaction_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    txn = (
+        await session.execute(
+            select(BankTransaction).where(
+                BankTransaction.id == bank_transaction_id,
+                BankTransaction.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not txn:
+        raise NotFoundError(message="Transaksi bank tidak ditemukan")
+
+    match_count = (
+        await session.execute(
+            select(func.count())
+            .select_from(ReconciliationMatch)
+            .where(ReconciliationMatch.bank_transaction_id == txn.id)
+        )
+    ).scalar() or 0
+    if match_count > 0:
+        raise ConflictError(message="Tidak dapat menghapus transaksi yang sudah dicocokkan dengan rekonsiliasi")
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="bank_transaction.delete",
+        module="accounting",
+        object_type="bank_transaction",
+        object_id=str(txn.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        before={
+            "externalId": txn.external_id,
+            "amount": money_str(txn.amount),
+            "transactionDate": txn.transaction_date.isoformat(),
+        },
+    )
+    await session.delete(txn)
+    await session.commit()
 
 
 @router.get(
@@ -1692,6 +1876,12 @@ class FiscalYearSchema(ApiSchema):
     periods: list[dict] = []
 
 
+class FiscalYearCreate(ApiSchema):
+    name: str | None = None
+    start_date: date
+    end_date: date
+
+
 class PeriodSchema(ApiSchema):
     id: str
     name: str
@@ -1752,6 +1942,231 @@ async def list_fiscal_years(
             )
         )
     return items
+
+
+@router.post(
+    "/fiscal-years",
+    response_model=FiscalYearSchema,
+    status_code=201,
+    summary="Buat Tahun Buku",
+    description="Membuat tahun buku baru beserta 12 periode bulanan. Rentang tidak boleh tumpang tindih dengan tahun buku yang sudah ada.",
+)
+async def create_fiscal_year(
+    body: FiscalYearCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if body.start_date > body.end_date:
+        raise ValidationError(message="Tanggal mulai harus sebelum tanggal akhir")
+
+    name = (body.name or "").strip() or f"Tahun Buku {body.start_date.year}"
+    if len(name) > 80:
+        raise ValidationError(message="Nama tahun buku terlalu panjang (maks 80 karakter)")
+
+    overlap = (
+        await session.execute(
+            select(FiscalYear.id).where(
+                FiscalYear.tenant_id == tenant.id,
+                FiscalYear.start_date <= body.end_date,
+                FiscalYear.end_date >= body.start_date,
+            )
+        )
+    ).scalar_one_or_none()
+    if overlap:
+        raise ConflictError(message="Sudah ada tahun buku untuk rentang tanggal tersebut")
+
+    same_name = (
+        await session.execute(
+            select(FiscalYear.id).where(
+                FiscalYear.tenant_id == tenant.id,
+                FiscalYear.name == name,
+            )
+        )
+    ).scalar_one_or_none()
+    if same_name:
+        raise ConflictError(message=f"Nama tahun buku '{name}' sudah digunakan")
+
+    fy, periods = await build_fiscal_year(
+        session=session,
+        tenant_id=tenant.id,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        name=name,
+    )
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="fiscal_year.create",
+        module="accounting",
+        object_type="fiscal_year",
+        object_id=str(fy.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={
+            "name": fy.name,
+            "startDate": fy.start_date.isoformat(),
+            "endDate": fy.end_date.isoformat(),
+            "periodCount": len(periods),
+        },
+    )
+    await session.commit()
+
+    return FiscalYearSchema(
+        id=str(fy.id),
+        name=fy.name,
+        start_date=fy.start_date,
+        end_date=fy.end_date,
+        status=fy.status,
+        periods=[
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "startDate": p.start_date.isoformat(),
+                "endDate": p.end_date.isoformat(),
+                "status": p.status,
+            }
+            for p in periods
+        ],
+    )
+
+
+@router.post(
+    "/fiscal-years/{fiscal_year_id}/close",
+    response_model=FiscalYearSchema,
+    summary="Tutup Tahun Buku",
+    description="Menutup tahun buku. Semua periode harus sudah ditutup terlebih dahulu.",
+)
+async def close_fiscal_year(
+    fiscal_year_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    fy = (
+        await session.execute(
+            select(FiscalYear).where(
+                FiscalYear.id == fiscal_year_id,
+                FiscalYear.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not fy:
+        raise NotFoundError(message="Tahun buku tidak ditemukan")
+    if fy.status == "closed":
+        raise ValidationError(message="Tahun buku sudah ditutup")
+
+    open_periods = (
+        (
+            await session.execute(
+                select(AccountingPeriod)
+                .where(
+                    AccountingPeriod.fiscal_year_id == fy.id,
+                    AccountingPeriod.status != "closed",
+                )
+                .order_by(AccountingPeriod.start_date)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if open_periods:
+        names = ", ".join(p.name for p in open_periods[:5])
+        raise ValidationError(
+            message=f"Tidak dapat menutup tahun buku selama periode masih terbuka: {names}"
+        )
+
+    fy.status = "closed"
+    fy.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="fiscal_year.close",
+        module="accounting",
+        object_type="fiscal_year",
+        object_id=str(fy.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"name": fy.name, "status": fy.status},
+    )
+    await session.commit()
+    await session.refresh(fy)
+    return FiscalYearSchema(
+        id=str(fy.id),
+        name=fy.name,
+        start_date=fy.start_date,
+        end_date=fy.end_date,
+        status=fy.status,
+        periods=[],
+    )
+
+
+@router.post(
+    "/fiscal-years/{fiscal_year_id}/reopen",
+    response_model=FiscalYearSchema,
+    summary="Buka Kembali Tahun Buku",
+    description="Membuka kembali tahun buku yang sudah ditutup (khusus tenant_owner).",
+)
+async def reopen_fiscal_year(
+    fiscal_year_id: str = Path(...),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    fy = (
+        await session.execute(
+            select(FiscalYear).where(
+                FiscalYear.id == fiscal_year_id,
+                FiscalYear.tenant_id == tenant.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not fy:
+        raise NotFoundError(message="Tahun buku tidak ditemukan")
+    if fy.status == "open":
+        raise ValidationError(message="Tahun buku sudah terbuka")
+
+    locked_periods = (
+        (
+            await session.execute(
+                select(AccountingPeriod.id).where(
+                    AccountingPeriod.fiscal_year_id == fy.id,
+                    AccountingPeriod.status == "locked",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if locked_periods:
+        raise ValidationError(message="Tahun buku tidak dapat dibuka selama ada periode terkunci")
+
+    fy.status = "open"
+    fy.updated_at = datetime.now(timezone.utc)
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="fiscal_year.reopen",
+        module="accounting",
+        object_type="fiscal_year",
+        object_id=str(fy.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"name": fy.name, "status": fy.status},
+    )
+    await session.commit()
+    await session.refresh(fy)
+    return FiscalYearSchema(
+        id=str(fy.id),
+        name=fy.name,
+        start_date=fy.start_date,
+        end_date=fy.end_date,
+        status=fy.status,
+        periods=[],
+    )
 
 
 @router.post("/periods/{period_id}/close", response_model=PeriodSchema, summary="Tutup Periode", description="Menutup periode akuntansi (status menjadi closed, laba/rugi ditutup ke Laba Ditahan)")

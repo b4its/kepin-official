@@ -128,4 +128,64 @@ test.describe('Owner UI Interaction', () => {
     expect(errors).toEqual([]);
     await expect(page.locator('body')).toContainText(/notifikasi/i, { timeout: 10_000 });
   });
+
+  test('fiscal years page lists years and opens create modal', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+
+    await page.goto(`/app/${TENANT}/accounting/fiscal-years`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(800);
+    expect(errors).toEqual([]);
+
+    await expect(page.locator('body')).toContainText(/tahun buku/i, { timeout: 10_000 });
+
+    const createBtn = page.locator('button').filter({ hasText: /buat tahun buku/i }).first();
+    await expect(createBtn).toBeVisible();
+    await createBtn.click();
+
+    const modal = page.locator('[role="dialog"], .modal, .MuiModal-root').first();
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#fy-start')).toBeVisible();
+    await expect(page.locator('#fy-end')).toBeVisible();
+  });
+
+  test('fiscal years modal creates a run-scoped fiscal year', async ({ page }) => {
+    const year = 2035 + (Date.now() % 20);
+    const start = `${year}-04-01`;
+    const end = `${year + 1}-03-31`;
+    const name = `Tahun Buku E2E ${year}`;
+
+    await page.goto(`/app/${TENANT}/accounting/fiscal-years`);
+    await page.waitForLoadState('networkidle');
+
+    const createBtn = page.locator('button').filter({ hasText: /buat tahun buku/i }).first();
+    await expect(createBtn).toBeVisible();
+    await createBtn.click();
+
+    const modal = page.locator('[role="dialog"], .modal, .MuiModal-root').first();
+    await expect(modal).toBeVisible();
+
+    await page.locator('#fy-name').fill(name);
+    await page.locator('#fy-start').fill(start);
+    await page.locator('#fy-end').fill(end);
+    await page.locator('button').filter({ hasText: /simpan/i }).first().click();
+    await expect(modal).not.toBeVisible({ timeout: 10_000 });
+
+    await expect(page.locator('body')).toContainText(name, { timeout: 10_000 });
+    await expect(page.locator('body')).toContainText(/per bulan|periode 20/i, { timeout: 10_000 });
+  });
+
+  test('reconciliation page shows bank accounts and transactions tables', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+
+    await page.goto(`/app/${TENANT}/accounting/reconciliation`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(800);
+    expect(errors).toEqual([]);
+
+    await expect(page.locator('body')).toContainText(/rekening bank/i, { timeout: 10_000 });
+    await expect(page.locator('body')).toContainText(/transaksi bank/i, { timeout: 10_000 });
+  });
 });

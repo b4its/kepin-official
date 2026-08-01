@@ -628,6 +628,58 @@ Konfirmasi match.
 
 Hapus match.
 
+#### GET `/api/v1/tenants/{tenantSlug}/bank-accounts`
+
+Daftar rekening bank (nama, nomor tersamarkan, status, akun GL).
+
+#### POST `/api/v1/tenants/{tenantSlug}/bank-accounts`
+
+Tambah rekening bank (khusus owner). Body: `{ accountId, bankName, maskedNumber? }`.
+
+#### PATCH `/api/v1/tenants/{tenantSlug}/bank-accounts/{bank_account_id}`
+
+Update rekening bank (khusus owner). Field opsional: `bankName`, `maskedNumber`, `status` (`active`/`inactive`).
+
+#### DELETE `/api/v1/tenants/{tenantSlug}/bank-accounts/{bank_account_id}`
+
+Hapus rekening bank (khusus owner). Ditolak `409` jika rekening masih memiliki transaksi bank.
+
+#### GET `/api/v1/tenants/{tenantSlug}/bank-transactions`
+
+Daftar transaksi bank. Mendukung `?search=` (external ID/deskripsi) dan `?bankAccountId=`.
+
+#### POST `/api/v1/tenants/{tenantSlug}/bank-transactions`
+
+Impor transaksi bank manual (khusus owner). External ID harus unik.
+
+#### DELETE `/api/v1/tenants/{tenantSlug}/bank-transactions/{bank_transaction_id}`
+
+Hapus transaksi bank yang salah impor (khusus owner). Ditolak `409` jika sudah dicocokkan dengan rekonsiliasi.
+
+#### GET `/api/v1/tenants/{tenantSlug}/fiscal-years`
+
+Daftar tahun buku beserta 12 periode bulanannya.
+
+#### POST `/api/v1/tenants/{tenantSlug}/fiscal-years`
+
+Buat tahun buku baru (khusus owner). Body: `{ name?, startDate, endDate }`. Membuat 12 periode; ditolak `409` jika rentang tumpang tindih dengan tahun buku lain atau nama duplikat.
+
+#### POST `/api/v1/tenants/{tenantSlug}/fiscal-years/{fiscal_year_id}/close`
+
+Tutup tahun buku (khusus owner). Semua periode harus sudah ditutup, jika tidak `422` dengan daftar periode terbuka.
+
+#### POST `/api/v1/tenants/{tenantSlug}/fiscal-years/{fiscal_year_id}/reopen`
+
+Buka kembali tahun buku yang ditutup (khusus owner). Ditolak `422` jika ada periode terkunci.
+
+#### POST `/api/v1/tenants/{tenantSlug}/periods/{period_id}/close`
+
+Tutup periode akuntansi (owner): laba/rugi ditutup ke Laba Ditahan.
+
+#### POST `/api/v1/tenants/{tenantSlug}/periods/{period_id}/reopen`
+
+Buka kembali periode (owner): membuat jurnal pembalik penutupan.
+
 ### Sales
 
 #### GET `/api/v1/tenants/{tenantSlug}/customers`

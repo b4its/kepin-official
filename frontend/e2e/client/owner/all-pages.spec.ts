@@ -13,6 +13,7 @@ const PAGES = [
   { route: `/app/${TENANT}/transactions`, label: 'Transaksi' },
   { route: `/app/${TENANT}/accounting/chart-of-accounts`, label: 'Chart of Accounts' },
   { route: `/app/${TENANT}/accounting/journals`, label: 'Jurnal' },
+  { route: `/app/${TENANT}/accounting/fiscal-years`, label: 'Tahun Buku' },
   { route: `/app/${TENANT}/accounting/reconciliation`, label: 'Rekonsiliasi' },
   { route: `/app/${TENANT}/reports`, label: 'Laporan' },
   { route: `/app/${TENANT}/reports/investor`, label: 'Investor Report' },

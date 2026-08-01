@@ -47,8 +47,17 @@ export async function postJournal(slug: string, id: string) { return api(`/tenan
 export async function reverseJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/reverse`, { method: 'POST' }); }
 export async function getBankAccounts(slug: string) { return api(`/tenants/${slug}/bank-accounts`); }
 export async function createBankAccount(slug: string, data: { accountId: string; bankName: string; maskedNumber?: string }) { return api(`/tenants/${slug}/bank-accounts`, { method: 'POST', body: JSON.stringify(data) }); }
-export async function getBankTransactions(slug: string) { return api(`/tenants/${slug}/bank-transactions`); }
+export async function updateBankAccount(slug: string, id: string, data: { bankName?: string; maskedNumber?: string; status?: string }) { return api(`/tenants/${slug}/bank-accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+export async function deleteBankAccount(slug: string, id: string) { return api(`/tenants/${slug}/bank-accounts/${id}`, { method: 'DELETE' }); }
+export async function getBankTransactions(slug: string, params?: string) { return api(`/tenants/${slug}/bank-transactions${params || ''}`); }
 export async function createBankTransaction(slug: string, data: { bankAccountId: string; externalId: string; transactionDate: string; description?: string; amount: string }) { return api(`/tenants/${slug}/bank-transactions`, { method: 'POST', body: JSON.stringify(data) }); }
+export async function deleteBankTransaction(slug: string, id: string) { return api(`/tenants/${slug}/bank-transactions/${id}`, { method: 'DELETE' }); }
+export async function getFiscalYears(slug: string) { return api(`/tenants/${slug}/fiscal-years`); }
+export async function createFiscalYear(slug: string, data: { name?: string; startDate: string; endDate: string }) { return api(`/tenants/${slug}/fiscal-years`, { method: 'POST', body: JSON.stringify(data) }); }
+export async function closeFiscalYear(slug: string, id: string) { return api(`/tenants/${slug}/fiscal-years/${id}/close`, { method: 'POST' }); }
+export async function reopenFiscalYear(slug: string, id: string) { return api(`/tenants/${slug}/fiscal-years/${id}/reopen`, { method: 'POST' }); }
+export async function closePeriod(slug: string, id: string) { return api(`/tenants/${slug}/periods/${id}/close`, { method: 'POST' }); }
+export async function reopenPeriod(slug: string, id: string) { return api(`/tenants/${slug}/periods/${id}/reopen`, { method: 'POST' }); }
 export async function createReconciliationMatch(slug: string, data: { bankTransactionId: string; transactionId: string; confidence?: string; note?: string }) { return api(`/tenants/${slug}/reconciliation/matches`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function confirmReconciliationMatch(slug: string, id: string) { return api(`/tenants/${slug}/reconciliation/matches/${id}/confirm`, { method: 'POST' }); }
 export async function getCustomers(slug: string) { return api(`/tenants/${slug}/customers`); }

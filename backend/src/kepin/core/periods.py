@@ -1,12 +1,68 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kepin.core.ids import new_uuid
 from kepin.db.models import AccountingPeriod, FiscalYear
+
+
+async def build_fiscal_year(
+    session: AsyncSession,
+    tenant_id: str,
+    start_date: date,
+    end_date: date,
+    name: str | None = None,
+) -> tuple[FiscalYear, list[AccountingPeriod]]:
+    """Buat fiscal year baru secara eksplisit beserta 12 periode bulanannya.
+
+    Tidak melakukan validasi tumpang-tindih; pemanggil bertanggung jawab
+    memastikan rentang belum pernah digunakan.
+    """
+    if start_date > end_date:
+        raise ValueError("start_date must be before end_date")
+
+    fy = FiscalYear(
+        id=new_uuid(),
+        tenant_id=tenant_id,
+        name=name or f"Tahun Buku {start_date.year}",
+        start_date=start_date,
+        end_date=end_date,
+        status="open",
+    )
+    session.add(fy)
+    await session.flush()
+
+    periods: list[AccountingPeriod] = []
+    cursor = start_date
+    while cursor <= end_date:
+        if cursor.month == 12:
+            period_end = date(cursor.year, 12, 31)
+        else:
+            period_end = date(cursor.year, cursor.month + 1, 1) - timedelta(days=1)
+        period_end = min(period_end, end_date)
+
+        period = AccountingPeriod(
+            id=new_uuid(),
+            tenant_id=tenant_id,
+            fiscal_year_id=fy.id,
+            name=f"Periode {cursor.strftime('%Y-%m')}",
+            start_date=cursor,
+            end_date=period_end,
+            status="open",
+        )
+        session.add(period)
+        periods.append(period)
+
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+
+    await session.flush()
+    return fy, periods
 
 
 async def ensure_fiscal_year(

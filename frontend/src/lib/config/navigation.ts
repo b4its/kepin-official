@@ -20,6 +20,7 @@ import {
   Bell,
   LayoutDashboard,
   KeyRound,
+  CalendarDays,
   type Icon,
 } from '@lucide/svelte';
 
@@ -91,6 +92,7 @@ export const clientNavigation: NavigationGroup[] = [
       { key: 'accounting_transactions', label: 'Transaksi', href: '/transactions', icon: DollarSign },
       { key: 'accounting_journals', label: 'Jurnal', href: '/accounting/journals', icon: BookOpen },
       { key: 'accounting_coa', label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', icon: FileText },
+      { key: 'accounting_fiscal', label: 'Tahun Buku', href: '/accounting/fiscal-years', icon: CalendarDays },
       { key: 'accounting_recon', label: 'Rekonsiliasi', href: '/accounting/reconciliation', icon: CreditCard },
     ],
   },
