@@ -271,7 +271,7 @@ Report HTML tersedia di `frontend/playwright-report/index.html`. Artifact kegaga
 |-------|-------|----------|--------|------|
 | Admin | admin@kepin.io | admin123 | — | Platform admin |
 | Owner | budi@tokomaju.com | budi123 | toko-maju | tenant_owner |
-| Employee | ani@tokomaju.com | ani123 | toko-maju | employee |
+| Employee | ani@tokomaju.com | ani12345 | toko-maju | employee |
 | Employee 2 | siti@warungsegar.com | siti123 | warung-segar | employee |
 
 ## Struktur Test File

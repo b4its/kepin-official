@@ -63,7 +63,7 @@ check("short password rejected", code == 400, f"({code})")
 code, body = post("/auth/reset-password", {"token": token, "new_password": "baru12345"})
 check("reset with valid token", code == 200, f"({code})")
 
-code, body = post("/auth/login", {"email": EMAIL, "password": "ani123"})
+code, body = post("/auth/login", {"email": EMAIL, "password": "ani12345"})
 check("old password fails", code == 401, f"({code})")
 
 code, body = post("/auth/login", {"email": EMAIL, "password": "baru12345"})

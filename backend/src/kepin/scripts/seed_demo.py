@@ -555,7 +555,7 @@ async def main():
                  password_hash=hash_password("budi123"),
                  status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
             User(id=UID_ANI, name="Ani Lestari", email="ani@tokomaju.com",
-                 password_hash=hash_password("ani123"),
+                 password_hash=hash_password("ani12345"),
                  status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
             User(id=UID_SITI, name="Siti Nurhaliza", email="siti@warungsegar.com",
                  password_hash=hash_password("siti123"),
@@ -1124,7 +1124,7 @@ async def main():
         print()
         print("Manager Toko Maju:")
         print("  Email: ani@tokomaju.com")
-        print("  Password: ani123")
+        print("  Password: ani12345")
         print("  Name: Ani Lestari")
         print("  Role: Manager")
         print()

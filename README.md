@@ -292,7 +292,9 @@ Akun demo:
 | Email | Password | Tenant |
 |---|---|---|
 | `budi@tokomaju.com` | `budi123` | `toko-maju` |
+| `ani@tokomaju.com` | `ani12345` | `toko-maju` |
 | `siti@warungsegar.com` | `siti123` | `warung-segar` |
+| `admin@kepin.io` | `admin123` | — (platform admin) |
 
 ### Verifikasi
 - Frontend: http://localhost:5173
