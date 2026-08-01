@@ -44,7 +44,7 @@ async def close_period(
                 .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == tenant_id))
                 .where(
                     JournalEntry.tenant_id == tenant_id,
-                    JournalEntry.status == "posted",
+                    JournalEntry.status.in_(("posted", "reversed")),
                     JournalEntry.journal_date.between(period.start_date, period.end_date),
                     Account.type.in_(["income", "expense"]),
                 )

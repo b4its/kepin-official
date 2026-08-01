@@ -13,6 +13,7 @@ from kepin.core.config import get_settings
 from kepin.db.base import Base
 from kepin.db.models import (
     Account,
+    BankAccount,
     Branch,
     Customer,
     CustomerPayment,
@@ -660,6 +661,22 @@ async def main():
 
             accounts = generate_accounts(tid)
             session.add_all(accounts)
+
+            demo_banks = [
+                ("1-1003", "BCA"),
+                ("1-1004", "Bank Mandiri"),
+                ("1-1005", "BNI"),
+                ("1-1006", "BRI"),
+                ("1-1007", "Bank Syariah"),
+            ]
+            for acc in accounts:
+                if acc.code in dict(demo_banks):
+                    session.add(BankAccount(
+                        id=str(uuid4()), tenant_id=tid, account_id=acc.id,
+                        bank_name=dict(demo_banks)[acc.code],
+                        masked_number=f"**** {random.randint(1000, 9999)}",
+                        status="active", created_at=NOW, updated_at=NOW,
+                    ))
 
             customers = generate_customers(tid, td["sector"], 200)
             session.add_all(customers)

@@ -25,12 +25,14 @@ Skrip:
 
 Catatan `reconcile.py`: output akhir `ALL CHECKS PASS` menandakan buku seimbang.
 
-Syarat untuk `smtp_test.py` / `reset_test.py`:
+Syarat untuk `smtp_test.py` / `reset_test.py`: sink SMTP berjalan sebagai
+service Compose `smtp-sink` (`docker compose --profile full up -d`).
+Log email bersama di volume `smtp-emails` (terlihat dari kepin-backend di
+`/tmp/smtp_emails.log`).
+
+Bila menjalankan backend tanpa Compose, nyalakan sink manual:
 
 ```sh
-rtk docker exec kepin-backend pip install -q aiosmtpd
-rtk docker cp backend/tests/regression/smtp_sink.py kepin-backend:/tmp/
-rtk docker exec -d kepin-backend python /tmp/smtp_sink.py
+pip install aiosmtpd
+python smtp_sink.py
 ```
-
-Catatan: sink mati saat container di-recreate; jalankan ulang bila perlu.

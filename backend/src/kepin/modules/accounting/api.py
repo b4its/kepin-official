@@ -217,6 +217,12 @@ class BankTransactionCreate(ApiSchema):
 # ── Helpers ──────────────────────────────────────────────────────────
 
 
+def _journal_statuses():
+    """Jurnal yang diperhitungkan (posted + reversed) agar pasangan
+    original+reversal netral di saldo akun."""
+    return JournalEntry.status.in_(("posted", "reversed"))
+
+
 def _generate_number(prefix: str = "DOC") -> str:
     ts = datetime.now()
     return f"{prefix}-{ts.strftime('%Y%m%d%H%M%S')}-{ts.microsecond // 1000:03d}"
@@ -442,7 +448,7 @@ async def get_account_balance(
         .where(
             JournalLine.tenant_id == tenant.id,
             JournalLine.account_id == account_id,
-            JournalEntry.status == "posted",
+            _journal_statuses(),
         )
     )
     debit_total, credit_total = result.one()

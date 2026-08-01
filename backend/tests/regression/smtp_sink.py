@@ -23,9 +23,9 @@ async def amain():
     if os.path.exists(path):
         os.remove(path)
     handler = FileHandler(path)
-    controller = Controller(handler, hostname="127.0.0.1", port=1025)
+    controller = Controller(handler, hostname="0.0.0.0", port=1025)
     controller.start()
-    print("SMTP sink on 127.0.0.1:1025 -> /tmp/smtp_emails.log", flush=True)
+    print("SMTP sink on 0.0.0.0:1025 -> /tmp/smtp_emails.log", flush=True)
     try:
         await asyncio.Event().wait()
     except (KeyboardInterrupt, asyncio.CancelledError):

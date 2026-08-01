@@ -20,6 +20,7 @@ from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.time import resolve_period
 from kepin.db.models import (
     Account,
+    BankAccount,
     Customer,
     CustomerPayment,
     GoodsReceipt,
@@ -42,6 +43,38 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 def _not_closing_journal():
     """Filter jurnal penutup (CLS-*) dan reversal-nya (REV-CLS-*) dari laporan laba/rugi."""
     return ~JournalEntry.journal_number.like("CLS-%"), ~JournalEntry.journal_number.like("REV-CLS-%")
+
+
+def _journal_statuses():
+    """Jurnal yang diperhitungkan laporan: posted + reversed.
+
+    Jurnal original yang di-reverse (status 'reversed') tetap dihitung agar
+    pasangan original+reversal-nya netral di laporan keuangan; tanpa ini
+    reversal akan tampil sebagai posisi berlawanan yang salah.
+    """
+    return JournalEntry.status.in_(("posted", "reversed"))
+
+
+async def _cash_account_ids(session: AsyncSession, tenant_id: str) -> list[str]:
+    """Akun kas tunai (nama mengandung 'kas') + akun GL yang terhubung rekening bank."""
+    bank_account_ids = (
+        await session.execute(
+            select(BankAccount.account_id).where(BankAccount.tenant_id == tenant_id)
+        )
+    ).scalars().all()
+    rows = (
+        await session.execute(
+            select(Account.id).where(
+                Account.tenant_id == tenant_id,
+                Account.type == "asset",
+                or_(
+                    Account.name.ilike("%kas%"),
+                    Account.id.in_(bank_account_ids),
+                ),
+            )
+        )
+    ).scalars().all()
+    return list(rows)
 
 
 class ReportMetadata(ApiSchema):
@@ -88,7 +121,7 @@ async def get_summary(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 JournalEntry.journal_number.not_like("CLS-%"),
                 JournalEntry.journal_number.not_like("REV-CLS-%"),
                 JournalEntry.journal_date.between(start, end),
@@ -116,7 +149,7 @@ async def get_summary(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 JournalEntry.journal_number.not_like("CLS-%"),
                 JournalEntry.journal_number.not_like("REV-CLS-%"),
                 JournalEntry.journal_date.between(start, end),
@@ -139,7 +172,7 @@ async def get_summary(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 JournalEntry.journal_number.not_like("CLS-%"),
                 JournalEntry.journal_number.not_like("REV-CLS-%"),
                 Account.type == "expense",
@@ -188,7 +221,7 @@ async def get_profit_loss(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 JournalEntry.journal_number.not_like("CLS-%"),
                 JournalEntry.journal_number.not_like("REV-CLS-%"),
                 Account.type.in_(["income", "expense"]),
@@ -242,7 +275,7 @@ async def get_trial_balance(
 
     conditions = [
         JournalEntry.tenant_id == ctx.id,
-        JournalEntry.status == "posted",
+        _journal_statuses(),
     ]
     if not include_closing:
         conditions.append(JournalEntry.journal_number.not_like("CLS-%"))
@@ -335,7 +368,7 @@ async def get_balance_sheet(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 Account.type.in_(["asset", "liability", "equity"]),
                 JournalEntry.journal_date <= end,
             )
@@ -380,15 +413,7 @@ async def get_cash_flow(
     start, end = params.resolve()
     metadata = _build_metadata(ctx, start, end)
 
-    cash_accounts = (
-        await session.execute(
-            select(Account.id).where(
-                Account.tenant_id == ctx.id,
-                Account.type == "asset",
-                Account.name.ilike("%kas%"),
-            )
-        )
-    ).scalars().all()
+    cash_accounts = await _cash_account_ids(session, ctx.id)
 
     if not cash_accounts:
         return {
@@ -411,7 +436,7 @@ async def get_cash_flow(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 JournalLine.account_id.in_(cash_accounts),
                 JournalEntry.journal_date.between(start, end),
             )
@@ -460,7 +485,7 @@ async def get_general_ledger(
 
     conditions = [
         JournalEntry.tenant_id == ctx.id,
-        JournalEntry.status == "posted",
+        _journal_statuses(),
         JournalEntry.journal_date.between(start, end),
     ]
     if account_id:
@@ -743,7 +768,7 @@ async def get_stock_valuation(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 Account.code == "1-3001",
             )
             .group_by(Account.code)
@@ -777,15 +802,7 @@ async def get_investor_report(
 ):
     today = date.today()
 
-    cash_accounts = (
-        await session.execute(
-            select(Account.id).where(
-                Account.tenant_id == ctx.id,
-                Account.type == "asset",
-                Account.name.ilike("%kas%"),
-            )
-        )
-    ).scalars().all()
+    cash_accounts = await _cash_account_ids(session, ctx.id)
     cash_position = Decimal("0")
     if cash_accounts:
         cash_rows = (
@@ -797,7 +814,7 @@ async def get_investor_report(
                 .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
                 .where(
                     JournalEntry.tenant_id == ctx.id,
-                    JournalEntry.status == "posted",
+                    _journal_statuses(),
                     JournalLine.account_id.in_(cash_accounts),
                     JournalEntry.journal_date <= today,
                 )
@@ -829,7 +846,7 @@ async def get_investor_report(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 JournalEntry.journal_number.not_like("CLS-%"),
                 JournalEntry.journal_number.not_like("REV-CLS-%"),
                 JournalEntry.journal_date >= six_months_ago,
@@ -853,7 +870,7 @@ async def get_investor_report(
             .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
             .where(
                 JournalEntry.tenant_id == ctx.id,
-                JournalEntry.status == "posted",
+                _journal_statuses(),
                 JournalEntry.journal_number.not_like("CLS-%"),
                 JournalEntry.journal_number.not_like("REV-CLS-%"),
                 Account.type == "expense",

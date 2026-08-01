@@ -33,7 +33,7 @@ services:
       AUTHORIZATION_ENABLED: "false"
       SQL_ECHO: "false"
       LOG_LEVEL: INFO
-      SMTP_HOST: 127.0.0.1
+      SMTP_HOST: smtp-sink
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
       SMTP_FROM: noreply@kepin.io
@@ -43,9 +43,28 @@ services:
     volumes:
       - ./backend/src:/app/src:ro
       - ./backend/alembic:/app/alembic:ro
+      - smtp-emails:/tmp
     depends_on:
       db:
         condition: service_healthy
+      smtp-sink:
+        condition: service_healthy
+
+  smtp-sink:
+    profiles: ["full"]
+    container_name: kepin-smtp-sink
+    restart: unless-stopped
+    image: python:3.13-slim
+    volumes:
+      - ./backend/tests/regression/smtp_sink.py:/app/smtp_sink.py:ro
+      - smtp-emails:/tmp
+    command: sh -c "pip install -q aiosmtpd && python /app/smtp_sink.py"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket,sys; sys.exit(0 if socket.socket().connect_ex(('127.0.0.1',1025))==0 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
     profiles: ["full"]
@@ -63,4 +82,6 @@ services:
 
 volumes:
   pgdata:
+    driver: local
+  smtp-emails:
     driver: local

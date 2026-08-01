@@ -22,6 +22,7 @@ from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.time import resolve_period
 from kepin.db.models import (
     Account,
+    BankAccount,
     Branch,
     Invoice,
     JournalEntry,
@@ -130,6 +131,12 @@ async def get_dashboard(
     expense = (await session.execute(expense_stmt)).scalar() or Decimal("0")
 
     gross_profit = income - expense
+
+    bank_account_ids = (
+        await session.execute(
+            select(BankAccount.account_id).where(BankAccount.tenant_id == tid)
+        )
+    ).scalars().all()
     cash_stmt = (
         select(
             func.coalesce(func.sum(JournalLine.debit - JournalLine.credit), 0)
@@ -139,9 +146,14 @@ async def get_dashboard(
         .join(Account, Account.id == JournalLine.account_id)
         .where(
             JournalEntry.tenant_id == tid,
-            JournalEntry.status == "posted",
+            JournalEntry.status.in_(("posted", "reversed")),
             Account.tenant_id == tid,
-            Account.code.in_(["1-1002", "1-1003"]),
+            Account.type == "asset",
+            or_(
+                Account.name.ilike("%kas%"),
+                Account.code.in_(["1-1002", "1-1003"]),
+                Account.id.in_(bank_account_ids),
+            ),
         )
     )
     cash_balance = (await session.execute(cash_stmt)).scalar() or Decimal("0")

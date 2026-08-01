@@ -217,6 +217,57 @@ check("delete missing bank 404", sc == 404, f"{sc}")
 check("bank count restored", len(jget("/bank-accounts")[1]) == bank_count, f"{bank_count}")
 
 # ═══════════════════════════════════════════════════════════════════
+#  CASH FLOW — bank accounts must be included
+# ═══════════════════════════════════════════════════════════════════
+
+def cash_flow_net():
+    sc, body = jget("/reports/cash-flow?startDate=2020-01-01&endDate=2030-12-31")
+    assert sc == 200, f"cash-flow {sc}"
+    return Decimal(body["summary"]["netCashFlow"]), len(body.get("rows", []))
+
+
+from decimal import Decimal  # noqa: E402
+
+sc, body = jget("/reports/cash-flow?startDate=2026-01-01&endDate=2026-12-31")
+check("cash-flow 200", sc == 200, f"{sc}")
+check("cash-flow has rows", len(body.get("rows", [])) > 0, f"{len(body.get('rows', []))} rows")
+check("cash-flow summary keys", set(body.get("summary", {})) == {"operating", "investing", "financing", "netCashFlow"}, str(body.get("summary", {})))
+
+before_net, before_rows = cash_flow_net()
+
+accts = jget("/accounts?pageSize=100")[1]["items"]
+bank_mandiri = next(a for a in accts if a["code"] == "1-1004")
+expense_acct = next(a for a in accts if a["type"] == "expense")
+years_list = jget("/fiscal-years")[1]
+open_periods = [p for y in years_list if y.get("status") == "open" for p in y.get("periods", []) if p.get("status") == "open"]
+open_periods.sort(key=lambda p: p["startDate"])
+check("open period exists", len(open_periods) > 0, f"{len(open_periods)}")
+journal_date = open_periods[0]["startDate"][:10] if open_periods else "2026-08-01"
+jrn = jpost("/journals", {
+    "journalDate": journal_date,
+    "reference": "CASHFLOW-TEST",
+    "description": "uji cash flow bank",
+    "lines": [
+        {"accountId": bank_mandiri["id"], "debit": "50000", "credit": "0", "description": "setoran uji"},
+        {"accountId": expense_acct["id"], "debit": "0", "credit": "50000", "description": "setoran uji"},
+    ],
+})
+check("journal create 201", jrn[0] == 201, f"{jrn[0]}")
+jid = jrn[1].get("id")
+
+sc, body = jpost(f"/journals/{jid}/post")
+check("journal post 200", sc == 200, f"{sc}")
+
+after_net, _ = cash_flow_net()
+check("cash-flow net +50000 from bank journal", after_net == before_net + Decimal("50000"), f"{before_net} -> {after_net}")
+
+sc, body = jpost(f"/journals/{jid}/reverse")
+check("journal reverse 200", sc == 200, f"{sc}")
+
+restored_net, _ = cash_flow_net()
+check("cash-flow net restored after reversal", restored_net == before_net, f"{before_net} -> {restored_net}")
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail
 # ═══════════════════════════════════════════════════════════════════
 

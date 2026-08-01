@@ -20,7 +20,7 @@ async def main():
             .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
             .where(
                 JournalLine.tenant_id == tid,
-                JournalEntry.status == "posted",
+                JournalEntry.status.in_(("posted", "reversed")),
                 Account.code.in_(["1-2001", "1-3001", "1-1002", "2-1001", "2-2005", "4-1001", "6-1001", "3-4001"]),
             )
             .group_by(Account.code, Account.name)
@@ -91,7 +91,7 @@ async def main():
         db_total, cr_total = (await s.execute(
             select(func.sum(JournalLine.debit), func.sum(JournalLine.credit))
             .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
-            .where(JournalLine.tenant_id == tid, JournalEntry.status == "posted")
+            .where(JournalLine.tenant_id == tid, JournalEntry.status.in_(("posted", "reversed")))
         )).one()
         balanced = abs((db_total or 0) - (cr_total or 0)) < 0.01
         ok = ok and balanced
