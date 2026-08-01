@@ -6,6 +6,7 @@ const PAGES = [
   { route: `/app/${TENANT}/sales/invoices`, label: 'Invoice' },
   { route: `/app/${TENANT}/sales/customers`, label: 'Pelanggan' },
   { route: `/app/${TENANT}/purchasing/orders`, label: 'Pesanan' },
+  { route: `/app/${TENANT}/purchasing/payments`, label: 'Pembayaran' },
   { route: `/app/${TENANT}/purchasing/suppliers`, label: 'Pemasok' },
   { route: `/app/${TENANT}/inventory/products`, label: 'Produk' },
   { route: `/app/${TENANT}/inventory/movements`, label: 'Pergerakan Stok' },
