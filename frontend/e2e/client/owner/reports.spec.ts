@@ -23,6 +23,7 @@ test.describe('Owner Reports & Export', () => {
     await expect(page.getByText('Arus Kas Operasi')).toBeVisible();
     await expect(page.getByText('Net Arus Kas')).toBeVisible();
     await expect(page.getByText('Arus Kas Pendanaan')).toBeVisible();
+    await expect(page.getByText('Arus Kas per Bulan')).toBeVisible();
     expect(errors).toEqual([]);
   });
 

@@ -81,6 +81,10 @@
     rows: { month: string; assets: string; liabilities: string; equity: string; liabilitiesPlusEquity: string }[];
   };
 
+  type MonthlyCashFlow = {
+    rows: { month: string; operating: string; investing: string; financing: string; net: string }[];
+  };
+
   type AccountingPeriod = {
     id: string;
     name: string;
@@ -122,6 +126,7 @@
   let cashFlow = $state<CashFlowReport | null>(null);
   let monthlyProfitLoss = $state<MonthlyProfitLoss | null>(null);
   let monthlyBalanceSheet = $state<MonthlyBalanceSheet | null>(null);
+  let monthlyCashFlow = $state<MonthlyCashFlow | null>(null);
   let fiscalYears = $state<FiscalYear[]>([]);
 
   const tenantSlug = $derived($page.params.tenantSlug || '');
@@ -210,7 +215,7 @@
     const q = query({ startDate: start, endDate: end });
     const tbq = query({ startDate: start, endDate: end, includeClosing: closing });
     try {
-      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, cashFlowRes, monthlyRes, monthlyBsRes, yearsRes] = await Promise.all([
+      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, cashFlowRes, monthlyRes, monthlyBsRes, monthlyCfRes, yearsRes] = await Promise.all([
         api<SummaryReport>(`/tenants/${slug}/reports/summary?${q}`),
         api<ProfitLossReport>(`/tenants/${slug}/reports/profit-loss?${q}`),
         api<BalanceSheetReport>(`/tenants/${slug}/reports/balance-sheet?${q}`),
@@ -221,6 +226,7 @@
         api<CashFlowReport>(`/tenants/${slug}/reports/cash-flow?${q}`),
         api<MonthlyProfitLoss>(`/tenants/${slug}/reports/profit-loss-monthly?${q}`),
         api<MonthlyBalanceSheet>(`/tenants/${slug}/reports/balance-sheet-monthly?${q}`),
+        api<MonthlyCashFlow>(`/tenants/${slug}/reports/cash-flow-monthly?${q}`),
         api<FiscalYear[]>(`/tenants/${slug}/fiscal-years`),
       ]);
       if (seq !== requestSeq) return;
@@ -234,6 +240,7 @@
       cashFlow = cashFlowRes;
       monthlyProfitLoss = monthlyRes;
       monthlyBalanceSheet = monthlyBsRes;
+      monthlyCashFlow = monthlyCfRes;
       fiscalYears = yearsRes;
     } catch (err: any) {
       if (seq === requestSeq) error = err?.message || 'Gagal memuat laporan';
@@ -502,6 +509,37 @@
     <MetricCard label="Arus Kas Investasi" value={cashInvesting} loading={loading} format="currency" />
     <MetricCard label="Arus Kas Pendanaan" value={cashFinancing} loading={loading} format="currency" />
     <MetricCard label="Net Arus Kas" value={cashNet} loading={loading} format="currency" />
+  </div>
+  <div class="card p-5 mb-4">
+    <h3 class="mb-4 font-semibold">Arus Kas per Bulan</h3>
+    {#if (monthlyCashFlow?.rows ?? []).length > 0}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+              <th class="pb-2 pr-4 font-medium">Bulan</th>
+              <th class="pb-2 pr-4 text-right font-medium">Operasi</th>
+              <th class="pb-2 pr-4 text-right font-medium">Investasi</th>
+              <th class="pb-2 pr-4 text-right font-medium">Pendanaan</th>
+              <th class="pb-2 text-right font-medium">Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each monthlyCashFlow?.rows ?? [] as row}
+              <tr class="border-b border-[hsl(var(--border))] last:border-0">
+                <td class="py-2 pr-4">{monthName(row.month)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.operating)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.investing)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.financing)}</td>
+                <td class="py-2 text-right font-semibold tabular-nums" class:text-emerald-600={toNumber(row.net) >= 0} class:text-red-600={toNumber(row.net) < 0}>{money(row.net)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {:else}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Belum ada jurnal pada rentang ini.</p>
+    {/if}
   </div>
   <div class="card p-5 mb-4">
     <div class="flex flex-wrap items-center gap-2 text-xs">

@@ -77,6 +77,70 @@ async def _cash_account_ids(session: AsyncSession, tenant_id: str) -> list[str]:
     return list(rows)
 
 
+_INVESTING_KEYWORDS = ("peralatan", "kendaraan", "bangunan", "gedung", "tanah", "investasi", "mesin")
+
+
+def _cash_flow_category(journal_id: str, contra_rows) -> str:
+    contra = [r for r in contra_rows if r.journal_entry_id == journal_id]
+    has_investing = any(
+        r.type == "asset" and any(k in (r.name or "").lower() for k in _INVESTING_KEYWORDS)
+        for r in contra
+    )
+    has_financing = any(r.type in ("liability", "equity") for r in contra)
+    if has_investing:
+        return "investing"
+    if has_financing:
+        return "financing"
+    return "operating"
+
+
+async def _cash_flow_lines(session: AsyncSession, tenant_id: str, start: date, end: date):
+    """Baris jurnal pada akun kas/bank + akun lawannya, untuk klasifikasi arus kas."""
+    cash_accounts = await _cash_account_ids(session, tenant_id)
+    if not cash_accounts:
+        return [], [], []
+
+    rows = (
+        await session.execute(
+            select(
+                JournalEntry.id.label("je_id"),
+                JournalEntry.journal_date.label("dt"),
+                JournalLine.description,
+                JournalLine.debit,
+                JournalLine.credit,
+                Account.name.label("account_name"),
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+            .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == tenant_id))
+            .where(
+                JournalEntry.tenant_id == tenant_id,
+                _journal_statuses(),
+                JournalLine.account_id.in_(cash_accounts),
+                JournalEntry.journal_date.between(start, end),
+            )
+            .order_by(JournalEntry.journal_date, JournalLine.id)
+        )
+    ).all()
+
+    je_ids = {row.je_id for row in rows}
+    contra_rows = []
+    if je_ids:
+        contra_rows = (
+            await session.execute(
+                select(JournalLine.journal_entry_id, Account.type, Account.name)
+                .select_from(JournalLine)
+                .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == tenant_id))
+                .where(
+                    JournalLine.journal_entry_id.in_(je_ids),
+                    JournalLine.account_id.not_in(cash_accounts),
+                )
+            )
+        ).all()
+
+    return rows, contra_rows, cash_accounts
+
+
 class ReportMetadata(ApiSchema):
     tenant_name: str
     period: dict
@@ -545,7 +609,7 @@ async def get_cash_flow(
     start, end = params.resolve()
     metadata = _build_metadata(ctx, start, end)
 
-    cash_accounts = await _cash_account_ids(session, ctx.id)
+    rows, contra_rows, cash_accounts = await _cash_flow_lines(session, ctx.id, start, end)
 
     if not cash_accounts:
         return {
@@ -554,63 +618,10 @@ async def get_cash_flow(
             "rows": [],
         }
 
-    rows = (
-        await session.execute(
-            select(
-                JournalEntry.id.label("je_id"),
-                JournalEntry.journal_date.label("dt"),
-                JournalLine.description,
-                JournalLine.debit,
-                JournalLine.credit,
-                Account.name.label("account_name"),
-            )
-            .select_from(JournalLine)
-            .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
-            .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
-            .where(
-                JournalEntry.tenant_id == ctx.id,
-                _journal_statuses(),
-                JournalLine.account_id.in_(cash_accounts),
-                JournalEntry.journal_date.between(start, end),
-            )
-            .order_by(JournalEntry.journal_date, JournalLine.id)
-        )
-    ).all()
-
-    je_ids = {row.je_id for row in rows}
-    contra_rows = []
-    if je_ids:
-        contra_rows = (
-            await session.execute(
-                select(JournalLine.journal_entry_id, Account.type, Account.name)
-                .select_from(JournalLine)
-                .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
-                .where(
-                    JournalLine.journal_entry_id.in_(je_ids),
-                    JournalLine.account_id.not_in(cash_accounts),
-                )
-            )
-        ).all()
-
-    _INVESTING_KEYWORDS = ("peralatan", "kendaraan", "bangunan", "gedung", "tanah", "investasi", "mesin")
-
-    def _category(journal_id: str) -> str:
-        contra = [r for r in contra_rows if r.journal_entry_id == journal_id]
-        has_investing = any(
-            r.type == "asset" and any(k in (r.name or "").lower() for k in _INVESTING_KEYWORDS)
-            for r in contra
-        )
-        has_financing = any(r.type in ("liability", "equity") for r in contra)
-        if has_investing:
-            return "investing"
-        if has_financing:
-            return "financing"
-        return "operating"
-
     totals = {"operating": Decimal("0"), "investing": Decimal("0"), "financing": Decimal("0")}
     flow_rows = []
     for row in rows:
-        category = _category(row.je_id)
+        category = _cash_flow_category(row.je_id, contra_rows)
         flow_rows.append({
             "date": row.dt.isoformat() if hasattr(row.dt, "isoformat") else str(row.dt),
             "description": row.description or "",
@@ -630,6 +641,53 @@ async def get_cash_flow(
             "netCashFlow": str(totals["operating"] + totals["investing"] + totals["financing"]),
         },
         "rows": flow_rows,
+    }
+
+
+@router.get("/cash-flow-monthly")
+async def get_cash_flow_monthly(
+    ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+    params: PeriodParams = Depends(),
+):
+    """Arus kas (operasi/investasi/pendanaan) per bulan dalam rentang."""
+    start, end = params.resolve()
+    metadata = _build_metadata(ctx, start, end)
+
+    rows, contra_rows, _ = await _cash_flow_lines(session, ctx.id, start, end)
+
+    deltas: dict[str, dict[str, Decimal]] = {}
+    for row in rows:
+        month = row.dt.isoformat()[:7] if hasattr(row.dt, "isoformat") else str(row.dt)[:7]
+        category = _cash_flow_category(row.je_id, contra_rows)
+        deltas.setdefault(month, {}).setdefault(category, Decimal("0"))
+        deltas[month][category] += row.debit - row.credit
+
+    out = []
+    cursor = date(start.year, start.month, 1)
+    month_end = date(end.year, end.month, 1)
+    while cursor <= month_end:
+        key = f"{cursor.year:04d}-{cursor.month:02d}"
+        d = deltas.get(key, {})
+        operating = d.get("operating", Decimal("0"))
+        investing = d.get("investing", Decimal("0"))
+        financing = d.get("financing", Decimal("0"))
+        out.append({
+            "month": key,
+            "operating": str(operating),
+            "investing": str(investing),
+            "financing": str(financing),
+            "net": str(operating + investing + financing),
+        })
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+
+    return {
+        "metadata": metadata.model_dump(mode="json"),
+        "rows": out,
     }
 
 

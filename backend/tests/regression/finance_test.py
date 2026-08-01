@@ -317,6 +317,29 @@ sc, july_asof = jget("/reports/balance-sheet?startDate=2026-07-31&endDate=2026-0
 check("balance monthly carries opening balance", len(july_rows) == 1 and Decimal(july_rows[0]["assets"]) == Decimal(july_asof["summary"]["totalAssets"]), str(july_rows))
 
 # ═══════════════════════════════════════════════════════════════════
+#  CASH-FLOW MONTHLY
+# ═══════════════════════════════════════════════════════════════════
+
+sc, body = jget("/reports/cash-flow-monthly?startDate=2026-01-01&endDate=2026-12-31")
+check("cash-flow-monthly 200", sc == 200, f"{sc}")
+cf_months = body.get("rows", [])
+check("cash-flow monthly has 12 rows", len(cf_months) == 12, f"{len(cf_months)}")
+check("cash-flow monthly sorted asc", all(cf_months[i]["month"] <= cf_months[i + 1]["month"] for i in range(len(cf_months) - 1)), str([m["month"] for m in cf_months]))
+cf_totals = {
+    "operating": sum(Decimal(m["operating"]) for m in cf_months),
+    "investing": sum(Decimal(m["investing"]) for m in cf_months),
+    "financing": sum(Decimal(m["financing"]) for m in cf_months),
+    "net": sum(Decimal(m["net"]) for m in cf_months),
+}
+sc, body = jget("/reports/cash-flow?startDate=2026-01-01&endDate=2026-12-31")
+cf_summary = body["summary"]
+check("cash-flow monthly operating sums to annual", cf_totals["operating"] == Decimal(cf_summary["operating"]), f"{cf_totals['operating']} vs {cf_summary['operating']}")
+check("cash-flow monthly financing sums to annual", cf_totals["financing"] == Decimal(cf_summary["financing"]), f"{cf_totals['financing']} vs {cf_summary['financing']}")
+check("cash-flow monthly net sums to annual", cf_totals["net"] == Decimal(cf_summary["netCashFlow"]), f"{cf_totals['net']} vs {cf_summary['netCashFlow']}")
+sc, body = jget("/reports/cash-flow-monthly?startDate=2026-06-01&endDate=2026-06-30")
+check("cash-flow monthly range respected", len(body.get("rows", [])) == 1 and body["rows"][0]["month"] == "2026-06", str(body.get("rows", [])))
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail
 # ═══════════════════════════════════════════════════════════════════
 
