@@ -73,6 +73,10 @@
     }[];
   };
 
+  type MonthlyProfitLoss = {
+    rows: { month: string; income: string; expense: string; profit: string }[];
+  };
+
   type AccountingPeriod = {
     id: string;
     name: string;
@@ -112,6 +116,7 @@
   let payableAging = $state<PayableAgingReport | null>(null);
   let stockValuation = $state<StockValuationReport | null>(null);
   let cashFlow = $state<CashFlowReport | null>(null);
+  let monthlyProfitLoss = $state<MonthlyProfitLoss | null>(null);
   let fiscalYears = $state<FiscalYear[]>([]);
 
   const tenantSlug = $derived($page.params.tenantSlug || '');
@@ -172,6 +177,14 @@
     return formatIDR(toNumber(value));
   }
 
+  const monthLabels = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+  function monthName(ym: string): string {
+    const [y, m] = ym.split('-').map(Number);
+    if (!y || !m || m < 1 || m > 12) return ym;
+    return `${monthLabels[m - 1]} ${y}`;
+  }
+
   function query(params: Record<string, string | boolean | undefined>) {
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
@@ -192,7 +205,7 @@
     const q = query({ startDate: start, endDate: end });
     const tbq = query({ startDate: start, endDate: end, includeClosing: closing });
     try {
-      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, cashFlowRes, yearsRes] = await Promise.all([
+      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, cashFlowRes, monthlyRes, yearsRes] = await Promise.all([
         api<SummaryReport>(`/tenants/${slug}/reports/summary?${q}`),
         api<ProfitLossReport>(`/tenants/${slug}/reports/profit-loss?${q}`),
         api<BalanceSheetReport>(`/tenants/${slug}/reports/balance-sheet?${q}`),
@@ -201,6 +214,7 @@
         api<PayableAgingReport>(`/tenants/${slug}/reports/payable-aging?asOf=${end}`),
         api<StockValuationReport>(`/tenants/${slug}/reports/stock-valuation?asOf=${end}`),
         api<CashFlowReport>(`/tenants/${slug}/reports/cash-flow?${q}`),
+        api<MonthlyProfitLoss>(`/tenants/${slug}/reports/profit-loss-monthly?${q}`),
         api<FiscalYear[]>(`/tenants/${slug}/fiscal-years`),
       ]);
       if (seq !== requestSeq) return;
@@ -212,6 +226,7 @@
       payableAging = payableRes;
       stockValuation = stockRes;
       cashFlow = cashFlowRes;
+      monthlyProfitLoss = monthlyRes;
       fiscalYears = yearsRes;
     } catch (err: any) {
       if (seq === requestSeq) error = err?.message || 'Gagal memuat laporan';
@@ -385,6 +400,35 @@
     searchable={true}
   />
 {:else if activeTab === 'profit-loss'}
+  <div class="card p-5 mb-4">
+    <h3 class="mb-4 font-semibold">Laba Rugi per Bulan</h3>
+    {#if (monthlyProfitLoss?.rows ?? []).length > 0}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+              <th class="pb-2 pr-4 font-medium">Bulan</th>
+              <th class="pb-2 pr-4 text-right font-medium">Pendapatan</th>
+              <th class="pb-2 pr-4 text-right font-medium">Beban</th>
+              <th class="pb-2 text-right font-medium">Laba Bersih</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each monthlyProfitLoss?.rows ?? [] as row}
+              <tr class="border-b border-[hsl(var(--border))] last:border-0">
+                <td class="py-2 pr-4">{monthName(row.month)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.income)}</td>
+                <td class="py-2 pr-4 text-right tabular-nums">{money(row.expense)}</td>
+                <td class="py-2 text-right font-semibold tabular-nums" class:text-emerald-600={toNumber(row.profit) >= 0} class:text-red-600={toNumber(row.profit) < 0}>{money(row.profit)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {:else}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Belum ada jurnal pada rentang ini.</p>
+    {/if}
+  </div>
   <DataTable
     columns={[
       { key: 'code', label: 'Kode', sortable: true },

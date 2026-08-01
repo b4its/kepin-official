@@ -273,6 +273,22 @@ restored_net, _ = cash_flow_net()
 check("cash-flow net restored after reversal", restored_net == before_net, f"{before_net} -> {restored_net}")
 
 # ═══════════════════════════════════════════════════════════════════
+#  PROFIT-LOSS MONTHLY
+# ═══════════════════════════════════════════════════════════════════
+
+sc, body = jget("/reports/profit-loss-monthly?startDate=2026-01-01&endDate=2026-12-31")
+check("profit-loss-monthly 200", sc == 200, f"{sc}")
+months = body.get("rows", [])
+check("monthly has rows", len(months) > 0, f"{len(months)}")
+check("monthly rows sorted asc", all(months[i]["month"] <= months[i + 1]["month"] for i in range(len(months) - 1)), str([m["month"] for m in months]))
+monthly_profit = sum(Decimal(m["profit"]) for m in months)
+sc, body = jget("/reports/profit-loss?startDate=2026-01-01&endDate=2026-12-31")
+annual_profit = Decimal(body["summary"]["netProfit"])
+check("monthly profit sums to annual", monthly_profit == annual_profit, f"{monthly_profit} vs {annual_profit}")
+sc, body = jget("/reports/profit-loss-monthly?startDate=2026-01-01&endDate=2026-06-01")
+check("monthly range respected", all(m["month"] <= "2026-06" for m in body.get("rows", [])), str([m["month"] for m in body.get("rows", [])]))
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail
 # ═══════════════════════════════════════════════════════════════════
 

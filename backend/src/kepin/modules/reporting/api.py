@@ -262,6 +262,57 @@ async def get_profit_loss(
     }
 
 
+@router.get("/profit-loss-monthly")
+async def get_profit_loss_monthly(
+    ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+    params: PeriodParams = Depends(),
+):
+    """Laba rugi per bulan dalam rentang periode (basis akrual, tanpa jurnal penutup)."""
+    start, end = params.resolve()
+    metadata = _build_metadata(ctx, start, end)
+
+    rows = (
+        await session.execute(
+            select(
+                func.to_char(func.date_trunc(literal_column("'month'"), JournalEntry.journal_date), "YYYY-MM").label("month"),
+                func.coalesce(
+                    func.sum(case((Account.type == "income", JournalLine.credit - JournalLine.debit), else_=0)), 0
+                ).label("income"),
+                func.coalesce(
+                    func.sum(case((Account.type == "expense", JournalLine.debit - JournalLine.credit), else_=0)), 0
+                ).label("expense"),
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+            .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
+            .where(
+                JournalEntry.tenant_id == ctx.id,
+                _journal_statuses(),
+                JournalEntry.journal_number.not_like("CLS-%"),
+                JournalEntry.journal_number.not_like("REV-CLS-%"),
+                JournalEntry.journal_date.between(start, end),
+            )
+            .group_by(func.date_trunc(literal_column("'month'"), JournalEntry.journal_date))
+            .order_by(func.date_trunc(literal_column("'month'"), JournalEntry.journal_date))
+        )
+    ).all()
+
+    return {
+        "metadata": metadata.model_dump(mode="json"),
+        "rows": [
+            {
+                "month": row.month,
+                "income": str(row.income),
+                "expense": str(row.expense),
+                "profit": str(row.income - row.expense),
+            }
+            for row in rows
+        ],
+    }
+
+
 @router.get("/trial-balance")
 async def get_trial_balance(
     ctx: TenantContext = Depends(get_tenant_context),

@@ -26,6 +26,17 @@ test.describe('Owner Reports & Export', () => {
     expect(errors).toEqual([]);
   });
 
+  test('profit-loss tab shows monthly breakdown', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Laba Rugi' }).click();
+    await expect(page.getByText('Laba Rugi per Bulan')).toBeVisible();
+    await expect(page.getByText('Pendapatan', { exact: true }).first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test('investor report page loads', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
