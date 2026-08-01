@@ -14,6 +14,18 @@ test.describe('Owner Reports & Export', () => {
     expect(errors).toEqual([]);
   });
 
+  test('cash flow tab renders summary and rows', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Arus Kas' }).click();
+    await expect(page.getByText('Arus Kas Operasi')).toBeVisible();
+    await expect(page.getByText('Net Arus Kas')).toBeVisible();
+    await expect(page.getByText('Arus Kas Pendanaan')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test('investor report page loads', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });

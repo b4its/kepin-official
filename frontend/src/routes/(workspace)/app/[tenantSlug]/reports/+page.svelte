@@ -60,6 +60,19 @@
     rows: { sku: string; productName: string; quantity: string; averageCost: string; value: string }[];
   };
 
+  type CashFlowReport = {
+    summary: { operating: string; investing: string; financing: string; netCashFlow: string };
+    rows: {
+      date: string;
+      description: string;
+      accountId: string;
+      accountName: string;
+      type: string;
+      inflow: string;
+      outflow: string;
+    }[];
+  };
+
   type AccountingPeriod = {
     id: string;
     name: string;
@@ -76,6 +89,7 @@
     { id: 'trial', label: 'Neraca Saldo' },
     { id: 'profit-loss', label: 'Laba Rugi' },
     { id: 'balance-sheet', label: 'Neraca' },
+    { id: 'cash-flow', label: 'Arus Kas' },
     { id: 'aging', label: 'Aging' },
     { id: 'stock', label: 'Valuasi Stok' },
   ] as const;
@@ -97,6 +111,7 @@
   let receivableAging = $state<ReceivableAgingReport | null>(null);
   let payableAging = $state<PayableAgingReport | null>(null);
   let stockValuation = $state<StockValuationReport | null>(null);
+  let cashFlow = $state<CashFlowReport | null>(null);
   let fiscalYears = $state<FiscalYear[]>([]);
 
   const tenantSlug = $derived($page.params.tenantSlug || '');
@@ -115,6 +130,10 @@
   const arOutstanding = $derived(toNumber(receivableAging?.grandTotal));
   const apOutstanding = $derived(toNumber(payableAging?.grandTotal));
   const stockGlDelta = $derived(toNumber(stockValuation?.summary.glDelta));
+  const cashOperating = $derived(toNumber(cashFlow?.summary.operating));
+  const cashInvesting = $derived(toNumber(cashFlow?.summary.investing));
+  const cashFinancing = $derived(toNumber(cashFlow?.summary.financing));
+  const cashNet = $derived(toNumber(cashFlow?.summary.netCashFlow));
 
   const summaryChart = $derived(() => {
     const rows = summary?.series ?? [];
@@ -141,6 +160,7 @@
     { section: 'Aging', label: 'Piutang Outstanding', value: formatIDR(arOutstanding) },
     { section: 'Aging', label: 'Hutang Outstanding', value: formatIDR(apOutstanding) },
     { section: 'Inventaris', label: 'Delta GL vs Stock', value: formatIDR(stockGlDelta) },
+    { section: 'Arus Kas', label: 'Net Arus Kas', value: formatIDR(cashNet) },
   ]);
 
   function toNumber(value: string | number | null | undefined): number {
@@ -172,7 +192,7 @@
     const q = query({ startDate: start, endDate: end });
     const tbq = query({ startDate: start, endDate: end, includeClosing: closing });
     try {
-      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, yearsRes] = await Promise.all([
+      const [summaryRes, profitLossRes, balanceSheetRes, trialBalanceRes, receivableRes, payableRes, stockRes, cashFlowRes, yearsRes] = await Promise.all([
         api<SummaryReport>(`/tenants/${slug}/reports/summary?${q}`),
         api<ProfitLossReport>(`/tenants/${slug}/reports/profit-loss?${q}`),
         api<BalanceSheetReport>(`/tenants/${slug}/reports/balance-sheet?${q}`),
@@ -180,6 +200,7 @@
         api<ReceivableAgingReport>(`/tenants/${slug}/reports/receivable-aging?asOf=${end}`),
         api<PayableAgingReport>(`/tenants/${slug}/reports/payable-aging?asOf=${end}`),
         api<StockValuationReport>(`/tenants/${slug}/reports/stock-valuation?asOf=${end}`),
+        api<CashFlowReport>(`/tenants/${slug}/reports/cash-flow?${q}`),
         api<FiscalYear[]>(`/tenants/${slug}/fiscal-years`),
       ]);
       if (seq !== requestSeq) return;
@@ -190,6 +211,7 @@
       receivableAging = receivableRes;
       payableAging = payableRes;
       stockValuation = stockRes;
+      cashFlow = cashFlowRes;
       fiscalYears = yearsRes;
     } catch (err: any) {
       if (seq === requestSeq) error = err?.message || 'Gagal memuat laporan';
@@ -388,6 +410,41 @@
     ]}
     data={balanceSheet?.rows ?? []}
     total={balanceSheet?.rows.length ?? 0}
+    pageSize={12}
+    loading={loading}
+    searchable={true}
+  />
+{:else if activeTab === 'cash-flow'}
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+    <MetricCard label="Arus Kas Operasi" value={cashOperating} loading={loading} format="currency" />
+    <MetricCard label="Arus Kas Investasi" value={cashInvesting} loading={loading} format="currency" />
+    <MetricCard label="Arus Kas Pendanaan" value={cashFinancing} loading={loading} format="currency" />
+    <MetricCard label="Net Arus Kas" value={cashNet} loading={loading} format="currency" />
+  </div>
+  <div class="card p-5 mb-4">
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      {#each [
+        { key: 'operating', label: 'Operasi' },
+        { key: 'investing', label: 'Investasi' },
+        { key: 'financing', label: 'Pendanaan' },
+      ] as cat}
+        <span class="rounded-full px-2.5 py-1 font-medium" class:bg-emerald-100={cat.key === 'operating'} class:text-emerald-700={cat.key === 'operating'} class:bg-sky-100={cat.key === 'investing'} class:text-sky-700={cat.key === 'investing'} class:bg-violet-100={cat.key === 'financing'} class:text-violet-700={cat.key === 'financing'}>
+          {cat.label}
+        </span>
+      {/each}
+    </div>
+  </div>
+  <DataTable
+    columns={[
+      { key: 'date', label: 'Tanggal', sortable: true },
+      { key: 'description', label: 'Deskripsi', sortable: true },
+      { key: 'accountName', label: 'Akun Kas', sortable: true },
+      { key: 'type', label: 'Kategori', render: (r: any) => r.type },
+      { key: 'inflow', label: 'Masuk', align: 'right', render: (r: any) => (toNumber(r.inflow) > 0 ? money(r.inflow) : '-') },
+      { key: 'outflow', label: 'Keluar', align: 'right', render: (r: any) => (toNumber(r.outflow) > 0 ? money(r.outflow) : '-') },
+    ]}
+    data={cashFlow?.rows ?? []}
+    total={cashFlow?.rows.length ?? 0}
     pageSize={12}
     loading={loading}
     searchable={true}

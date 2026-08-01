@@ -425,6 +425,7 @@ async def get_cash_flow(
     rows = (
         await session.execute(
             select(
+                JournalEntry.id.label("je_id"),
                 JournalEntry.journal_date.label("dt"),
                 JournalLine.description,
                 JournalLine.debit,
@@ -444,28 +445,57 @@ async def get_cash_flow(
         )
     ).all()
 
-    total_in = Decimal("0")
-    total_out = Decimal("0")
+    je_ids = {row.je_id for row in rows}
+    contra_rows = []
+    if je_ids:
+        contra_rows = (
+            await session.execute(
+                select(JournalLine.journal_entry_id, Account.type, Account.name)
+                .select_from(JournalLine)
+                .join(Account, and_(Account.id == JournalLine.account_id, Account.tenant_id == ctx.id))
+                .where(
+                    JournalLine.journal_entry_id.in_(je_ids),
+                    JournalLine.account_id.not_in(cash_accounts),
+                )
+            )
+        ).all()
+
+    _INVESTING_KEYWORDS = ("peralatan", "kendaraan", "bangunan", "gedung", "tanah", "investasi", "mesin")
+
+    def _category(journal_id: str) -> str:
+        contra = [r for r in contra_rows if r.journal_entry_id == journal_id]
+        has_investing = any(
+            r.type == "asset" and any(k in (r.name or "").lower() for k in _INVESTING_KEYWORDS)
+            for r in contra
+        )
+        has_financing = any(r.type in ("liability", "equity") for r in contra)
+        if has_investing:
+            return "investing"
+        if has_financing:
+            return "financing"
+        return "operating"
+
+    totals = {"operating": Decimal("0"), "investing": Decimal("0"), "financing": Decimal("0")}
     flow_rows = []
     for row in rows:
+        category = _category(row.je_id)
         flow_rows.append({
             "date": row.dt.isoformat() if hasattr(row.dt, "isoformat") else str(row.dt),
             "description": row.description or "",
             "accountName": row.account_name,
+            "type": category,
             "inflow": str(row.debit),
             "outflow": str(row.credit),
         })
-        total_in += row.debit
-        total_out += row.credit
+        totals[category] += row.debit - row.credit
 
-    net = total_in - total_out
     return {
         "metadata": metadata.model_dump(mode="json"),
         "summary": {
-            "operating": str(net),
-            "investing": "0.00",
-            "financing": "0.00",
-            "netCashFlow": str(net),
+            "operating": str(totals["operating"]),
+            "investing": str(totals["investing"]),
+            "financing": str(totals["financing"]),
+            "netCashFlow": str(totals["operating"] + totals["investing"] + totals["financing"]),
         },
         "rows": flow_rows,
     }

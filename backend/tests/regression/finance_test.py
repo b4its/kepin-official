@@ -233,6 +233,11 @@ check("cash-flow 200", sc == 200, f"{sc}")
 check("cash-flow has rows", len(body.get("rows", [])) > 0, f"{len(body.get('rows', []))} rows")
 check("cash-flow summary keys", set(body.get("summary", {})) == {"operating", "investing", "financing", "netCashFlow"}, str(body.get("summary", {})))
 
+s = body.get("summary", {})
+check("cash-flow categories sum to net", Decimal(s["operating"]) + Decimal(s["investing"]) + Decimal(s["financing"]) == Decimal(s["netCashFlow"]), str(s))
+check("cash-flow rows have type", all(r.get("type") in ("operating", "investing", "financing") for r in body.get("rows", [])), "missing type")
+check("cash-flow financing from supplier payments", Decimal(s["financing"]) < 0, str(s["financing"]))
+
 before_net, before_rows = cash_flow_net()
 
 accts = jget("/accounts?pageSize=100")[1]["items"]
