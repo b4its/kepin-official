@@ -59,6 +59,7 @@ export async function updateBankAccount(slug: string, id: string, data: { bankNa
 export async function deleteBankAccount(slug: string, id: string) { return api(`/tenants/${slug}/bank-accounts/${id}`, { method: 'DELETE' }); }
 export async function getBankTransactions(slug: string, params?: string) { return api(`/tenants/${slug}/bank-transactions${params || ''}`); }
 export async function getCustomerStatement(slug: string, customerId: string, params?: string) { return api(`/tenants/${slug}/customer-statements?customerId=${customerId}${params || ''}`); }
+export async function getSupplierStatement(slug: string, supplierId: string, params?: string) { return api(`/tenants/${slug}/supplier-statements?supplierId=${supplierId}${params || ''}`); }
 export async function createBankTransaction(slug: string, data: { bankAccountId: string; externalId: string; transactionDate: string; description?: string; amount: string }) { return api(`/tenants/${slug}/bank-transactions`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function importBankTransactionsCsv(slug: string, data: { bankAccountId: string; csv: string }) { return api(`/tenants/${slug}/bank-transactions/import`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function deleteBankTransaction(slug: string, id: string) { return api(`/tenants/${slug}/bank-transactions/${id}`, { method: 'DELETE' }); }

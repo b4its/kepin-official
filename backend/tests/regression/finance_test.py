@@ -148,6 +148,123 @@ def purge_customer_statement_fixtures():
     asyncio.run(_purge())
 
 
+def purge_supplier_statement_fixtures():
+    import asyncio
+
+    from sqlalchemy import delete, or_, select, update
+
+    from kepin.db.session import get_session
+    from kepin.db.models import (
+        GoodsReceipt,
+        GoodsReceiptLine,
+        JournalEntry,
+        JournalLine,
+        Product,
+        PurchaseOrder,
+        PurchaseOrderLine,
+        StockBalance,
+        StockMovement,
+        Supplier,
+        SupplierPayment,
+        Tenant,
+    )
+
+    async def _purge():
+        async for s in get_session():
+            tenant = (
+                await s.execute(select(Tenant).where(Tenant.slug == "toko-maju"))
+            ).scalar_one()
+            sids = (
+                await s.execute(
+                    select(Supplier.id).where(
+                        Supplier.tenant_id == str(tenant.id),
+                        Supplier.code.like("SUL-FT-%"),
+                    )
+                )
+            ).scalars().all()
+            for sid in sids:
+                pos = (
+                    await s.execute(select(PurchaseOrder).where(PurchaseOrder.supplier_id == sid))
+                ).scalars().all()
+                po_ids = [po.id for po in pos]
+                grns = (
+                    await s.execute(
+                        select(GoodsReceipt).where(
+                            GoodsReceipt.purchase_order_id.in_(po_ids) if po_ids else GoodsReceipt.id.is_(None)
+                        )
+                    )
+                ).scalars().all()
+                pay_rows = (
+                    await s.execute(
+                        select(SupplierPayment).where(SupplierPayment.supplier_id == sid)
+                    )
+                ).scalars().all()
+                jids = set()
+                for grn in grns:
+                    if grn.journal_entry_id:
+                        jids.add(grn.journal_entry_id)
+                    await s.execute(delete(GoodsReceiptLine).where(GoodsReceiptLine.goods_receipt_id == grn.id))
+                    await s.execute(delete(GoodsReceipt).where(GoodsReceipt.id == grn.id))
+                for p in pay_rows:
+                    if p.journal_entry_id:
+                        jids.add(p.journal_entry_id)
+                    await s.execute(delete(SupplierPayment).where(SupplierPayment.id == p.id))
+                for po in pos:
+                    await s.execute(
+                        delete(PurchaseOrderLine).where(PurchaseOrderLine.purchase_order_id == po.id)
+                    )
+                rev_numbers = {f"REV-{p.payment_number}" for p in pay_rows}
+                if rev_numbers:
+                    orphan_revs = (
+                        await s.execute(
+                            select(JournalEntry.id).where(
+                                JournalEntry.tenant_id == str(tenant.id),
+                                JournalEntry.journal_number.in_(list(rev_numbers)),
+                            )
+                        )
+                    ).scalars().all()
+                    for jid in orphan_revs:
+                        await s.execute(delete(JournalLine).where(JournalLine.journal_entry_id == jid))
+                        await s.execute(delete(JournalEntry).where(JournalEntry.id == jid))
+                for po in pos:
+                    await s.execute(delete(PurchaseOrder).where(PurchaseOrder.id == po.id))
+                if jids:
+                    rev_jids = (
+                        await s.execute(
+                            select(JournalEntry.id).where(
+                                JournalEntry.reversed_entry_id.in_(list(jids))
+                            )
+                        )
+                    ).scalars().all()
+                    all_jids = jids | set(rev_jids)
+                    for jid in all_jids:
+                        if not jid:
+                            continue
+                        await s.execute(delete(JournalLine).where(JournalLine.journal_entry_id == jid))
+                        await s.execute(
+                            update(JournalEntry)
+                            .where(JournalEntry.reversed_entry_id == jid)
+                            .values(reversed_entry_id=None)
+                        )
+                        await s.execute(delete(JournalEntry).where(JournalEntry.id == jid))
+                await s.execute(delete(Supplier).where(Supplier.id == sid))
+            pids = (
+                await s.execute(
+                    select(Product.id).where(
+                        Product.tenant_id == str(tenant.id),
+                        Product.sku.like("SKU-FT-%"),
+                    )
+                )
+            ).scalars().all()
+            for pid in pids:
+                await s.execute(delete(StockMovement).where(StockMovement.product_id == pid))
+                await s.execute(delete(StockBalance).where(StockBalance.product_id == pid))
+                await s.execute(delete(Product).where(Product.id == pid))
+            await s.commit()
+
+    asyncio.run(_purge())
+
+
 def login(email, pw):
     r = C.post("/auth/login", json={"email": email, "password": pw})
     return r.json().get("access_token", "")
@@ -762,6 +879,81 @@ check("statement unknown customer 404", sc == 404, f"{sc}")
 sc, _ = jpost(f"/customer-payments/{pay_id}/void")
 check("statement payment void 200", sc == 200, f"{sc}")
 purge_customer_statement_fixtures()
+
+# ═══════════════════════════════════════════════════════════════════
+#  PURCHASING — KARTU HUTANG PER PEMASOK (supplier statement)
+# ═══════════════════════════════════════════════════════════════════
+
+purge_supplier_statement_fixtures()
+
+ts = str(int(time.time() * 1000))[-8:]
+sc, body = jpost("/products", {"sku": f"SKU-FT-{ts}", "name": f"FT Barang {ts}", "unit": "pcs", "cost_price": "400000", "sale_price": "500000"})
+check("supplier stmt product create 201", sc == 201, f"{sc}")
+prod_id = body.get("id", "")
+
+sc, body = jget("/inventory-locations")
+check("supplier stmt locations 200", sc == 200 and len(body) > 0, f"{sc} {len(body)}")
+loc_id = body[0]["id"] if body else None
+
+sc, body = jpost("/suppliers", {"code": f"SUL-FT-{ts}", "name": f"FT Pemasok {ts}", "email": f"ftsup{ts}@test.com"})
+check("supplier stmt supplier create 201", sc == 201, f"{sc}")
+sup_id = body.get("id", "")
+check("supplier stmt supplier id present", bool(sup_id))
+
+sc, body = jpost("/purchase-orders", {
+    "supplier_id": sup_id,
+    "order_date": "2026-08-01",
+    "lines": [{"product_id": prod_id, "item_name": "Bahan Baku", "quantity": "1", "unit_price": "400000"}],
+})
+check("supplier stmt PO create 201", sc == 201, f"{sc}")
+po_id = body.get("id", "")
+po_line_id = body.get("lines", [{}])[0].get("id", "")
+check("supplier stmt PO line id present", bool(po_line_id))
+
+sc, body = jpost(f"/purchase-orders/{po_id}/send")
+check("supplier stmt PO send 200", sc == 200 and body.get("status") == "sent", f"{sc} {body.get('status')}")
+
+sc, body = jpost(f"/purchase-orders/{po_id}/receive", {"location_id": loc_id, "lines": [{"line_id": po_line_id, "quantity_received": "1"}]})
+check("supplier stmt receive 200", sc == 200, f"{sc}")
+
+sc, body = jget(f"/supplier-statements?supplierId={sup_id}")
+check("supplier stmt 200", sc == 200, f"{sc}")
+check("supplier stmt supplier info", body.get("supplierId") == sup_id and body.get("supplierName", "").startswith("FT Pemasok"), str(body.get("supplierName")))
+check("supplier stmt opening zero", Decimal(body.get("opening", "0")) == Decimal("0"), body.get("opening"))
+s_rows = body.get("items", [])
+check("supplier stmt GRN row", len(s_rows) == 1 and s_rows[0]["reference"].startswith("GR-") and s_rows[0]["credit"] == "400000.00" and Decimal(s_rows[0]["balance"]) == Decimal("400000"), str(s_rows))
+check("supplier stmt closing == GRN total", Decimal(body.get("closing", "0")) == Decimal("400000"), body.get("closing"))
+
+sc, body = jpost("/supplier-payments", {"supplier_id": sup_id, "payment_date": "2026-08-04", "amount": "400000", "method": "transfer"})
+check("supplier stmt payment create 201", sc == 201, f"{sc}")
+sup_pay_id = body.get("id", "")
+sc, body = jpost(f"/supplier-payments/{sup_pay_id}/post")
+check("supplier stmt payment post 200", sc == 200 and body.get("status") == "posted", f"{sc} {body.get('status')}")
+
+sc, body = jget(f"/supplier-statements?supplierId={sup_id}")
+s_rows = body.get("items", [])
+check("supplier stmt 2 rows", len(s_rows) == 2, f"{len(s_rows)}")
+check("supplier stmt GRN then payment", s_rows[0]["reference"].startswith("GR-") and s_rows[1]["reference"].startswith("SPAY-"), str([r["reference"] for r in s_rows]))
+check("supplier stmt running balance ends zero", Decimal(s_rows[0]["balance"]) == Decimal("400000") and Decimal(s_rows[1]["balance"]) == Decimal("0") and Decimal(body.get("closing", "0")) == Decimal("0"), str([r["balance"] for r in s_rows]))
+bal_ok = True
+prev_bal = Decimal(body["opening"])
+for row in s_rows:
+    delta = Decimal(row["debit"]) - Decimal(row["credit"])
+    if Decimal(row["balance"]) != prev_bal - delta:
+        bal_ok = False
+        break
+    prev_bal = Decimal(row["balance"])
+check("supplier stmt balance consistent", bal_ok)
+
+sc, body = jget(f"/supplier-statements?supplierId={sup_id}&startDate=2026-08-04")
+check("supplier stmt startDate opening carries GRN", Decimal(body.get("opening", "0")) == Decimal("400000") and len(body.get("items", [])) == 1, f"{body.get('opening')} {len(body.get('items', []))}")
+
+sc, body = jget("/supplier-statements?supplierId=00000000-0000-0000-0000-000000000000")
+check("supplier stmt unknown supplier 404", sc == 404, f"{sc}")
+
+sc, _ = jpost(f"/supplier-payments/{sup_pay_id}/void")
+check("supplier stmt payment void 200", sc == 200, f"{sc}")
+purge_supplier_statement_fixtures()
 
 # ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail

@@ -950,6 +950,27 @@ class SupplierPaymentCreate(ApiSchema):
     branch_id: str | None = None
 
 
+class StatementLineSchema(ApiSchema):
+    id: str
+    date: date
+    reference: str
+    description: str
+    debit: str
+    credit: str
+    balance: str
+
+
+class SupplierStatementSchema(ApiSchema):
+    supplier_id: str
+    supplier_code: str
+    supplier_name: str
+    start_date: date | None = None
+    end_date: date | None = None
+    opening: str
+    closing: str
+    items: list[StatementLineSchema]
+
+
 async def _next_supplier_payment_number(
     session: AsyncSession,
     tenant_id: str,
@@ -1125,3 +1146,135 @@ async def void_supplier_payment(
     await session.commit()
     await session.refresh(payment)
     return SupplierPaymentSchema.model_validate(payment)
+
+
+@router.get("/supplier-statements", response_model=SupplierStatementSchema, summary="Kartu Hutang per Pemasok", description="Mutasi penerimaan barang & pembayaran pemasok dengan saldo berjalan")
+async def get_supplier_statement(
+    supplier_id: str = Query(alias="supplierId"),
+    start_date: date | None = Query(None, alias="startDate"),
+    end_date: date | None = Query(None, alias="endDate"),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    sup = await session.execute(
+        select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.tenant_id == tenant.id,
+        )
+    )
+    supplier = sup.scalar_one_or_none()
+    if not supplier:
+        raise NotFoundError(message="Pemasok tidak ditemukan")
+
+    grn_rows = (
+        await session.execute(
+            select(
+                GoodsReceipt.id,
+                GoodsReceipt.receipt_number,
+                GoodsReceipt.received_at,
+                GoodsReceipt.created_at,
+                PurchaseOrder.po_number,
+                func.sum(GoodsReceiptLine.quantity * GoodsReceiptLine.unit_cost).label("total"),
+            )
+            .select_from(GoodsReceipt)
+            .join(PurchaseOrder, PurchaseOrder.id == GoodsReceipt.purchase_order_id)
+            .join(GoodsReceiptLine, GoodsReceiptLine.goods_receipt_id == GoodsReceipt.id)
+            .where(
+                PurchaseOrder.supplier_id == supplier.id,
+                GoodsReceipt.tenant_id == tenant.id,
+                GoodsReceipt.status == "completed",
+            )
+            .group_by(
+                GoodsReceipt.id,
+                GoodsReceipt.receipt_number,
+                GoodsReceipt.received_at,
+                GoodsReceipt.created_at,
+                PurchaseOrder.po_number,
+            )
+        )
+    ).all()
+
+    payments = (
+        await session.execute(
+            select(SupplierPayment)
+            .where(
+                SupplierPayment.supplier_id == supplier.id,
+                SupplierPayment.tenant_id == tenant.id,
+                SupplierPayment.status == "posted",
+            )
+            .order_by(SupplierPayment.payment_date, SupplierPayment.created_at, SupplierPayment.payment_number)
+        )
+    ).scalars().all()
+
+    rows: list[dict] = []
+    for grn in grn_rows:
+        rows.append(
+            {
+                "sort_date": grn.received_at.date(),
+                "sort_created": grn.created_at,
+                "id": str(grn.id),
+                "date": grn.received_at.date(),
+                "reference": grn.receipt_number,
+                "description": f"Penerimaan barang (PO {grn.po_number})",
+                "debit": ZERO,
+                "credit": to_money(grn.total),
+            }
+        )
+    for pay in payments:
+        rows.append(
+            {
+                "sort_date": pay.payment_date,
+                "sort_created": pay.created_at,
+                "id": str(pay.id),
+                "date": pay.payment_date,
+                "reference": pay.payment_number,
+                "description": f"Pembayaran ({pay.method or 'transfer'})",
+                "debit": pay.amount,
+                "credit": ZERO,
+            }
+        )
+
+    rows.sort(key=lambda r: (r["sort_date"], r["sort_created"] or datetime.min, r["reference"]))
+
+    if start_date is not None:
+        opening = ZERO + sum(
+            (r["credit"] - r["debit"]) for r in rows if r["sort_date"] < start_date
+        )
+        rows = [r for r in rows if r["sort_date"] >= start_date]
+    else:
+        opening = ZERO
+
+    if end_date is not None:
+        rows = [r for r in rows if r["sort_date"] <= end_date]
+
+    rows = rows[-1000:]
+
+    items: list[dict] = []
+    running = opening
+    for r in rows:
+        running += r["credit"] - r["debit"]
+        items.append(
+            StatementLineSchema(
+                id=r["id"],
+                date=r["date"],
+                reference=r["reference"],
+                description=r["description"],
+                debit=money_str(r["debit"]),
+                credit=money_str(r["credit"]),
+                balance=money_str(running),
+            )
+        )
+
+    closing = running if items else opening
+
+    return SupplierStatementSchema(
+        supplier_id=str(supplier.id),
+        supplier_code=supplier.code,
+        supplier_name=supplier.name,
+        start_date=start_date,
+        end_date=end_date,
+        opening=money_str(opening),
+        closing=money_str(closing),
+        items=items,
+    )
