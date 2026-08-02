@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, func, and_, or_, text
 from uuid import UUID
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -209,6 +209,21 @@ class BankTransactionSchema(ApiSchema):
     transaction_date: date
     description: str = ""
     amount: str
+    matched: bool = False
+
+
+class MatchCandidateSchema(ApiSchema):
+    id: str
+    transaction_number: str
+    transaction_date: date
+    description: str = ""
+    amount: str
+    score: int
+
+
+class ReconciliationSuggestionSchema(ApiSchema):
+    bank_transaction: BankTransactionSchema
+    candidates: list[MatchCandidateSchema]
 
 
 class BankTransactionCreate(ApiSchema):
@@ -1638,6 +1653,19 @@ async def list_bank_transactions(
             .limit(params.page_size)
         )
     ).scalars().all()
+    matched_ids = {
+        str(x)
+        for x in (
+            await session.execute(
+                select(ReconciliationMatch.bank_transaction_id).where(
+                    ReconciliationMatch.tenant_id == tenant.id,
+                    ReconciliationMatch.status == "confirmed",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    }
     items = [
         BankTransactionSchema(
             id=str(row.id),
@@ -1646,6 +1674,7 @@ async def list_bank_transactions(
             transaction_date=row.transaction_date,
             description=row.description,
             amount=money_str(row.amount),
+            matched=str(row.id) in matched_ids,
         )
         for row in rows
     ]
@@ -1803,6 +1832,89 @@ async def list_reconciliation(
         )
 
     return make_paginated(items, params.page, params.page_size, total)
+
+
+@router.get(
+    "/reconciliation/suggestions",
+    response_model=PaginatedResponse[ReconciliationSuggestionSchema],
+    summary="Saran Pencocokan",
+    description="Mencari kandidat transaksi internal untuk transaksi bank yang belum dicocokkan (amount sama, tanggal berdekatan)",
+)
+async def reconciliation_suggestions(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+    bank_account_id: str | None = Query(None, alias="bankAccountId"),
+    date_gap_days: int = Query(7, ge=1, le=30),
+):
+    matched_sub = select(ReconciliationMatch.bank_transaction_id).where(
+        ReconciliationMatch.tenant_id == tenant.id,
+        ReconciliationMatch.status == "confirmed",
+    )
+    filters = [
+        BankTransaction.tenant_id == tenant.id,
+        ~BankTransaction.id.in_(matched_sub),
+    ]
+    if bank_account_id:
+        filters.append(BankTransaction.bank_account_id == bank_account_id)
+    stmts = (
+        await session.execute(
+            select(BankTransaction)
+            .where(and_(*filters))
+            .order_by(BankTransaction.transaction_date.desc())
+            .limit(50)
+        )
+    ).scalars().all()
+
+    gap = timedelta(days=date_gap_days)
+    items: list[ReconciliationSuggestionSchema] = []
+    for stmt in stmts:
+        txn_rows = (
+            await session.execute(
+                select(Transaction)
+                .where(
+                    Transaction.tenant_id == tenant.id,
+                    Transaction.status == "posted",
+                    func.abs(Transaction.amount) == abs(stmt.amount),
+                    Transaction.transaction_date.between(stmt.transaction_date - gap, stmt.transaction_date + gap),
+                )
+                .order_by(Transaction.transaction_date.desc())
+                .limit(5)
+            )
+        ).scalars().all()
+        if not txn_rows:
+            continue
+        candidates = []
+        for t in txn_rows:
+            gap_days = abs((t.transaction_date - stmt.transaction_date).days)
+            score = max(20, 100 - gap_days * 5)
+            candidates.append(
+                MatchCandidateSchema(
+                    id=str(t.id),
+                    transaction_number=t.transaction_number,
+                    transaction_date=t.transaction_date,
+                    description=t.description or "",
+                    amount=money_str(t.amount),
+                    score=score,
+                )
+            )
+        candidates.sort(key=lambda c: (-c.score, c.transaction_date))
+        items.append(
+            ReconciliationSuggestionSchema(
+                bank_transaction=BankTransactionSchema(
+                    id=str(stmt.id),
+                    bank_account_id=str(stmt.bank_account_id),
+                    external_id=stmt.external_id,
+                    transaction_date=stmt.transaction_date,
+                    description=stmt.description,
+                    amount=money_str(stmt.amount),
+                    matched=False,
+                ),
+                candidates=candidates,
+            )
+        )
+
+    return make_paginated(items, 1, len(items), len(items))
 
 
 @router.post(

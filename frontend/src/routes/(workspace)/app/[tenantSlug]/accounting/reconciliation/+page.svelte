@@ -11,8 +11,10 @@
   import { Pencil, RefreshCw, Trash2 } from '@lucide/svelte';
 
   type BankAccount = { id: string; accountId: string; accountName?: string; bankName: string; maskedNumber: string; status: string; glBalance?: string; statementCount?: number; statementTotal?: string; unmatchedCount?: number; unmatchedTotal?: string };
-  type BankTransaction = { id: string; bankAccountId: string; externalId: string; transactionDate: string; description: string; amount: string };
+  type BankTransaction = { id: string; bankAccountId: string; externalId: string; transactionDate: string; description: string; amount: string; matched?: boolean };
   type Match = { id: string; bankTransactionId: string; transactionId: string; confidence: string; status: string; matchedAt?: string | null; note?: string };
+  type MatchCandidate = { id: string; transactionNumber: string; transactionDate: string; description: string; amount: string; score: number };
+  type Suggestion = { bankTransaction: BankTransaction; candidates: MatchCandidate[] };
 
   const slug = $derived($page.params.tenantSlug || '');
   const isOwner = $derived($currentRole === 'tenant_owner');
@@ -26,7 +28,12 @@
   let showBankAccount = $state(false);
   let showBankTransaction = $state(false);
   let showMatch = $state(false);
+  let showSuggest = $state(false);
   let editingBank = $state<BankAccount | null>(null);
+  let suggestionTxn = $state<BankTransaction | null>(null);
+  let suggestions = $state<MatchCandidate[]>([]);
+  let suggestLoading = $state(false);
+  let suggestApplying = $state(false);
   let accountForm = $state({ accountId: '', bankName: '', maskedNumber: '', status: 'active' });
   let bankTxnForm = $state({ bankAccountId: '', externalId: '', transactionDate: '', description: '', amount: '' });
   let matchForm = $state({ bankTransactionId: '', transactionId: '', confidence: '100', note: '' });
@@ -139,6 +146,43 @@
     } catch (err: any) { showToast(err?.message || 'Gagal mengonfirmasi match', 'error'); }
   }
 
+  async function openSuggest(txn: BankTransaction) {
+    if (!slug) return;
+    suggestionTxn = txn;
+    suggestions = [];
+    showSuggest = true;
+    suggestLoading = true;
+    try {
+      const res = await tenantApi.getReconciliationSuggestions(slug, `?bankAccountId=${txn.bankAccountId}`);
+      const item = (res?.items ?? []).find((s: Suggestion) => s.bankTransaction.id === txn.id);
+      suggestions = item?.candidates ?? [];
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal memuat saran', 'error');
+      showSuggest = false;
+    } finally {
+      suggestLoading = false;
+    }
+  }
+
+  async function applySuggestion(candidate: MatchCandidate) {
+    if (!slug || !isOwner || !suggestionTxn) return;
+    suggestApplying = true;
+    try {
+      const match = await tenantApi.createReconciliationMatch(slug, {
+        bankTransactionId: suggestionTxn.id,
+        transactionId: candidate.id,
+        confidence: String(candidate.score),
+        note: 'saran otomatis',
+      });
+      await tenantApi.confirmReconciliationMatch(slug, match.id);
+      showToast('Saran diterapkan dan match dikonfirmasi', 'success');
+      showSuggest = false;
+      suggestionTxn = null;
+      await loadAll();
+    } catch (err: any) { showToast(err?.message || 'Gagal menerapkan saran', 'error'); }
+    finally { suggestApplying = false; }
+  }
+
   $effect(() => { if (slug) void loadAll(); });
 </script>
 
@@ -193,8 +237,17 @@
 </div>
 
 <h3 class="font-semibold mb-3">Transaksi Bank ({bankTransactions.length})</h3>
-<DataTable columns={[{ key: 'transactionDate', label: 'Tanggal' }, { key: 'externalId', label: 'External ID' }, { key: 'description', label: 'Deskripsi' }, { key: 'amount', label: 'Jumlah', align: 'right' }]} data={bankTransactions} total={bankTransactions.length} loading={loading} searchable={true}>
+<DataTable columns={[
+  { key: 'transactionDate', label: 'Tanggal' },
+  { key: 'externalId', label: 'External ID' },
+  { key: 'description', label: 'Deskripsi' },
+  { key: 'amount', label: 'Jumlah', align: 'right' },
+  { key: 'matched', label: 'Status', render: (r: any) => r.matched ? '<span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Terkait</span>' : '<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Belum dicocokkan</span>' },
+]} data={bankTransactions} total={bankTransactions.length} loading={loading} searchable={true}>
   {#snippet rowActions(item: BankTransaction)}
+    {#if !item.matched}
+      <button class="text-xs text-[hsl(var(--primary))] hover:underline" onclick={() => openSuggest(item)} title="Lihat saran pencocokan">Saran</button>
+    {/if}
     {#if isOwner}
       <button class="rounded p-1 text-red-500 hover:bg-red-50" onclick={() => deleteBankTransaction(item)} title="Hapus"><Trash2 class="w-4 h-4" /></button>
     {/if}
@@ -298,4 +351,34 @@
       <Button type="submit" loading={saving}>Buat Match</Button>
     </div>
   </form>
+</Modal>
+<Modal title={suggestionTxn ? `Saran Pencocokan · ${suggestionTxn.externalId}` : 'Saran Pencocokan'} open={showSuggest} onclose={() => showSuggest = false}>
+  {#if suggestLoading}
+    <p class="text-sm text-[hsl(var(--muted-foreground))]">Mencari kandidat transaksi internal…</p>
+  {:else if suggestions.length === 0}
+    <p class="text-sm text-[hsl(var(--muted-foreground))]">Tidak ada transaksi internal dengan jumlah yang sama dalam ±7 hari.</p>
+  {:else}
+    <p class="mb-3 text-sm text-[hsl(var(--muted-foreground))]">
+      Transaksi bank {suggestionTxn?.transactionDate} · {formatIDR(Number(suggestionTxn?.amount ?? 0))} · {suggestionTxn?.description || '-'}
+    </p>
+    <div class="space-y-2">
+      {#each suggestions as candidate}
+        <div class="flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border))] px-3 py-2">
+          <div class="min-w-0">
+            <p class="truncate text-sm font-medium">{candidate.transactionNumber} · {candidate.transactionDate}</p>
+            <p class="truncate text-xs text-[hsl(var(--muted-foreground))]">{candidate.description || '-'} · {formatIDR(Number(candidate.amount))}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <span class="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">Skor {candidate.score}</span>
+            {#if isOwner}
+              <Button variant="secondary" size="sm" loading={suggestApplying} onclick={() => applySuggestion(candidate)}>Cocokkan</Button>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    </div>
+    {#if !isOwner}
+      <p class="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Read-only: hanya owner yang dapat menerapkan saran.</p>
+    {/if}
+  {/if}
 </Modal>

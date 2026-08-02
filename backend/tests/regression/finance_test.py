@@ -344,6 +344,98 @@ sc, body = jget("/reports/cash-flow-monthly?startDate=2026-06-01&endDate=2026-06
 check("cash-flow monthly range respected", len(body.get("rows", [])) == 1 and body["rows"][0]["month"] == "2026-06", str(body.get("rows", [])))
 
 # ═══════════════════════════════════════════════════════════════════
+#  RECONCILIATION SUGGESTIONS
+# ═══════════════════════════════════════════════════════════════════
+
+sc, body = jget("/bank-accounts")
+sug_bca = next(b for b in body if b["bankName"] == "BCA")
+sug_bca_id = sug_bca["id"]
+
+sc, body = jget("/bank-transactions?pageSize=100")
+for b in body.get("items", []):
+    if b["externalId"].startswith("SGT-150K"):
+        jdelete(f"/bank-transactions/{b['id']}")
+page = 1
+while True:
+    sc, body = jget(f"/transactions?pageSize=100&page={page}&startDate=2000-01-01&endDate=2099-12-31")
+    items = body.get("items", [])
+    for t in items:
+        if t.get("description", "").startswith("saran auto-match"):
+            jpost(f"/transactions/{t['id']}/void", {})
+    if not items or page * 100 >= body.get("total", 0):
+        break
+    page += 1
+
+sc, body = jpost("/bank-transactions", {"bankAccountId": sug_bca_id, "externalId": "SGT-150K-A", "transactionDate": "2026-06-15", "description": "pembayaran pelanggan", "amount": "150000"})
+check("suggest stmt A 201", sc == 201, f"{sc}")
+sug_stmt_a = body.get("id")
+sc, body = jpost("/bank-transactions", {"bankAccountId": sug_bca_id, "externalId": "SGT-150K-B", "transactionDate": "2026-06-25", "description": "pembayaran lain", "amount": "150000"})
+check("suggest stmt B 201", sc == 201, f"{sc}")
+sug_stmt_b = body.get("id")
+
+sug_accts = []
+sug_page = 1
+while True:
+    sc, body = jget(f"/accounts?pageSize=100&page={sug_page}")
+    sug_accts += body.get("items", [])
+    if len(sug_accts) >= body.get("total", 0):
+        break
+    sug_page += 1
+sug_income = next((a for a in sug_accts if a["type"] == "income"), None)
+sug_cash = next((a for a in sug_accts if a["code"] == "1-1002"), None)
+
+
+def make_posted_txn(d, amount, desc):
+    sc, tr = jpost("/transactions", {"transactionDate": d, "type": "income", "description": desc, "amount": amount, "account_id": sug_cash["id"], "counter_account_id": sug_income["id"]})
+    tid = tr.get("id")
+    jpost(f"/transactions/{tid}/post", {})
+    return tid
+
+
+sug_txn_a = make_posted_txn("2026-06-15", "150000", "saran auto-match")
+
+sc, body = jget(f"/reconciliation/suggestions?bankAccountId={sug_bca_id}")
+check("suggestions 200", sc == 200, f"{sc}")
+sug_items = body.get("items", [])
+sug_a = next((s for s in sug_items if s["bankTransaction"]["id"] == sug_stmt_a), None)
+sug_b = next((s for s in sug_items if s["bankTransaction"]["id"] == sug_stmt_b), None)
+check("suggest stmt A has candidate", sug_a is not None and len(sug_a.get("candidates", [])) >= 1, str(sug_a))
+check("suggest score 100 same day", bool(sug_a) and sug_a["candidates"][0]["score"] == 100, str(sug_a))
+check("suggest stmt B excluded (gap 10 > 7)", sug_b is None, f"{sug_b}")
+
+sug_txn_b = make_posted_txn("2026-06-25", "150000", "saran auto-match 2")
+sc, body = jget(f"/reconciliation/suggestions?bankAccountId={sug_bca_id}&dateGapDays=0")
+check("suggest dateGapDays=0 includes stmt B", sc == 200 and any(s["bankTransaction"]["id"] == sug_stmt_b for s in body.get("items", [])), f"{sc}")
+
+sc, body = jpost("/reconciliation/matches", {"bankTransactionId": sug_stmt_a, "transactionId": sug_txn_a, "confidence": "100", "note": "saran auto"})
+check("suggest match create 201", sc == 201, f"{sc}")
+sug_match_id = body.get("id")
+sc, _ = jpost(f"/reconciliation/matches/{sug_match_id}/confirm")
+check("suggest match confirm 200", sc == 200, f"{sc}")
+
+sc, body = jget(f"/reconciliation/suggestions?bankAccountId={sug_bca_id}")
+check("suggestions exclude confirmed", sc == 200 and all(s["bankTransaction"]["id"] != sug_stmt_a for s in body.get("items", [])), str([s["bankTransaction"]["externalId"] for s in body.get("items", [])]))
+
+sc, body = jget(f"/bank-transactions?bankAccountId={sug_bca_id}&pageSize=50")
+sug_flags = body.get("items", [])
+sug_flag_a = next((b for b in sug_flags if b["id"] == sug_stmt_a), None)
+sug_flag_b = next((b for b in sug_flags if b["id"] == sug_stmt_b), None)
+check("bank txn matched flag true after confirm", bool(sug_flag_a) and sug_flag_a["matched"] is True, str(sug_flag_a))
+check("bank txn matched flag false unmatched", bool(sug_flag_b) and sug_flag_b["matched"] is False, str(sug_flag_b))
+
+sc, _ = jdelete(f"/reconciliation/matches/{sug_match_id}")
+check("suggest cleanup match 204", sc == 204, f"{sc}")
+for sid in (sug_stmt_a, sug_stmt_b):
+    sc, _ = jdelete(f"/bank-transactions/{sid}")
+    check("suggest cleanup stmt 204", sc == 204, f"{sc}")
+for tid in (sug_txn_a, sug_txn_b):
+    sc, body = jpost(f"/transactions/{tid}/void", {})
+    check("suggest cleanup void txn", sc == 200 and body.get("status") == "voided", f"{sc}")
+
+sc, body = jget(f"/reconciliation/suggestions?bankAccountId={sug_bca_id}")
+check("suggestions empty after cleanup", sc == 200 and all(s["bankTransaction"]["externalId"] not in ("SGT-150K-A", "SGT-150K-B") for s in body.get("items", [])), f"{sc}")
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail
 # ═══════════════════════════════════════════════════════════════════
 
