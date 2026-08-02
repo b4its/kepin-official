@@ -28,11 +28,19 @@
   let dashboard = $state<Dashboard | null>(null);
   let loading = $state(false);
   let error = $state('');
+  let compareMode = $state(false);
+  let compareStart = $state('');
+  let compareEnd = $state('');
+  let compareDashboard = $state<Dashboard | null>(null);
+  let compareLoading = $state(false);
 
   const income = $derived(number(dashboard?.metrics.income));
   const expense = $derived(number(dashboard?.metrics.expense));
   const profit = $derived(number(dashboard?.metrics.grossProfit));
   const cash = $derived(number(dashboard?.metrics.cashBalance));
+  const compareIncome = $derived(compareMode ? number(compareDashboard?.metrics.income) : null);
+  const compareExpense = $derived(compareMode ? number(compareDashboard?.metrics.expense) : null);
+  const compareProfit = $derived(compareMode ? number(compareDashboard?.metrics.grossProfit) : null);
   const cashFlow = $derived(dashboard?.cashFlow ?? dashboard?.cash_flow ?? []);
   const composition = $derived(dashboard?.expenseComposition ?? dashboard?.expense_composition ?? []);
   const recent = $derived(dashboard?.recentTransactions ?? dashboard?.recent_transactions ?? []);
@@ -45,6 +53,31 @@
   function onRangeChange(_preset: Preset, start: string, end: string) {
     startDate = start;
     endDate = end;
+  }
+
+  function defaultCompareRange() {
+    if (!startDate || !endDate) return;
+    const span = new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime();
+    const cEnd = new Date(`${startDate}T00:00:00`).getTime() - 86400000;
+    compareStart = new Date(cEnd - span).toISOString().slice(0, 10);
+    compareEnd = new Date(cEnd).toISOString().slice(0, 10);
+  }
+
+  function toggleCompare() {
+    compareMode = !compareMode;
+    if (compareMode) defaultCompareRange();
+  }
+
+  async function loadCompare() {
+    if (!slug || !compareStart || !compareEnd) return;
+    compareLoading = true;
+    try {
+      compareDashboard = await tenantApi.getTenantDashboard(slug, { startDate: compareStart, endDate: compareEnd }) as Dashboard;
+    } catch {
+      compareDashboard = null;
+    } finally {
+      compareLoading = false;
+    }
   }
 
   async function loadDashboard() {
@@ -68,6 +101,11 @@
   });
 
   $effect(() => { if (slug && startDate && endDate) void loadDashboard(); });
+  $effect(() => {
+    if (slug && compareMode && compareStart && compareEnd) {
+      void loadCompare();
+    }
+  });
 </script>
 
 <PageHeader title="Dashboard" description={`${$page.params.tenantSlug || 'Workspace'} · data backend real-time`}>
@@ -79,10 +117,27 @@
 <div class="mb-6"><DateRangeFilter onChange={onRangeChange} /></div>
 {#if error}<div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>{/if}
 
+<div class="card mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 p-4">
+  <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
+    <input type="checkbox" checked={compareMode} onclick={toggleCompare} class="h-4 w-4" />
+    Bandingkan dengan periode sebelumnya
+  </label>
+  {#if compareMode}
+    <div class="flex flex-wrap items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+      <span>Periode pembanding:</span>
+      <input type="date" bind:value={compareStart} class="input-field" aria-label="Tanggal mulai pembanding" />
+      <span>s.d.</span>
+      <input type="date" bind:value={compareEnd} class="input-field" aria-label="Tanggal akhir pembanding" />
+    </div>
+    <button class="text-xs text-[hsl(var(--primary))] hover:underline" onclick={defaultCompareRange}>← Periode sebelumnya</button>
+    {#if compareLoading}<span class="text-xs text-[hsl(var(--muted-foreground))]">Memuat…</span>{/if}
+  {/if}
+</div>
+
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-  <MetricCard label="Pendapatan" value={income} loading={loading} format="currency" />
-  <MetricCard label="Pengeluaran" value={expense} loading={loading} format="currency" />
-  <MetricCard label="Laba Bersih" value={profit} loading={loading} format="currency" />
+  <MetricCard label="Pendapatan" value={income} previousValue={compareMode ? compareIncome : undefined} loading={loading} format="currency" />
+  <MetricCard label="Pengeluaran" value={expense} previousValue={compareMode ? compareExpense : undefined} loading={loading} format="currency" />
+  <MetricCard label="Laba Bersih" value={profit} previousValue={compareMode ? compareProfit : undefined} loading={loading} format="currency" />
   <MetricCard label="Kas & Bank" value={cash} loading={loading} format="currency" />
 </div>
 
