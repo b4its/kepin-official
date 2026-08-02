@@ -49,6 +49,7 @@ export async function createTransaction(slug: string, data: any) { return api(`/
 export async function postTransaction(slug: string, id: string) { return api(`/tenants/${slug}/transactions/${id}/post`, { method: 'POST' }); }
 export async function voidTransaction(slug: string, id: string) { return api(`/tenants/${slug}/transactions/${id}/void`, { method: 'POST' }); }
 export async function getJournals(slug: string, params?: string) { return api(`/tenants/${slug}/journals${params || ''}`); }
+export async function getLedger(slug: string, params?: string) { return api(`/tenants/${slug}/journals/ledger${params || ''}`); }
 export async function createJournal(slug: string, data: { journalDate: string; reference?: string; description?: string; lines: { accountId: string; description?: string; debit: string; credit: string }[] }) { return api(`/tenants/${slug}/journals`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function postJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/post`, { method: 'POST', headers: { 'X-Idempotency-Key': crypto.randomUUID() } }); }
 export async function reverseJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/reverse`, { method: 'POST' }); }

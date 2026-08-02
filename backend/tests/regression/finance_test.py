@@ -218,6 +218,17 @@ check("delete missing bank 404", sc == 404, f"{sc}")
 
 check("bank count restored", len(jget("/bank-accounts")[1]) == bank_count, f"{bank_count}")
 
+# Bersihkan residu e2e: hapus semua match + statement bank agar ringkasan deterministik
+bank_list = jget("/bank-accounts")[1]
+bca_summary = next((b for b in bank_list if b["bankName"] == "BCA"), None)
+if bca_summary:
+    sc, body = jget("/reconciliation?pageSize=100")
+    for m in body.get("items", []):
+        jdelete(f"/reconciliation/matches/{m['id']}")
+    sc, body = jget(f"/bank-transactions?bankAccountId={bca_summary['id']}&pageSize=100")
+    for b in body.get("items", []):
+        jdelete(f"/bank-transactions/{b['id']}")
+
 sc, body = jget("/bank-accounts")
 banks = body
 seed_banks = [b for b in banks if b["bankName"] in ("BCA", "BNI", "BRI", "Bank Mandiri", "Bank Syariah")]
@@ -556,6 +567,34 @@ check("journals accountId filter touches account", all(any(l.get("accountId") ==
 check("journals accountId filter total <= all", body.get("total", 0) <= gl_all, f"{body.get('total')} <= {gl_all}")
 sc, body = jget("/journals?accountId=00000000-0000-0000-0000-000000000000")
 check("journals unknown account filter 0", sc == 200 and body.get("total", 0) == 0, f"{sc} {body.get('total')}")
+
+# ═══════════════════════════════════════════════════════════════════
+#  JOURNALS — BUKU BESAR PER AKUN (running balance)
+# ═══════════════════════════════════════════════════════════════════
+
+sc, body = jget(f"/journals/ledger?accountId={sug_cash['id']}")
+check("ledger 200", sc == 200, f"{sc}")
+ledger_b = body
+check("ledger account info", body.get("accountId") == sug_cash["id"] and body.get("normalBalance") == "debit", str(body.get("accountId")))
+ledger_rows = body.get("items", [])
+check("ledger has rows", len(ledger_rows) > 0, f"{len(ledger_rows)}")
+check("ledger closing == last balance", Decimal(body.get("closing", "0")) == Decimal(ledger_rows[-1]["balance"]), f"{body.get('closing')} vs {ledger_rows[-1]['balance']}")
+prev_bal = Decimal(body["opening"])
+bal_ok = True
+for row in ledger_rows:
+    delta = Decimal(row["debit"]) - Decimal(row["credit"])
+    if Decimal(row["balance"]) != prev_bal + delta:
+        bal_ok = False
+        break
+    prev_bal = Decimal(row["balance"])
+check("ledger running balance consistent", bal_ok, f"opening={body['opening']}")
+dates = [r["journalDate"] for r in ledger_rows]
+check("ledger chronological asc", dates == sorted(dates), str(dates[:3]))
+
+sc, body = jget(f"/journals/ledger?accountId={sug_cash['id']}&startDate=2026-01-01&endDate=2026-12-31")
+check("ledger with period 200", sc == 200 and len(body.get("items", [])) > 0, f"{sc}")
+sc, body = jget("/journals/ledger?accountId=00000000-0000-0000-0000-000000000000")
+check("ledger unknown account 404", sc == 404, f"{sc}")
 
 # ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail

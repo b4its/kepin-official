@@ -41,6 +41,28 @@ test.describe('Owner Accounting Workflow', () => {
     expect(errors).toEqual([]);
   });
 
+  test('journals ledger shows running balance for an account', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+
+    await page.goto(`/app/${TENANT}/accounting/journals`);
+    await page.waitForLoadState('networkidle');
+
+    const select = page.getByLabel('Filter akun buku besar');
+    await select.selectOption({ index: 1 });
+    await expect(page.getByText('Hanya jurnal yang menyentuh akun terpilih')).toBeVisible();
+
+    await page.getByRole('checkbox', { name: 'Lihat buku besar (saldo berjalan)' }).check();
+    await expect(page.getByText(/^Buku Besar · /)).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Saldo awal' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Saldo' })).toBeVisible();
+    await expect(page.getByText('Saldo akhir').first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'Reset' }).click();
+    await expect(page.getByText(/^Buku Besar · /)).not.toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test('transactions endpoint returns data', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
     const res = await api.get(`tenants/${TENANT}/transactions`);

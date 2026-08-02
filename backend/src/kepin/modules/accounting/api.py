@@ -162,6 +162,29 @@ class JournalUpdate(ApiSchema):
     lines: list[dict] | None = None
 
 
+class LedgerLineSchema(ApiSchema):
+    journal_entry_id: str
+    journal_number: str
+    journal_date: date
+    status: str = "posted"
+    reference: str = ""
+    description: str = ""
+    debit: str = "0.00"
+    credit: str = "0.00"
+    balance: str = "0.00"
+
+
+class LedgerSchema(ApiSchema):
+    account_id: str
+    account_code: str
+    account_name: str
+    account_type: str
+    normal_balance: str
+    opening: str
+    closing: str
+    items: list[LedgerLineSchema]
+
+
 class ReconciliationSchema(ApiSchema):
     id: str
     bank_transaction_id: str
@@ -1005,6 +1028,89 @@ async def list_journals(
         )
 
     return make_paginated(items, params.page, params.page_size, total)
+
+
+@router.get(
+    "/journals/ledger",
+    response_model=LedgerSchema,
+    summary="Buku Besar per Akun",
+    description="Mutasi saldo akun per jurnal dengan saldo berjalan (opening + delta = closing)",
+)
+async def get_account_ledger(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+    account_id: str = Query(alias="accountId"),
+    start_date: date | None = Query(None, alias="startDate"),
+    end_date: date | None = Query(None, alias="endDate"),
+):
+    account = (
+        await session.execute(
+            select(Account).where(Account.id == account_id, Account.tenant_id == tenant.id)
+        )
+    ).scalar_one_or_none()
+    if not account:
+        raise NotFoundError(message="Akun tidak ditemukan")
+
+    sign = 1 if account.normal_balance == "debit" else -1
+    sub_status = select(JournalLine, JournalEntry).join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id).where(
+        JournalLine.tenant_id == tenant.id,
+        JournalLine.account_id == account.id,
+        _journal_statuses(),
+    )
+
+    def _sum_rows(rows):
+        total = Decimal("0")
+        for _line, entry in rows:
+            total += ((_line.debit or Decimal("0")) - (_line.credit or Decimal("0"))) * sign
+        return total
+
+    opening = Decimal("0")
+    if start_date:
+        opening_rows = (
+            await session.execute(
+                sub_status.where(JournalEntry.journal_date < start_date)
+            )
+        ).all()
+        opening = _sum_rows(opening_rows)
+
+    q = sub_status
+    if start_date:
+        q = q.where(JournalEntry.journal_date >= start_date)
+    if end_date:
+        q = q.where(JournalEntry.journal_date <= end_date)
+    q = q.order_by(JournalEntry.journal_date.asc(), JournalEntry.created_at.asc(), JournalLine.line_number.asc()).limit(1000)
+    rows = (await session.execute(q)).all()
+
+    running = opening
+    items: list[LedgerLineSchema] = []
+    for line, entry in rows:
+        delta = (line.debit - line.credit) * sign
+        running += delta
+        items.append(
+            LedgerLineSchema(
+                journal_entry_id=str(entry.id),
+                journal_number=entry.journal_number,
+                journal_date=entry.journal_date,
+                status=entry.status,
+                reference=entry.reference or "",
+                description=entry.description or line.description or "",
+                debit=money_str(line.debit),
+                credit=money_str(line.credit),
+                balance=money_str(running),
+            )
+        )
+
+    return LedgerSchema(
+        account_id=str(account.id),
+        account_code=account.code,
+        account_name=account.name,
+        account_type=account.type,
+        normal_balance=account.normal_balance,
+        opening=money_str(opening),
+        closing=money_str(running),
+        items=items,
+    )
 
 
 @router.post("/journals", response_model=JournalSchema, status_code=201, summary="Buat Jurnal", description="Membuat jurnal baru dengan lines debit/kredit")

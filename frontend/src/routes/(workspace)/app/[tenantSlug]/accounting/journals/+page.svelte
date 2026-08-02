@@ -7,9 +7,12 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import { accounts, currentRole, journalEntries, loadJournals, tenantApi } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
+  import { formatIDR } from '$lib/utils/currency';
   import { Download, Plus, RefreshCw } from '@lucide/svelte';
 
   type Line = { accountId: string; description: string; debit: string; credit: string };
+  type LedgerLine = { journalEntryId: string; journalNumber: string; journalDate: string; status: string; reference: string; description: string; debit: string; credit: string; balance: string };
+  type Ledger = { accountId: string; accountCode: string; accountName: string; accountType: string; normalBalance: string; opening: string; closing: string; items: LedgerLine[] };
 
   const slug = $derived($page.params.tenantSlug || '');
   const isOwner = $derived($currentRole === 'tenant_owner');
@@ -19,6 +22,11 @@
   let saving = $state(false);
   let error = $state('');
   let accountFilter = $state('');
+  let showLedger = $state(false);
+  let ledger = $state<Ledger | null>(null);
+  let ledgerLoading = $state(false);
+  let startDate = $state('');
+  let endDate = $state('');
   let form = $state({ journalDate: '', reference: '', description: '', lines: [] as Line[] });
 
   const totalDebit = $derived(form.lines.reduce((sum, line) => sum + amount(line.debit), 0));
@@ -78,6 +86,28 @@
     }
   }
 
+  async function loadLedger() {
+    if (!slug || !accountFilter) return;
+    ledgerLoading = true;
+    error = '';
+    try {
+      const parts = [`?accountId=${accountFilter}`];
+      if (startDate) parts.push(`startDate=${startDate}`);
+      if (endDate) parts.push(`endDate=${endDate}`);
+      ledger = await tenantApi.getLedger(slug, parts.join('&')) as Ledger;
+    } catch (err: any) {
+      ledger = null;
+      error = err?.message || 'Gagal memuat buku besar';
+    } finally {
+      ledgerLoading = false;
+    }
+  }
+
+  async function toggleLedger() {
+    showLedger = !showLedger;
+    if (showLedger) await loadLedger();
+  }
+
   async function saveDraft() {
     if (!slug || !isOwner || !balanced) return;
     saving = true;
@@ -135,7 +165,7 @@
 <div class="card mb-4 flex flex-wrap items-center gap-3 p-4">
   <label class="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
     Buku besar per akun:
-    <select bind:value={accountFilter} onchange={() => refresh()} class="input-field" aria-label="Filter akun buku besar">
+    <select bind:value={accountFilter} onchange={() => { showLedger = false; void refresh(); }} class="input-field" aria-label="Filter akun buku besar">
       <option value="">Semua akun</option>
       {#each $accounts.filter((account) => account.status === 'active') as account}
         <option value={account.id}>{account.code} · {account.name}</option>
@@ -144,10 +174,69 @@
   </label>
   {#if accountFilter}
     <span class="text-xs text-[hsl(var(--muted-foreground))]">Hanya jurnal yang menyentuh akun terpilih</span>
-    <button class="text-xs text-[hsl(var(--primary))] hover:underline" onclick={() => { accountFilter = ''; void refresh(); }}>Reset</button>
+    <button class="text-xs text-[hsl(var(--primary))] hover:underline" onclick={() => { accountFilter = ''; showLedger = false; void refresh(); }}>Reset</button>
+    <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
+      <input type="checkbox" checked={showLedger} onclick={toggleLedger} class="h-4 w-4" />
+      Lihat buku besar (saldo berjalan)
+    </label>
   {/if}
 </div>
 
+{#if showLedger && ledger}
+  <div class="card mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <span>Periode:</span>
+      <input type="date" bind:value={startDate} class="input-field w-40" aria-label="Tanggal mulai buku besar" />
+      <span>s.d.</span>
+      <input type="date" bind:value={endDate} class="input-field w-40" aria-label="Tanggal akhir buku besar" />
+      <Button size="sm" variant="secondary" onclick={loadLedger} loading={ledgerLoading}>Terapkan</Button>
+    </div>
+    <p class="text-xs text-[hsl(var(--muted-foreground))]">
+      Saldo awal {formatIDR(Number(ledger.opening))} · Saldo akhir {formatIDR(Number(ledger.closing))}
+    </p>
+  </div>
+{/if}
+
+{#if showLedger && ledger}
+  <div class="card overflow-x-auto">
+    <div class="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-3">
+      <h3 class="font-semibold">Buku Besar · {ledger.accountCode} {ledger.accountName}</h3>
+      <span class="rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-xs">{ledger.accountType} · normal {ledger.normalBalance}</span>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+          <th class="px-4 py-2">Tanggal</th>
+          <th class="px-4 py-2">No. Jurnal</th>
+          <th class="px-4 py-2">Deskripsi</th>
+          <th class="px-4 py-2 text-right">Debit</th>
+          <th class="px-4 py-2 text-right">Kredit</th>
+          <th class="px-4 py-2 text-right">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-[hsl(var(--border))]">
+          <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="5">Saldo awal</td>
+          <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(ledger.opening))}</td>
+        </tr>
+        {#each ledger.items as line}
+          <tr class="border-b border-[hsl(var(--border))]">
+            <td class="px-4 py-2">{line.journalDate}</td>
+            <td class="px-4 py-2 font-mono text-xs">{line.journalNumber}</td>
+            <td class="px-4 py-2 text-[hsl(var(--muted-foreground))]">{line.description || line.reference || '-'}</td>
+            <td class="px-4 py-2 text-right tabular-nums">{Number(line.debit) !== 0 ? formatIDR(Number(line.debit)) : ''}</td>
+            <td class="px-4 py-2 text-right tabular-nums">{Number(line.credit) !== 0 ? formatIDR(Number(line.credit)) : ''}</td>
+            <td class="px-4 py-2 text-right font-medium tabular-nums">{formatIDR(Number(line.balance))}</td>
+          </tr>
+        {/each}
+        <tr>
+          <td class="px-4 py-2 font-semibold" colspan="5">Saldo akhir</td>
+          <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(ledger.closing))}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+{:else}
 <DataTable
   columns={[
     { key: 'date', label: 'Tanggal', sortable: true },
@@ -167,6 +256,7 @@
     {#if isOwner && item.status === 'posted'}<button class="ml-2 text-xs text-[var(--color-kepin-danger)] hover:underline" onclick={() => reverse(item.id)}>Reverse</button>{/if}
   {/snippet}
 </DataTable>
+{/if}
 
 <Modal title="Jurnal Baru" open={showModal} onclose={() => showModal = false}>
   <form onsubmit={saveDraft} class="space-y-4">
