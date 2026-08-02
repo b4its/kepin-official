@@ -163,6 +163,27 @@ class CustomerPaymentCreate(ApiSchema):
     allocations: list[PaymentAllocationInput] = []
 
 
+class StatementLineSchema(ApiSchema):
+    id: str
+    date: date
+    reference: str
+    description: str
+    debit: str
+    credit: str
+    balance: str
+
+
+class CustomerStatementSchema(ApiSchema):
+    customer_id: str
+    customer_code: str
+    customer_name: str
+    start_date: date | None = None
+    end_date: date | None = None
+    opening: str
+    closing: str
+    items: list[StatementLineSchema]
+
+
 # ── Helpers ────────────────────────────────────────────────────────────
 
 
@@ -1070,3 +1091,119 @@ async def void_customer_payment(
     await session.refresh(payment)
 
     return CustomerPaymentSchema.model_validate(payment)
+
+
+@router.get("/customer-statements", response_model=CustomerStatementSchema, summary="Kartu Piutang per Pelanggan", description="Mutasi faktur & pembayaran pelanggan dengan saldo berjalan")
+async def get_customer_statement(
+    customer_id: str = Query(alias="customerId"),
+    start_date: date | None = Query(None, alias="startDate"),
+    end_date: date | None = Query(None, alias="endDate"),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    cust = await session.execute(
+        select(Customer).where(
+            Customer.id == customer_id,
+            Customer.tenant_id == tenant.id,
+        )
+    )
+    customer = cust.scalar_one_or_none()
+    if not customer:
+        raise NotFoundError(message="Pelanggan tidak ditemukan")
+
+    invoices = (
+        await session.execute(
+            select(Invoice)
+            .where(
+                Invoice.customer_id == customer.id,
+                Invoice.tenant_id == tenant.id,
+                Invoice.status.in_(["posted", "partial", "paid"]),
+            )
+            .order_by(Invoice.invoice_date, Invoice.created_at, Invoice.invoice_number)
+        )
+    ).scalars().all()
+
+    payments = (
+        await session.execute(
+            select(CustomerPayment)
+            .where(
+                CustomerPayment.customer_id == customer.id,
+                CustomerPayment.tenant_id == tenant.id,
+                CustomerPayment.status == "posted",
+            )
+            .order_by(CustomerPayment.payment_date, CustomerPayment.created_at, CustomerPayment.payment_number)
+        )
+    ).scalars().all()
+
+    rows: list[dict] = []
+    for inv in invoices:
+        rows.append(
+            {
+                "sort_date": inv.invoice_date,
+                "sort_created": inv.created_at,
+                "id": str(inv.id),
+                "date": inv.invoice_date,
+                "reference": inv.invoice_number,
+                "description": f"Invoice (jatuh tempo {inv.due_date.isoformat()})",
+                "debit": ZERO,
+                "credit": inv.total,
+            }
+        )
+    for pay in payments:
+        rows.append(
+            {
+                "sort_date": pay.payment_date,
+                "sort_created": pay.created_at,
+                "id": str(pay.id),
+                "date": pay.payment_date,
+                "reference": pay.payment_number,
+                "description": f"Pembayaran ({pay.method or 'transfer'})",
+                "debit": pay.amount,
+                "credit": ZERO,
+            }
+        )
+
+    rows.sort(key=lambda r: (r["sort_date"], r["sort_created"] or datetime.min, r["reference"]))
+
+    if start_date is not None:
+        opening = ZERO + sum(
+            (r["credit"] - r["debit"]) for r in rows if r["sort_date"] < start_date
+        )
+        rows = [r for r in rows if r["sort_date"] >= start_date]
+    else:
+        opening = ZERO
+
+    if end_date is not None:
+        rows = [r for r in rows if r["sort_date"] <= end_date]
+
+    rows = rows[-1000:]
+
+    items: list[dict] = []
+    running = opening
+    for r in rows:
+        running += r["credit"] - r["debit"]
+        items.append(
+            StatementLineSchema(
+                id=r["id"],
+                date=r["date"],
+                reference=r["reference"],
+                description=r["description"],
+                debit=money_str(r["debit"]),
+                credit=money_str(r["credit"]),
+                balance=money_str(running),
+            )
+        )
+
+    closing = running if items else opening
+
+    return CustomerStatementSchema(
+        customer_id=str(customer.id),
+        customer_code=customer.code,
+        customer_name=customer.name,
+        start_date=start_date,
+        end_date=end_date,
+        opening=money_str(opening),
+        closing=money_str(closing),
+        items=items,
+    )

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import Button from '$lib/components/ui/Button.svelte';
@@ -6,7 +7,9 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import { customers, createCustomer, updateCustomer, deleteCustomer } from '$lib/stores/data';
+  import { getCustomerStatement } from '$lib/api/tenants';
   import { showToast } from '$lib/stores/toast';
+  import { formatIDR } from '$lib/utils/currency';
   import { Download } from '@lucide/svelte';
 
   let showModal = $state(false);
@@ -14,7 +17,20 @@
   let editingIndex = $state<number | null>(null);
   let deleteIndex = $state<number | null>(null);
 
+  let showStatement = $state(false);
+  let statementCustomer = $state<{ id: string; code: string; name: string } | null>(null);
+  let statement = $state<{
+    opening: string;
+    closing: string;
+    items: { id: string; date: string; reference: string; description: string; debit: string; credit: string; balance: string }[];
+  } | null>(null);
+  let statementLoading = $state(false);
+  let statementStart = $state('');
+  let statementEnd = $state('');
+
   let form = $state({ code: '', name: '', email: '', phone: '', address: '' });
+
+  const slug = $derived($page.params.tenantSlug || '');
 
   const exportColumns = [
     { key: 'code', label: 'Kode' },
@@ -57,6 +73,30 @@
       showToast('Pelanggan berhasil dihapus', 'success');
     }
   }
+
+  async function openStatement(item: { id: string; code: string; name: string }) {
+    statementCustomer = { id: item.id, code: item.code, name: item.name };
+    statement = null;
+    statementStart = '';
+    statementEnd = '';
+    showStatement = true;
+    await loadStatement();
+  }
+
+  async function loadStatement() {
+    if (!statementCustomer?.id) return;
+    statementLoading = true;
+    try {
+      const params = [];
+      if (statementStart) params.push(`&startDate=${statementStart}`);
+      if (statementEnd) params.push(`&endDate=${statementEnd}`);
+      statement = await getCustomerStatement(slug, statementCustomer.id, params.join('')) as unknown as typeof statement;
+    } catch (e) {
+      showToast('Gagal memuat kartu piutang', 'error');
+    } finally {
+      statementLoading = false;
+    }
+  }
 </script>
 
 <PageHeader title="Pelanggan" description="Daftar pelanggan" breadcrumbs={[{ label: 'Penjualan' }, { label: 'Pelanggan' }]}>
@@ -79,6 +119,7 @@
   searchable={true}
 >
   {#snippet rowActions(item: any, i: number)}
+    <button onclick={() => openStatement(item)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Statement</button>
     <button onclick={() => openEdit(i)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
     <button onclick={() => deleteIndex = i} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
   {/snippet}
@@ -121,6 +162,68 @@
   onconfirm={confirmDelete}
   message="Hapus pelanggan ini? Tindakan ini tidak dapat dibatalkan."
 />
+
+<Modal
+  title={statementCustomer ? `Kartu Piutang · ${statementCustomer.code} ${statementCustomer.name}` : 'Kartu Piutang'}
+  open={showStatement}
+  onclose={() => showStatement = false}
+>
+  <div class="space-y-4">
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <span>Periode:</span>
+      <input type="date" bind:value={statementStart} class="input-field w-40" aria-label="Tanggal mulai kartu piutang" />
+      <span>s.d.</span>
+      <input type="date" bind:value={statementEnd} class="input-field w-40" aria-label="Tanggal akhir kartu piutang" />
+      <Button size="sm" variant="secondary" onclick={loadStatement} loading={statementLoading}>Terapkan</Button>
+    </div>
+    {#if statement}
+      <p class="text-xs text-[hsl(var(--muted-foreground))]">
+        Saldo awal {formatIDR(Number(statement.opening))} · Saldo akhir {formatIDR(Number(statement.closing))}
+      </p>
+      <div class="max-h-96 overflow-auto rounded border border-[hsl(var(--border))]">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0 bg-[hsl(var(--card))]">
+            <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+              <th class="px-4 py-2">Tanggal</th>
+              <th class="px-4 py-2">No. Referensi</th>
+              <th class="px-4 py-2">Deskripsi</th>
+              <th class="px-4 py-2 text-right">Debit</th>
+              <th class="px-4 py-2 text-right">Kredit</th>
+              <th class="px-4 py-2 text-right">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-[hsl(var(--border))]">
+              <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="5">Saldo awal</td>
+              <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(statement.opening))}</td>
+            </tr>
+            {#if statement.items.length === 0}
+              <tr class="border-b border-[hsl(var(--border))]">
+                <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="6">Tidak ada mutasi pada periode ini</td>
+              </tr>
+            {/if}
+            {#each statement.items as line}
+              <tr class="border-b border-[hsl(var(--border))]">
+                <td class="px-4 py-2">{line.date}</td>
+                <td class="px-4 py-2 font-mono text-xs">{line.reference}</td>
+                <td class="px-4 py-2 text-[hsl(var(--muted-foreground))]">{line.description}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{Number(line.debit) !== 0 ? formatIDR(Number(line.debit)) : ''}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{Number(line.credit) !== 0 ? formatIDR(Number(line.credit)) : ''}</td>
+                <td class="px-4 py-2 text-right font-medium tabular-nums">{formatIDR(Number(line.balance))}</td>
+              </tr>
+            {/each}
+            <tr>
+              <td class="px-4 py-2 font-semibold" colspan="5">Saldo akhir</td>
+              <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(statement.closing))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {:else if statementLoading}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Memuat kartu piutang…</p>
+    {/if}
+  </div>
+</Modal>
 
 <ExportModal
   open={showExport}

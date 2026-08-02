@@ -168,6 +168,11 @@ test.describe('Owner UI Interaction', () => {
   });
 
   test('fiscal years modal creates a run-scoped fiscal year', async ({ page }) => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const res = await api.get(`tenants/${TENANT}/fiscal-years`);
+    expect(res.status()).toBe(200);
+    const existing = await res.json();
+
     await page.goto(`/app/${TENANT}/accounting/fiscal-years`);
     await page.waitForLoadState('networkidle');
 
@@ -178,9 +183,8 @@ test.describe('Owner UI Interaction', () => {
     const modal = page.locator('[role="dialog"], .modal, .MuiModal-root').first();
     await expect(modal).toBeVisible();
 
-    const body = await page.locator('body').innerText();
     let year = 2035;
-    while (year <= 2054 && body.includes(`Tahun Buku E2E ${year}`)) year += 1;
+    while (year <= 2054 && existing.some((y: any) => y.name === `Tahun Buku E2E ${year}`)) year += 1;
     const start = `${year}-04-01`;
     const end = `${year + 1}-03-31`;
     const name = `Tahun Buku E2E ${year}`;

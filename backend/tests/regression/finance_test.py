@@ -1,4 +1,5 @@
 import sys
+import time
 
 from decimal import Decimal
 
@@ -52,6 +53,99 @@ def purge_fiscal_year():
 
 
 purge_fiscal_year()
+
+
+def purge_customer_statement_fixtures():
+    import asyncio
+
+    from sqlalchemy import delete, or_, select, update
+
+    from kepin.db.session import get_session
+    from kepin.db.models import (
+        Customer,
+        CustomerPayment,
+        CustomerPaymentAllocation,
+        Invoice,
+        InvoiceLine,
+        JournalEntry,
+        JournalLine,
+        Tenant,
+    )
+
+    async def _purge():
+        async for s in get_session():
+            tenant = (
+                await s.execute(select(Tenant).where(Tenant.slug == "toko-maju"))
+            ).scalar_one()
+            cids = (
+                await s.execute(
+                select(Customer.id).where(
+                    Customer.tenant_id == str(tenant.id),
+                    or_(
+                        Customer.code.like("CUS-FT-%"),
+                        Customer.code.like("CUS-DBG-%"),
+                    ),
+                )
+                )
+            ).scalars().all()
+            for cid in cids:
+                inv_rows = (
+                    await s.execute(select(Invoice).where(Invoice.customer_id == cid))
+                ).scalars().all()
+                pay_rows = (
+                    await s.execute(
+                        select(CustomerPayment).where(CustomerPayment.customer_id == cid)
+                    )
+                ).scalars().all()
+                jids = {r.journal_entry_id for r in inv_rows} | {
+                    r.journal_entry_id for r in pay_rows
+                }
+                rev_numbers = {f"REV-{r.invoice_number}" for r in inv_rows} | {
+                    f"REV-{p.payment_number}" for p in pay_rows
+                }
+                if rev_numbers:
+                    orphan_revs = (
+                        await s.execute(
+                            select(JournalEntry.id).where(
+                                JournalEntry.tenant_id == str(tenant.id),
+                                JournalEntry.journal_number.in_(list(rev_numbers)),
+                            )
+                        )
+                    ).scalars().all()
+                    for jid in orphan_revs:
+                        await s.execute(delete(JournalLine).where(JournalLine.journal_entry_id == jid))
+                        await s.execute(delete(JournalEntry).where(JournalEntry.id == jid))
+                for p in pay_rows:
+                    await s.execute(
+                        delete(CustomerPaymentAllocation).where(CustomerPaymentAllocation.payment_id == p.id)
+                    )
+                    await s.execute(delete(CustomerPayment).where(CustomerPayment.id == p.id))
+                for i in inv_rows:
+                    await s.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == i.id))
+                    await s.execute(delete(Invoice).where(Invoice.id == i.id))
+                if jids:
+                    rev_jids = (
+                        await s.execute(
+                            select(JournalEntry.id).where(
+                                JournalEntry.reversed_entry_id.in_(list(jids))
+                            )
+                        )
+                    ).scalars().all()
+                    all_jids = jids | set(rev_jids)
+                    for jid in all_jids:
+                        if not jid:
+                            continue
+                        await s.execute(delete(JournalLine).where(JournalLine.journal_entry_id == jid))
+                        await s.execute(
+                            update(JournalEntry)
+                            .where(JournalEntry.reversed_entry_id == jid)
+                            .values(reversed_entry_id=None)
+                        )
+                        await s.execute(delete(JournalEntry).where(JournalEntry.id == jid))
+                await s.execute(delete(Customer).where(Customer.id == cid))
+            await s.commit()
+
+    asyncio.run(_purge())
 
 
 def login(email, pw):
@@ -595,6 +689,79 @@ sc, body = jget(f"/journals/ledger?accountId={sug_cash['id']}&startDate=2026-01-
 check("ledger with period 200", sc == 200 and len(body.get("items", [])) > 0, f"{sc}")
 sc, body = jget("/journals/ledger?accountId=00000000-0000-0000-0000-000000000000")
 check("ledger unknown account 404", sc == 404, f"{sc}")
+
+# ═══════════════════════════════════════════════════════════════════
+#  SALES — KARTU PIUTANG PER PELANGGAN (customer statement)
+# ═══════════════════════════════════════════════════════════════════
+
+purge_customer_statement_fixtures()
+
+ts = str(int(time.time() * 1000))[-8:]
+sc, body = jpost("/customers", {"code": f"CUS-FT-{ts}", "name": f"FT Customer {ts}", "email": f"ft{ts}@test.com"})
+check("statement customer create 201", sc == 201, f"{sc}")
+cust_id = body.get("id", "")
+check("statement customer id present", bool(cust_id))
+
+sc, body = jpost("/invoices", {
+    "customer_id": cust_id,
+    "invoice_date": "2026-05-10",
+    "due_date": "2026-06-10",
+    "lines": [{"item_name": "Jasa Konsultasi", "quantity": "1", "unit_price": "250000"}],
+})
+check("statement invoice create 201", sc == 201, f"{sc}")
+inv_id = body.get("id", "")
+inv_total = Decimal(body.get("total", "0"))
+check("statement invoice total 250000", inv_total == Decimal("250000"), str(inv_total))
+sc, body = jpost(f"/invoices/{inv_id}/post")
+check("statement invoice post 200", sc == 200 and body.get("status") == "posted", f"{sc} {body.get('status')}")
+
+sc, body = jget(f"/customer-statements?customerId={cust_id}")
+check("statement 200", sc == 200, f"{sc}")
+check("statement customer info", body.get("customerId") == cust_id and body.get("customerName", "").startswith("FT Customer"), str(body.get("customerName")))
+check("statement opening zero", Decimal(body.get("opening", "0")) == Decimal("0"), body.get("opening"))
+st_rows = body.get("items", [])
+check("statement invoice row", len(st_rows) == 1 and st_rows[0]["credit"] == "250000.00" and Decimal(st_rows[0]["balance"]) == inv_total, str(st_rows))
+check("statement closing == invoice total", Decimal(body.get("closing", "0")) == inv_total, body.get("closing"))
+
+sc, body = jpost("/customer-payments", {
+    "customer_id": cust_id,
+    "payment_date": "2026-06-01",
+    "amount": "250000",
+    "method": "transfer",
+    "allocations": [{"invoice_id": inv_id, "amount": "250000"}],
+})
+check("statement payment create 201", sc == 201, f"{sc}")
+pay_id = body.get("id", "")
+sc, body = jpost(f"/customer-payments/{pay_id}/post")
+check("statement payment post 200", sc == 200 and body.get("status") == "posted", f"{sc} {body.get('status')}")
+
+sc, body = jget(f"/customer-statements?customerId={cust_id}")
+st_rows = body.get("items", [])
+check("statement 2 rows", len(st_rows) == 2, f"{len(st_rows)}")
+check("statement invoice then payment", st_rows[0]["reference"].startswith("INV-") and st_rows[1]["reference"].startswith("PAY-"), str([r["reference"] for r in st_rows]))
+check("statement running balance ends zero", Decimal(st_rows[0]["balance"]) == inv_total and Decimal(st_rows[1]["balance"]) == Decimal("0") and Decimal(body.get("closing", "0")) == Decimal("0"), str([r["balance"] for r in st_rows]))
+bal_ok = True
+prev_bal = Decimal(body["opening"])
+for row in st_rows:
+    delta = Decimal(row["debit"]) - Decimal(row["credit"])
+    if Decimal(row["balance"]) != prev_bal - delta:
+        bal_ok = False
+        break
+    prev_bal = Decimal(row["balance"])
+check("statement balance consistent", bal_ok)
+
+sc, body = jget(f"/customer-statements?customerId={cust_id}&startDate=2026-05-20")
+check("statement startDate opening carries invoice", Decimal(body.get("opening", "0")) == inv_total and len(body.get("items", [])) == 1, f"{body.get('opening')} {len(body.get('items', []))}")
+
+sc, body = jget(f"/customer-statements?customerId={cust_id}&startDate=2026-05-01&endDate=2026-05-31")
+check("statement endDate closes at invoice", len(body.get("items", [])) == 1 and Decimal(body.get("closing", "0")) == inv_total, f"{len(body.get('items', []))} {body.get('closing')}")
+
+sc, body = jget("/customer-statements?customerId=00000000-0000-0000-0000-000000000000")
+check("statement unknown customer 404", sc == 404, f"{sc}")
+
+sc, _ = jpost(f"/customer-payments/{pay_id}/void")
+check("statement payment void 200", sc == 200, f"{sc}")
+purge_customer_statement_fixtures()
 
 # ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail
