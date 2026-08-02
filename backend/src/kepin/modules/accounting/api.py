@@ -9,6 +9,7 @@ from decimal import Decimal
 import hashlib
 import re
 from typing import Any
+from pydantic import Field
 
 from kepin.api.dependencies import get_current_user, get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, ListParams, PeriodParams
 from kepin.api.errors import NotFoundError, ConflictError, ValidationError
@@ -245,6 +246,22 @@ class BankTransactionImportResult(ApiSchema):
     created: int
     skipped: int
     errors: list[str]
+
+
+class BulkAutoMatchCreate(ApiSchema):
+    bank_account_id: str | None = None
+    min_score: int = Field(90, ge=1, le=100)
+    max_statements: int = Field(50, ge=1, le=200)
+
+
+class BulkMatchSkipped(ApiSchema):
+    external_id: str
+    reason: str
+
+
+class BulkMatchResult(ApiSchema):
+    matched: int
+    skipped: list[BulkMatchSkipped]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -2173,12 +2190,118 @@ async def confirm_reconciliation_match(
     )
 
 
+@router.post(
+    "/reconciliation/matches/bulk",
+    response_model=BulkMatchResult,
+    summary="Cocokkan Semua Saran",
+    description="Menerapkan saran terbaik (skor >= minScore) untuk statement yang belum dicocokkan dan langsung mengonfirmasi",
+)
+async def bulk_auto_match(
+    body: BulkAutoMatchCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    confirmed_sub = select(ReconciliationMatch.id).where(
+        ReconciliationMatch.tenant_id == tenant.id,
+        ReconciliationMatch.status == "confirmed",
+    )
+    matched_bank_sub = select(ReconciliationMatch.bank_transaction_id).where(
+        ReconciliationMatch.id.in_(confirmed_sub)
+    )
+    matched_txn_sub = select(ReconciliationMatch.transaction_id).where(
+        ReconciliationMatch.id.in_(confirmed_sub)
+    )
+    filters = [
+        BankTransaction.tenant_id == tenant.id,
+        ~BankTransaction.id.in_(matched_bank_sub),
+    ]
+    if body.bank_account_id:
+        filters.append(BankTransaction.bank_account_id == body.bank_account_id)
+    stmts = (
+        await session.execute(
+            select(BankTransaction)
+            .where(and_(*filters))
+            .order_by(BankTransaction.transaction_date.desc())
+            .limit(max(1, body.max_statements))
+        )
+    ).scalars().all()
+
+    gap = timedelta(days=7)
+    now = datetime.now(timezone.utc)
+    used_txn_ids: set[str] = set()
+    matched = 0
+    skipped: list[BulkMatchSkipped] = []
+    for stmt in stmts:
+        txn_rows = (
+            await session.execute(
+                select(Transaction)
+                .where(
+                    Transaction.tenant_id == tenant.id,
+                    Transaction.status == "posted",
+                    ~Transaction.id.in_(matched_txn_sub),
+                    ~Transaction.id.in_(used_txn_ids),
+                    func.abs(Transaction.amount) == abs(stmt.amount),
+                    Transaction.transaction_date.between(stmt.transaction_date - gap, stmt.transaction_date + gap),
+                )
+                .order_by(Transaction.transaction_date.desc())
+                .limit(5)
+            )
+        ).scalars().all()
+        candidates = [
+            (max(20, 100 - abs((t.transaction_date - stmt.transaction_date).days) * 5), t)
+            for t in txn_rows
+        ]
+        candidates.sort(key=lambda c: (-c[0], c[1].transaction_date))
+        best = next((c for c in candidates if c[0] >= body.min_score), None)
+        if best is None:
+            skipped.append(
+                BulkMatchSkipped(
+                    external_id=stmt.external_id,
+                    reason=f"tidak ada kandidat dengan skor >= {body.min_score}",
+                )
+            )
+            continue
+        score, txn = best
+        session.add(
+            ReconciliationMatch(
+                id=new_uuid(),
+                tenant_id=tenant.id,
+                bank_transaction_id=stmt.id,
+                transaction_id=txn.id,
+                confidence=to_money(str(score)),
+                status="confirmed",
+                note="saran otomatis (bulk)",
+                matched_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        used_txn_ids.add(str(txn.id))
+        matched += 1
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="reconciliation.bulk_match",
+        module="accounting",
+        object_type="reconciliation",
+        object_id=str(tenant.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={"matched": matched, "skipped": len(skipped)},
+    )
+    await session.commit()
+
+    return BulkMatchResult(matched=matched, skipped=skipped)
+
+
 @router.delete(
     "/reconciliation/matches/{match_id}", status_code=204,
     summary="Hapus Match", description="Menghapus pencocokan rekonsiliasi",
 )
-async def delete_reconciliation_match(
-    match_id: str = Path(...),
+async def delete_reconciliation_match(    match_id: str = Path(...),
     tenant: TenantContext = Depends(get_tenant_context),
     _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),

@@ -69,6 +69,7 @@ export async function reopenPeriod(slug: string, id: string) { return api(`/tena
 export async function createReconciliationMatch(slug: string, data: { bankTransactionId: string; transactionId: string; confidence?: string; note?: string }) { return api(`/tenants/${slug}/reconciliation/matches`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function confirmReconciliationMatch(slug: string, id: string) { return api(`/tenants/${slug}/reconciliation/matches/${id}/confirm`, { method: 'POST' }); }
 export async function getReconciliationSuggestions(slug: string, params?: string) { return api(`/tenants/${slug}/reconciliation/suggestions${params || ''}`); }
+export async function bulkAutoMatch(slug: string, data: { bankAccountId?: string; minScore?: number; maxStatements?: number }) { return api(`/tenants/${slug}/reconciliation/matches/bulk`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function getCustomers(slug: string) { return api(`/tenants/${slug}/customers`); }
 export async function createCustomer(slug: string, data: any) { return api(`/tenants/${slug}/customers`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateCustomer(slug: string, id: string, data: any) { return api(`/tenants/${slug}/customers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }

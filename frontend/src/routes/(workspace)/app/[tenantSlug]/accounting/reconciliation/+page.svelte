@@ -38,6 +38,9 @@
   let importCsvForm = $state({ bankAccountId: '', csv: '' });
   let importResult = $state<{ created: number; skipped: number; errors: string[] } | null>(null);
   let importing = $state(false);
+  let bulkResult = $state<{ matched: number; skipped: { externalId: string; reason: string }[] } | null>(null);
+  let bulkLoading = $state(false);
+  let showBulkResult = $state(false);
   let accountForm = $state({ accountId: '', bankName: '', maskedNumber: '', status: 'active' });
   let bankTxnForm = $state({ bankAccountId: '', externalId: '', transactionDate: '', description: '', amount: '' });
   let matchForm = $state({ bankTransactionId: '', transactionId: '', confidence: '100', note: '' });
@@ -205,6 +208,20 @@
     finally { suggestApplying = false; }
   }
 
+  async function bulkApply() {
+    if (!slug || !isOwner) return;
+    const unmatched = bankTransactions.filter((t) => !t.matched).length;
+    if (!confirm(`Cocokkan semua statement yang belum dicocokkan (${unmatched}) dengan saran skor >= 90? Statement tanpa kandidat cukup yakin akan dilewati.`)) return;
+    bulkLoading = true;
+    try {
+      bulkResult = await tenantApi.bulkAutoMatch(slug, { minScore: 90 }) as { matched: number; skipped: { externalId: string; reason: string }[] };
+      showToast(`${bulkResult.matched} statement dicocokkan otomatis`, bulkResult.matched > 0 ? 'success' : 'info');
+      showBulkResult = true;
+      await loadAll();
+    } catch (err: any) { showToast(err?.message || 'Gagal mencocokkan otomatis', 'error'); }
+    finally { bulkLoading = false; }
+  }
+
   $effect(() => { if (slug) void loadAll(); });
 </script>
 
@@ -215,6 +232,7 @@
       <Button variant="secondary" onclick={openCreateBank}>+ Rekening Bank</Button>
       <Button variant="secondary" onclick={() => showBankTransaction = true} disabled={bankAccounts.length === 0}>+ Impor Bank Txn</Button>
       <Button variant="secondary" onclick={openImportCsv} disabled={bankAccounts.length === 0}>+ Impor CSV</Button>
+      <Button variant="secondary" onclick={bulkApply} loading={bulkLoading} disabled={!bankTransactions.some((t) => !t.matched)}>Cocokkan Semua Saran</Button>
       <Button onclick={() => showMatch = true} disabled={bankTransactions.length === 0 || postedTransactions.length === 0}>+ Buat Match</Button>
     {/if}
   {/snippet}
@@ -434,4 +452,25 @@
       <p class="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Read-only: hanya owner yang dapat menerapkan saran.</p>
     {/if}
   {/if}
+</Modal>
+<Modal title="Hasil Cocokkan Semua Saran" open={showBulkResult} onclose={() => showBulkResult = false}>
+  <p class="text-sm">
+    <span class="font-semibold text-[var(--color-kepin-green)]">{bulkResult?.matched ?? 0} statement</span> dicocokkan otomatis dan dikonfirmasi.
+  </p>
+  {#if (bulkResult?.skipped?.length ?? 0) > 0}
+    <div class="mt-3">
+      <p class="mb-1 text-sm font-medium">Dilewati ({bulkResult?.skipped.length}):</p>
+      <ul class="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-3 text-xs">
+        {#each bulkResult?.skipped ?? [] as item}
+          <li class="flex items-center justify-between gap-2">
+            <span class="truncate font-medium">{item.externalId}</span>
+            <span class="shrink-0 text-[hsl(var(--muted-foreground))]">{item.reason}</span>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
+  <div class="mt-4 flex justify-end">
+    <Button variant="secondary" onclick={() => showBulkResult = false}>Tutup</Button>
+  </div>
 </Modal>

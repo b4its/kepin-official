@@ -474,6 +474,76 @@ for b in csv_rows:
     check("csv cleanup row 204", sc == 204, f"{sc}")
 
 # ═══════════════════════════════════════════════════════════════════
+#  RECONCILIATION — BULK AUTO-MATCH (Cocokkan Semua Saran)
+# ═══════════════════════════════════════════════════════════════════
+
+sc, body = jget("/bank-transactions?pageSize=100")
+for b in body.get("items", []):
+    if b["externalId"].startswith("SGT-BULK"):
+        jdelete(f"/bank-transactions/{b['id']}")
+page = 1
+while True:
+    sc, body = jget(f"/transactions?pageSize=100&page={page}&startDate=2000-01-01&endDate=2099-12-31")
+    items = body.get("items", [])
+    for t in items:
+        if t.get("description", "").startswith("bulk auto-match"):
+            jpost(f"/transactions/{t['id']}/void", {})
+    if not items or page * 100 >= body.get("total", 0):
+        break
+    page += 1
+
+sc, body = jpost("/bank-transactions", {"bankAccountId": sug_bca_id, "externalId": "SGT-BULK-1", "transactionDate": "2026-06-10", "description": "bulk same day", "amount": "333000"})
+check("bulk stmt 1 201", sc == 201, f"{sc}")
+bulk_stmt_1 = body.get("id")
+sc, body = jpost("/bank-transactions", {"bankAccountId": sug_bca_id, "externalId": "SGT-BULK-2", "transactionDate": "2026-06-20", "description": "bulk no candidate", "amount": "555000"})
+check("bulk stmt 2 201", sc == 201, f"{sc}")
+bulk_stmt_2 = body.get("id")
+sc, body = jpost("/bank-transactions", {"bankAccountId": sug_bca_id, "externalId": "SGT-BULK-3", "transactionDate": "2026-06-12", "description": "bulk one day gap", "amount": "777000"})
+check("bulk stmt 3 201", sc == 201, f"{sc}")
+bulk_stmt_3 = body.get("id")
+
+bulk_txn_1 = make_posted_txn("2026-06-10", "333000", "bulk auto-match")
+bulk_txn_3 = make_posted_txn("2026-06-11", "777000", "bulk auto-match gap1")
+
+sc, body = jpost("/reconciliation/matches/bulk", {"bankAccountId": sug_bca_id, "minScore": 90})
+check("bulk apply 200", sc == 200, f"{sc}")
+check("bulk matched >= 2", body.get("matched", 0) >= 2, str(body))
+bulk_skipped = {s["externalId"]: s["reason"] for s in body.get("skipped", [])}
+check("bulk skipped stmt 2", "SGT-BULK-2" in bulk_skipped, str(bulk_skipped))
+check("bulk skipped reason mentions score", any("skor >= 90" in r for r in bulk_skipped.values()), str(bulk_skipped))
+
+sc, body = jget(f"/bank-transactions?bankAccountId={sug_bca_id}&pageSize=50")
+bulk_flags = {b["id"]: b["matched"] for b in body.get("items", [])}
+check("bulk stmt 1 matched", bulk_flags.get(bulk_stmt_1) is True, str(bulk_flags.get(bulk_stmt_1)))
+check("bulk stmt 3 matched", bulk_flags.get(bulk_stmt_3) is True, str(bulk_flags.get(bulk_stmt_3)))
+check("bulk stmt 2 unmatched", bulk_flags.get(bulk_stmt_2) is False, str(bulk_flags.get(bulk_stmt_2)))
+
+sc, body = jget(f"/reconciliation/suggestions?bankAccountId={sug_bca_id}")
+check("bulk suggestions exclude matched", sc == 200 and all(s["bankTransaction"]["id"] not in (bulk_stmt_1, bulk_stmt_3) for s in body.get("items", [])), str([s["bankTransaction"]["externalId"] for s in body.get("items", [])]))
+
+sc, body = jpost("/reconciliation/matches/bulk", {"bankAccountId": sug_bca_id, "minScore": 100}, headers=HA)
+check("bulk apply employee 403", sc == 403, f"{sc}")
+
+sc, body = jpost("/reconciliation/matches/bulk", {"bankAccountId": sug_bca_id, "minScore": 100})
+check("bulk minScore 100 no new match", sc == 200 and body.get("matched", 0) == 0, str(body))
+
+sc, body = jget("/audit-events?action=reconciliation.bulk_match&pageSize=100")
+check("audit reconciliation.bulk_match exists", sc == 200 and body.get("total", 0) > 0 and all(e.get("action") == "reconciliation.bulk_match" for e in body.get("items", [])), str(body.get("total")))
+
+sc, body = jget("/reconciliation?pageSize=100")
+bulk_matches = [m for m in body.get("items", []) if m["bankTransactionId"] in (bulk_stmt_1, bulk_stmt_3)]
+check("bulk matches listed confirmed", len(bulk_matches) == 2 and all(m.get("status") == "confirmed" for m in bulk_matches), str(bulk_matches))
+for m in bulk_matches:
+    sc, _ = jdelete(f"/reconciliation/matches/{m['id']}")
+    check("bulk cleanup match 204", sc == 204, f"{sc}")
+for sid in (bulk_stmt_1, bulk_stmt_2, bulk_stmt_3):
+    sc, _ = jdelete(f"/bank-transactions/{sid}")
+    check("bulk cleanup stmt 204", sc == 204, f"{sc}")
+for tid in (bulk_txn_1, bulk_txn_3):
+    sc, body = jpost(f"/transactions/{tid}/void", {})
+    check("bulk cleanup void txn", sc == 200 and body.get("status") == "voided", f"{sc}")
+
+# ═══════════════════════════════════════════════════════════════════
 #  JOURNALS — FILTER BUKU BESAR PER AKUN
 # ═══════════════════════════════════════════════════════════════════
 
