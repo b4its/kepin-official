@@ -436,6 +436,44 @@ sc, body = jget(f"/reconciliation/suggestions?bankAccountId={sug_bca_id}")
 check("suggestions empty after cleanup", sc == 200 and all(s["bankTransaction"]["externalId"] not in ("SGT-150K-A", "SGT-150K-B") for s in body.get("items", [])), f"{sc}")
 
 # ═══════════════════════════════════════════════════════════════════
+#  BANK CSV IMPORT
+# ═══════════════════════════════════════════════════════════════════
+
+csv_text = """tanggal;deskripsi;jumlah
+2026-06-01;CSV Penjualan tunai;150000
+2026-06-02;CSV Pembayaran supplier;-25000
+2026-06-03;CSV Refund pelanggan;12.500,50
+2026-06-04;Baris rusak
+2026-06-05;CSV Test angka;12.000
+"""
+sc, body = jpost("/bank-transactions/import", {"bankAccountId": sug_bca_id, "csv": csv_text})
+check("csv import 200", sc == 200, f"{sc}")
+check("csv import created 4", body.get("created") == 4, str(body))
+check("csv import errors 1", len(body.get("errors", [])) == 1, str(body.get("errors")))
+check("csv import error line 5", "Baris 5" in body.get("errors", [""])[0], str(body.get("errors")))
+
+sc, body = jpost("/bank-transactions/import", {"bankAccountId": sug_bca_id, "csv": csv_text})
+check("csv reimport idempotent", sc == 200 and body.get("created") == 0 and body.get("skipped") == 4, str(body))
+
+sc, body = jpost("/bank-transactions/import", {"bankAccountId": sug_bca_id, "csv": csv_text}, headers=HA)
+check("csv import employee 403", sc == 403, f"{sc}")
+
+sc, body = jpost("/bank-transactions/import", {"bankAccountId": "00000000-0000-0000-0000-000000000000", "csv": csv_text})
+check("csv import missing bank 404", sc == 404, f"{sc}")
+
+sc, body = jpost("/bank-transactions/import", {"bankAccountId": sug_bca_id, "csv": "\n".join("2026-06-01;Baris %d;1000" % i for i in range(201))})
+check("csv import >200 lines 422", sc == 422, f"{sc}")
+
+sc, body = jget(f"/bank-transactions?bankAccountId={sug_bca_id}&pageSize=100&search=CSV-")
+csv_rows = [b for b in body.get("items", []) if b["externalId"].startswith("CSV-")]
+check("csv rows in list", len(csv_rows) == 4, f"{len(csv_rows)}")
+amounts = sorted(Decimal(b["amount"]) for b in csv_rows)
+check("csv amounts parsed", amounts == [Decimal("-25000"), Decimal("12000"), Decimal("12500.50"), Decimal("150000")], str(amounts))
+for b in csv_rows:
+    sc, _ = jdelete(f"/bank-transactions/{b['id']}")
+    check("csv cleanup row 204", sc == 204, f"{sc}")
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail
 # ═══════════════════════════════════════════════════════════════════
 

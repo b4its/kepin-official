@@ -61,4 +61,43 @@ test.describe('Owner Reconciliation Suggestions', () => {
     await api.delete(`tenants/${TENANT}/bank-transactions/${stmt.id}`);
     await api.post(`tenants/${TENANT}/transactions/${txn.id}/void`, { data: {} });
   });
+
+  test('csv import adds statements and skips duplicates', async ({ page, request }) => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const tag = `E2E-CSV-${uniqueId()}`;
+    const csvText = `tanggal;deskripsi;jumlah\n2026-06-10;${tag} A;75000\n2026-06-11;${tag} B;-50000`;
+
+    const banksRes = await api.get(`tenants/${TENANT}/bank-accounts`);
+    const bca = (await banksRes.json()).find((b: any) => b.bankName === 'BCA');
+    expect(bca).toBeTruthy();
+
+    await page.goto(`/app/${TENANT}/accounting/reconciliation`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: '+ Impor CSV' }).click();
+
+    const dialog = page.getByRole('dialog');
+    await dialog.locator('#csv-bank').selectOption(bca.id);
+    await dialog.locator('#csv-text').fill(csvText);
+    await dialog.getByRole('button', { name: 'Impor CSV' }).click();
+
+    await expect(page.getByText('2 transaksi diimpor dari CSV')).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: tag }).first()).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Tutup' }).last().click();
+
+    await page.getByRole('button', { name: '+ Impor CSV' }).click();
+    const dialog2 = page.getByRole('dialog');
+    await dialog2.locator('#csv-bank').selectOption(bca.id);
+    await dialog2.locator('#csv-text').fill(csvText);
+    await dialog2.getByRole('button', { name: 'Impor CSV' }).click();
+    await expect(page.getByText('0 transaksi diimpor dari CSV')).toBeVisible();
+    await dialog2.getByRole('button', { name: 'Tutup' }).last().click();
+
+    const listRes = await api.get(`tenants/${TENANT}/bank-transactions?pageSize=100&search=CSV-`);
+    const rows = (await listRes.json()).items ?? [];
+    const tagged = rows.filter((b: any) => b.description.includes(tag));
+    expect(tagged.length).toBe(2);
+    for (const b of tagged) {
+      await api.delete(`tenants/${TENANT}/bank-transactions/${b.id}`);
+    }
+  });
 });

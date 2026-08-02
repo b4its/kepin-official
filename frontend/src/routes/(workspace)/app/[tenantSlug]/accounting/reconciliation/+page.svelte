@@ -29,11 +29,15 @@
   let showBankTransaction = $state(false);
   let showMatch = $state(false);
   let showSuggest = $state(false);
+  let showImportCsv = $state(false);
   let editingBank = $state<BankAccount | null>(null);
   let suggestionTxn = $state<BankTransaction | null>(null);
   let suggestions = $state<MatchCandidate[]>([]);
   let suggestLoading = $state(false);
   let suggestApplying = $state(false);
+  let importCsvForm = $state({ bankAccountId: '', csv: '' });
+  let importResult = $state<{ created: number; skipped: number; errors: string[] } | null>(null);
+  let importing = $state(false);
   let accountForm = $state({ accountId: '', bankName: '', maskedNumber: '', status: 'active' });
   let bankTxnForm = $state({ bankAccountId: '', externalId: '', transactionDate: '', description: '', amount: '' });
   let matchForm = $state({ bankTransactionId: '', transactionId: '', confidence: '100', note: '' });
@@ -114,6 +118,24 @@
     finally { saving = false; }
   }
 
+  function openImportCsv() {
+    importCsvForm = { bankAccountId: bankAccounts.find((b) => b.status === 'active')?.id ?? '', csv: '' };
+    importResult = null;
+    showImportCsv = true;
+  }
+
+  async function importCsv() {
+    if (!slug || !isOwner) return;
+    importing = true;
+    importResult = null;
+    try {
+      importResult = await tenantApi.importBankTransactionsCsv(slug, importCsvForm);
+      showToast(`${importResult.created} transaksi diimpor dari CSV`, 'success');
+      await loadAll();
+    } catch (err: any) { showToast(err?.message || 'Gagal mengimpor CSV', 'error'); }
+    finally { importing = false; }
+  }
+
   async function deleteBankTransaction(txn: BankTransaction) {
     if (!slug || !isOwner) return;
     if (!confirm(`Hapus transaksi bank ${txn.externalId}?`)) return;
@@ -192,6 +214,7 @@
     {#if isOwner}
       <Button variant="secondary" onclick={openCreateBank}>+ Rekening Bank</Button>
       <Button variant="secondary" onclick={() => showBankTransaction = true} disabled={bankAccounts.length === 0}>+ Impor Bank Txn</Button>
+      <Button variant="secondary" onclick={openImportCsv} disabled={bankAccounts.length === 0}>+ Impor CSV</Button>
       <Button onclick={() => showMatch = true} disabled={bankTransactions.length === 0 || postedTransactions.length === 0}>+ Buat Match</Button>
     {/if}
   {/snippet}
@@ -349,6 +372,36 @@
     <div class="flex justify-end gap-2">
       <Button variant="secondary" type="button" onclick={() => showMatch = false}>Batal</Button>
       <Button type="submit" loading={saving}>Buat Match</Button>
+    </div>
+  </form>
+</Modal>
+<Modal title="Impor Statement CSV" open={showImportCsv} onclose={() => showImportCsv = false}>
+  <form onsubmit={importCsv} class="space-y-4">
+    <div>
+      <label class="label-text" for="csv-bank">Rekening</label>
+      <select id="csv-bank" bind:value={importCsvForm.bankAccountId} class="input-field mt-1" required>
+        <option value="">Pilih rekening</option>
+        {#each bankAccounts.filter((b) => b.status === 'active') as bank}<option value={bank.id}>{bank.bankName} · {bank.maskedNumber}</option>{/each}
+      </select>
+    </div>
+    <div>
+      <label class="label-text" for="csv-text">Isi CSV</label>
+      <textarea id="csv-text" bind:value={importCsvForm.csv} rows={8} class="input-field mt-1 font-mono text-xs" placeholder={'tanggal;deskripsi;jumlah\n2026-06-15;Pembayaran pelanggan;150000\n2026-06-16;Bayar supplier;-25000'} required />
+      <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Format per baris: tanggal (YYYY-MM-DD); deskripsi; jumlah. Jumlah boleh negatif, titik ribuan & koma desimal didukung. Baris sama tidak akan diimpor dua kali.</p>
+    </div>
+    {#if importResult}
+      <div class="rounded-lg border border-[hsl(var(--border))] p-3 text-sm">
+        <p class="font-medium">{importResult.created} diimpor · {importResult.skipped} dilewati</p>
+        {#if importResult.errors.length > 0}
+          <ul class="mt-1 list-inside list-disc text-xs text-red-600">
+            {#each importResult.errors as err}<li>{err}</li>{/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
+    <div class="flex justify-end gap-2">
+      <Button variant="secondary" type="button" onclick={() => showImportCsv = false}>Tutup</Button>
+      <Button type="submit" loading={importing}>Impor CSV</Button>
     </div>
   </form>
 </Modal>

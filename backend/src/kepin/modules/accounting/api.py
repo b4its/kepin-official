@@ -6,6 +6,8 @@ from sqlalchemy import delete, select, func, and_, or_, text
 from uuid import UUID
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
+import hashlib
+import re
 from typing import Any
 
 from kepin.api.dependencies import get_current_user, get_session, TenantContext, get_tenant_context, get_tenant_membership, require_tenant_owner, ListParams, PeriodParams
@@ -232,6 +234,17 @@ class BankTransactionCreate(ApiSchema):
     transaction_date: date
     description: str = ""
     amount: str
+
+
+class BankTransactionImportCreate(ApiSchema):
+    bank_account_id: str
+    csv: str
+
+
+class BankTransactionImportResult(ApiSchema):
+    created: int
+    skipped: int
+    errors: list[str]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -1729,6 +1742,135 @@ async def create_bank_transaction(
         transaction_date=transaction.transaction_date,
         description=transaction.description,
         amount=money_str(transaction.amount),
+    )
+
+
+def _parse_bank_amount(raw: str) -> Decimal:
+    s = raw.strip().replace(" ", "").replace("Rp", "").replace("rp", "")
+    if "," in s:
+        return Decimal(s.replace(".", "").replace(",", "."))
+    if re.fullmatch(r"\d{1,3}(\.\d{3})+", s):
+        return Decimal(s.replace(".", ""))
+    return Decimal(s)
+
+
+@router.post(
+    "/bank-transactions/import",
+    response_model=BankTransactionImportResult,
+    summary="Impor Statement CSV",
+    description="Mengimpor transaksi bank dari teks CSV (format: tanggal;deskripsi;jumlah per baris). Idempoten: baris yang sama akan dilewati.",
+)
+async def import_bank_transactions_csv(
+    body: BankTransactionImportCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    bank = (
+        await session.execute(
+            select(BankAccount).where(
+                BankAccount.id == body.bank_account_id,
+                BankAccount.tenant_id == tenant.id,
+                BankAccount.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    if not bank:
+        raise NotFoundError(message="Rekening bank aktif tidak ditemukan")
+    if not body.csv.strip():
+        raise ValidationError(message="CSV kosong")
+
+    lines = body.csv.strip().splitlines()
+    if len(lines) > 200:
+        raise ValidationError(message="Maksimal 200 baris per impor")
+
+    now = datetime.now(timezone.utc)
+    parsed: list[BankTransaction] = []
+    errors: list[str] = []
+    for i, raw in enumerate(lines, start=1):
+        line = raw.strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if lower.startswith("tanggal") or lower.startswith("date"):
+            continue
+        parts = line.split(";") if ";" in line else line.split(",")
+        if len(parts) != 3:
+            errors.append(f"Baris {i}: format salah (butuh tanggal;deskripsi;jumlah)")
+            continue
+        date_str, desc, amount_str = (p.strip() for p in parts)
+        try:
+            tdate = date.fromisoformat(date_str)
+        except ValueError:
+            errors.append(f"Baris {i}: tanggal tidak valid '{date_str}'")
+            continue
+        if not desc:
+            errors.append(f"Baris {i}: deskripsi kosong")
+            continue
+        try:
+            amount = _parse_bank_amount(amount_str)
+        except Exception:
+            errors.append(f"Baris {i}: jumlah tidak valid '{amount_str}'")
+            continue
+        if amount == Decimal("0"):
+            errors.append(f"Baris {i}: jumlah nol")
+            continue
+        ext = f"CSV-{hashlib.md5(f'{tdate}|{desc}|{amount}'.encode()).hexdigest()[:10]}"
+        parsed.append(
+            BankTransaction(
+                id=new_uuid(),
+                tenant_id=tenant.id,
+                bank_account_id=bank.id,
+                external_id=ext,
+                transaction_date=tdate,
+                description=desc,
+                amount=amount,
+                raw_payload={"source": "csv"},
+                created_at=now,
+            )
+        )
+
+    existing = set(
+        (
+            await session.execute(
+                select(BankTransaction.external_id).where(
+                    BankTransaction.tenant_id == tenant.id,
+                    BankTransaction.bank_account_id == bank.id,
+                    BankTransaction.external_id.in_([t.external_id for t in parsed]),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    to_create = [t for t in parsed if t.external_id not in existing]
+    skipped = len(parsed) - len(to_create)
+
+    session.add_all(to_create)
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise ConflictError(message="Impor gagal karena bentrok external ID, coba lagi")
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="bank_transaction.import",
+        module="accounting",
+        object_type="bank_transaction",
+        object_id=str(bank.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        before={"bankName": bank.bank_name},
+        after={"created": len(to_create), "skipped": skipped, "errors": len(errors)},
+    )
+
+    return BankTransactionImportResult(
+        created=len(to_create),
+        skipped=skipped,
+        errors=errors,
     )
 
 
