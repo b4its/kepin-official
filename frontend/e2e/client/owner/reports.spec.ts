@@ -95,4 +95,20 @@ test.describe('Owner Reports & Export', () => {
     await page.waitForLoadState('networkidle');
     expect(errors).toEqual([]);
   });
+
+  test('insights period comparison fills compare range', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    await page.goto(`/app/${TENANT}/insights`);
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Pendapatan dan Beban Harian')).toBeVisible();
+
+    await page.getByRole('checkbox', { name: /bandingkan dengan periode sebelumnya/i }).check();
+    await expect(page.getByLabel('Tanggal mulai pembanding')).toHaveValue(/\d{4}-\d{2}-\d{2}/);
+    await expect(page.getByLabel('Tanggal akhir pembanding')).toHaveValue(/\d{4}-\d{2}-\d{2}/);
+    await page.getByRole('button', { name: /periode sebelumnya/i }).click();
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('checkbox', { name: /bandingkan dengan periode sebelumnya/i }).uncheck();
+    expect(errors).toEqual([]);
+  });
 });
