@@ -18,6 +18,7 @@
   let loading = $state(false);
   let saving = $state(false);
   let error = $state('');
+  let accountFilter = $state('');
   let form = $state({ journalDate: '', reference: '', description: '', lines: [] as Line[] });
 
   const totalDebit = $derived(form.lines.reduce((sum, line) => sum + amount(line.debit), 0));
@@ -69,7 +70,7 @@
     loading = true;
     error = '';
     try {
-      await loadJournals(slug);
+      await loadJournals(slug, accountFilter ? `?accountId=${accountFilter}` : undefined);
     } catch (err: any) {
       error = err?.message || 'Gagal memuat jurnal';
     } finally {
@@ -130,6 +131,22 @@
 
 {#if error}<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>{/if}
 {#if !isOwner}<div class="card p-4 mb-6 text-sm text-[hsl(var(--muted-foreground))]">Daftar jurnal bersifat read-only. Hanya owner dapat membuat, posting, atau reverse jurnal.</div>{/if}
+
+<div class="card mb-4 flex flex-wrap items-center gap-3 p-4">
+  <label class="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+    Buku besar per akun:
+    <select bind:value={accountFilter} onchange={() => refresh()} class="input-field" aria-label="Filter akun buku besar">
+      <option value="">Semua akun</option>
+      {#each $accounts.filter((account) => account.status === 'active') as account}
+        <option value={account.id}>{account.code} · {account.name}</option>
+      {/each}
+    </select>
+  </label>
+  {#if accountFilter}
+    <span class="text-xs text-[hsl(var(--muted-foreground))]">Hanya jurnal yang menyentuh akun terpilih</span>
+    <button class="text-xs text-[hsl(var(--primary))] hover:underline" onclick={() => { accountFilter = ''; void refresh(); }}>Reset</button>
+  {/if}
+</div>
 
 <DataTable
   columns={[

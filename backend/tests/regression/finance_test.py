@@ -465,13 +465,27 @@ sc, body = jpost("/bank-transactions/import", {"bankAccountId": sug_bca_id, "csv
 check("csv import >200 lines 422", sc == 422, f"{sc}")
 
 sc, body = jget(f"/bank-transactions?bankAccountId={sug_bca_id}&pageSize=100&search=CSV-")
-csv_rows = [b for b in body.get("items", []) if b["externalId"].startswith("CSV-")]
+csv_rows = [b for b in body.get("items", []) if b["externalId"].startswith("CSV-") and b["description"].startswith("CSV ")]
 check("csv rows in list", len(csv_rows) == 4, f"{len(csv_rows)}")
 amounts = sorted(Decimal(b["amount"]) for b in csv_rows)
 check("csv amounts parsed", amounts == [Decimal("-25000"), Decimal("12000"), Decimal("12500.50"), Decimal("150000")], str(amounts))
 for b in csv_rows:
     sc, _ = jdelete(f"/bank-transactions/{b['id']}")
     check("csv cleanup row 204", sc == 204, f"{sc}")
+
+# ═══════════════════════════════════════════════════════════════════
+#  JOURNALS — FILTER BUKU BESAR PER AKUN
+# ═══════════════════════════════════════════════════════════════════
+
+sc, body = jget("/journals?startDate=2026-01-01&endDate=2026-12-31&pageSize=100")
+gl_all = body.get("total", 0)
+sc, body = jget(f"/journals?startDate=2026-01-01&endDate=2026-12-31&pageSize=100&accountId={sug_cash['id']}")
+check("journals accountId filter 200", sc == 200, f"{sc}")
+gl_cash = body.get("items", [])
+check("journals accountId filter touches account", all(any(l.get("accountId") == sug_cash["id"] for l in j.get("lines", [])) for j in gl_cash), f"{len(gl_cash)} rows")
+check("journals accountId filter total <= all", body.get("total", 0) <= gl_all, f"{body.get('total')} <= {gl_all}")
+sc, body = jget("/journals?accountId=00000000-0000-0000-0000-000000000000")
+check("journals unknown account filter 0", sc == 200 and body.get("total", 0) == 0, f"{sc} {body.get('total')}")
 
 # ═══════════════════════════════════════════════════════════════════
 #  CLEANUP: FY 2032 + audit trail

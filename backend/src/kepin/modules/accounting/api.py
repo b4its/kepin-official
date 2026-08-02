@@ -897,6 +897,7 @@ async def list_journals(
     _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
     jnl_status: str | None = Query(None, alias="status"),
+    account_filter_id: str | None = Query(None, alias="accountId"),
 ):
     filters = [JournalEntry.tenant_id == tenant.id]
     if params.search:
@@ -910,6 +911,15 @@ async def list_journals(
         )
     if jnl_status:
         filters.append(JournalEntry.status == jnl_status)
+    if account_filter_id:
+        filters.append(
+            JournalEntry.id.in_(
+                select(JournalLine.journal_entry_id).where(
+                    JournalLine.tenant_id == tenant.id,
+                    JournalLine.account_id == account_filter_id,
+                )
+            )
+        )
 
     period_start, period_end = period.resolve()
     if period_start and period_end:

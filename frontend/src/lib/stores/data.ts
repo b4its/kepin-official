@@ -76,9 +76,9 @@ export async function deleteAccount(id: string) { const s = _slug; if (!s) retur
 
 // ── Journal Entries ──
 export const journalEntries = writable<JournalEntry[]>([]);
-export async function loadJournals(slug?: string) {
+export async function loadJournals(slug?: string, params?: string) {
   const s = slug || _slug; if (!s) return;
-  const res: any = await tenantApi.getJournals(s);
+  const res: any = await tenantApi.getJournals(s, params);
   if (!isActiveTenant(s)) return;
   journalEntries.set(res.items?.map((j: any) => ({
     id: j.id, date: j.date || j.journalDate || j.journal_date, description: j.description, reference: j.reference || j.journalNumber || j.journal_number || '',

@@ -24,6 +24,23 @@ test.describe('Owner Accounting Workflow', () => {
     await api.dispose();
   });
 
+  test('journals page filters by account (buku besar)', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+
+    await page.goto(`/app/${TENANT}/accounting/journals`);
+    await page.waitForLoadState('networkidle');
+
+    const select = page.getByLabel('Filter akun buku besar');
+    await expect(select).toBeVisible();
+    await select.selectOption({ index: 1 });
+
+    await expect(page.getByText('Hanya jurnal yang menyentuh akun terpilih')).toBeVisible();
+    await page.getByRole('button', { name: 'Reset' }).click();
+    await expect(page.getByText('Hanya jurnal yang menyentuh akun terpilih')).not.toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test('transactions endpoint returns data', async () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
     const res = await api.get(`tenants/${TENANT}/transactions`);
