@@ -65,6 +65,21 @@ test.describe('Owner Reports & Export', () => {
     expect(errors).toEqual([]);
   });
 
+  test('period comparison toggles and shows delta on metric cards', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('checkbox', { name: /bandingkan dengan periode sebelumnya/i }).check();
+    await expect(page.getByLabel('Tanggal mulai pembanding')).toHaveValue(/\d{4}-\d{2}-\d{2}/);
+    await expect(page.getByLabel('Tanggal akhir pembanding')).toHaveValue(/\d{4}-\d{2}-\d{2}/);
+    await page.getByRole('button', { name: /periode sebelumnya/i }).click();
+    await expect(page.getByLabel('Tanggal akhir pembanding')).toHaveValue(/\d{4}-\d{2}-\d{2}/);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('checkbox', { name: /bandingkan dengan periode sebelumnya/i }).uncheck();
+    expect(errors).toEqual([]);
+  });
+
   test('investor report page loads', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });

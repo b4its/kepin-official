@@ -128,6 +128,11 @@
   let monthlyBalanceSheet = $state<MonthlyBalanceSheet | null>(null);
   let monthlyCashFlow = $state<MonthlyCashFlow | null>(null);
   let fiscalYears = $state<FiscalYear[]>([]);
+  let compareMode = $state(false);
+  let compareStart = $state('');
+  let compareEnd = $state('');
+  let compareSummary = $state<SummaryReport | null>(null);
+  let compareLoading = $state(false);
 
   const tenantSlug = $derived($page.params.tenantSlug || '');
   const periods = $derived(fiscalYears.flatMap((fy) => fy.periods || []));
@@ -139,6 +144,9 @@
   const totalIncome = $derived(toNumber(summary?.summary.income));
   const totalExpense = $derived(toNumber(summary?.summary.expense));
   const netProfit = $derived(toNumber(summary?.summary.profit));
+  const compareIncome = $derived(compareMode ? toNumber(compareSummary?.summary.income) : null);
+  const compareExpense = $derived(compareMode ? toNumber(compareSummary?.summary.expense) : null);
+  const compareProfit = $derived(compareMode ? toNumber(compareSummary?.summary.profit) : null);
   const totalAssets = $derived(toNumber(balanceSheet?.summary.totalAssets));
   const liabilitiesPlusEquity = $derived(toNumber(balanceSheet?.summary.liabilitiesPlusEquity));
   const balanceGap = $derived(totalAssets - liabilitiesPlusEquity);
@@ -341,6 +349,38 @@
     endDate = end;
   }
 
+  function defaultCompareRange() {
+    if (!startDate || !endDate) return;
+    const span = new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime();
+    const cEnd = new Date(`${startDate}T00:00:00`).getTime() - 86400000;
+    compareStart = new Date(cEnd - span).toISOString().slice(0, 10);
+    compareEnd = new Date(cEnd).toISOString().slice(0, 10);
+  }
+
+  function toggleCompare() {
+    compareMode = !compareMode;
+    if (compareMode) defaultCompareRange();
+  }
+
+  async function loadCompare(slug: string, start: string, end: string) {
+    compareLoading = true;
+    try {
+      compareSummary = await api<SummaryReport>(`/tenants/${slug}/reports/summary?${query({ startDate: start, endDate: end })}`);
+    } catch {
+      compareSummary = null;
+    } finally {
+      compareLoading = false;
+    }
+  }
+
+  $effect(() => {
+    if (tenantSlug && compareMode && compareStart && compareEnd) {
+      void loadCompare(tenantSlug, compareStart, compareEnd);
+    } else if (!compareMode) {
+      compareSummary = null;
+    }
+  });
+
   async function loadReports(slug: string, start: string, end: string, closing: boolean) {
     const seq = ++requestSeq;
     loading = true;
@@ -477,10 +517,27 @@
   <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
 {/if}
 
+<div class="card mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 p-4">
+  <label class="flex cursor-pointer items-center gap-2 text-sm font-medium">
+    <input type="checkbox" checked={compareMode} onclick={toggleCompare} class="h-4 w-4" />
+    Bandingkan dengan periode sebelumnya
+  </label>
+  {#if compareMode}
+    <div class="flex flex-wrap items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+      <span>Periode pembanding:</span>
+      <input type="date" bind:value={compareStart} class="input-field" aria-label="Tanggal mulai pembanding" />
+      <span>s.d.</span>
+      <input type="date" bind:value={compareEnd} class="input-field" aria-label="Tanggal akhir pembanding" />
+    </div>
+    <button class="text-xs text-[hsl(var(--primary))] hover:underline" onclick={defaultCompareRange}>← Periode sebelumnya</button>
+    {#if compareLoading}<span class="text-xs text-[hsl(var(--muted-foreground))]">Memuat…</span>{/if}
+  {/if}
+</div>
+
 <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-  <MetricCard label="Pendapatan" value={totalIncome} loading={loading} format="currency" />
-  <MetricCard label="Beban" value={totalExpense} loading={loading} format="currency" />
-  <MetricCard label="Laba Bersih" value={netProfit} loading={loading} format="currency" />
+  <MetricCard label="Pendapatan" value={totalIncome} previousValue={compareMode ? compareIncome : undefined} loading={loading} format="currency" />
+  <MetricCard label="Beban" value={totalExpense} previousValue={compareMode ? compareExpense : undefined} loading={loading} format="currency" />
+  <MetricCard label="Laba Bersih" value={netProfit} previousValue={compareMode ? compareProfit : undefined} loading={loading} format="currency" />
   <MetricCard label="Piutang Outstanding" value={arOutstanding} loading={loading} format="currency" />
 </div>
 
