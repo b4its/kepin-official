@@ -22,6 +22,7 @@
   let matches = $state<Match[]>([]);
   let bankAccounts = $state<BankAccount[]>([]);
   let bankTransactions = $state<BankTransaction[]>([]);
+  let selectedBank = $state('');
   let loading = $state(false);
   let saving = $state(false);
   let error = $state('');
@@ -53,7 +54,7 @@
       const [matchRes, accountRes, txnRes] = await Promise.all([
         api(`/tenants/${slug}/reconciliation`),
         tenantApi.getBankAccounts(slug),
-        tenantApi.getBankTransactions(slug, '?pageSize=100'),
+        tenantApi.getBankTransactions(slug, `?pageSize=100${selectedBank ? `&bankAccountId=${selectedBank}` : ''}`),
       ]) as any[];
       matches = matchRes.items || [];
       bankAccounts = accountRes || [];
@@ -211,10 +212,11 @@
   async function bulkApply() {
     if (!slug || !isOwner) return;
     const unmatched = bankTransactions.filter((t) => !t.matched).length;
-    if (!confirm(`Cocokkan semua statement yang belum dicocokkan (${unmatched}) dengan saran skor >= 90? Statement tanpa kandidat cukup yakin akan dilewati.`)) return;
+    const label = bankAccounts.find((b) => b.id === selectedBank)?.bankName ?? 'semua rekening';
+    if (!confirm(`Cocokkan ${unmatched} statement belum dicocokkan di ${label} dengan saran skor >= 90? Statement tanpa kandidat cukup yakin akan dilewati.`)) return;
     bulkLoading = true;
     try {
-      bulkResult = await tenantApi.bulkAutoMatch(slug, { minScore: 90 }) as { matched: number; skipped: { externalId: string; reason: string }[] };
+      bulkResult = await tenantApi.bulkAutoMatch(slug, { minScore: 90, ...(selectedBank ? { bankAccountId: selectedBank } : {}) }) as { matched: number; skipped: { externalId: string; reason: string }[] };
       showToast(`${bulkResult.matched} statement dicocokkan otomatis`, bulkResult.matched > 0 ? 'success' : 'info');
       showBulkResult = true;
       await loadAll();
@@ -278,6 +280,13 @@
 </div>
 
 <h3 class="font-semibold mb-3">Transaksi Bank ({bankTransactions.length})</h3>
+<div class="mb-3 flex items-center gap-2">
+  <label class="text-sm text-[hsl(var(--muted-foreground))]" for="bank-txn-filter">Rekening:</label>
+  <select id="bank-txn-filter" bind:value={selectedBank} class="input-field w-64" onchange={() => loadAll()}>
+    <option value="">Semua rekening</option>
+    {#each bankAccounts as bank}<option value={bank.id}>{bank.bankName} · {bank.maskedNumber || '-'}</option>{/each}
+  </select>
+</div>
 <DataTable columns={[
   { key: 'transactionDate', label: 'Tanggal' },
   { key: 'externalId', label: 'External ID' },

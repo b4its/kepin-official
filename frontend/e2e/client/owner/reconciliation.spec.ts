@@ -169,4 +169,30 @@ test.describe('Owner Reconciliation Suggestions', () => {
     await api.delete(`tenants/${TENANT}/bank-transactions/${stmt.id}`);
     await api.post(`tenants/${TENANT}/transactions/${txn.id}/void`, { data: {} });
   });
+
+  test('bank account filter narrows transactions table', async ({ page }) => {
+    const errors: string[] = [];
+    let bankTxnUrl = '';
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    page.on('request', (req) => { if (req.url().includes('/bank-transactions?')) bankTxnUrl = req.url(); });
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const banksRes = await api.get(`tenants/${TENANT}/bank-accounts`);
+    const banks = (await banksRes.json()) as any[];
+    expect(banks.length).toBeGreaterThanOrEqual(1);
+
+    await page.goto(`/app/${TENANT}/accounting/reconciliation`);
+    await page.waitForLoadState('networkidle');
+
+    const filter = page.getByLabel('Rekening:');
+    await expect(filter).toBeVisible();
+
+    await filter.selectOption({ label: `${banks[0].bankName} · ${banks[0].maskedNumber || '-'}` });
+    await page.waitForLoadState('networkidle');
+    expect(bankTxnUrl).toContain(`bankAccountId=${banks[0].id}`);
+
+    await filter.selectOption({ label: 'Semua rekening' });
+    await page.waitForLoadState('networkidle');
+    expect(bankTxnUrl).not.toContain('bankAccountId=');
+    expect(errors).toEqual([]);
+  });
 });
