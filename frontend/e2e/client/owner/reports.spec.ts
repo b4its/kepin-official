@@ -139,7 +139,7 @@ test.describe('Owner Reports & Export', () => {
     await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Aging' }).click();
 
-    const receivableTable = page.locator('div.rounded-lg.border').last();
+    const receivableTable = page.locator('div.rounded-lg.border').filter({ hasText: 'Pelanggan' });
     await receivableTable.locator('input[placeholder="Cari..."]').fill(name);
     await expect(receivableTable.locator('tbody tr', { hasText: name })).toHaveCount(1);
     await receivableTable
@@ -168,6 +168,65 @@ test.describe('Owner Reports & Export', () => {
     });
     const paymentId = (await pay.json()).id;
     await api.post(`tenants/${TENANT}/customer-payments/${paymentId}/void`).catch(() => {});
+    await api.dispose();
+  });
+
+  test('aging per-supplier drill-down opens kartu hutang', async ({ page }) => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const runId = uniqueId();
+    const name = `0E2E AgingSup ${runId}`;
+
+    const prod = await api.post(`tenants/${TENANT}/products`, {
+      data: { sku: `SKU-${runId.slice(-12)}`, name: `E2E Aging Barang ${runId}`, unit: 'pcs', cost_price: '400000', sale_price: '500000' },
+    });
+    expect(prod.status()).toBe(201);
+    const productId = (await prod.json()).id;
+
+    const locRes = await api.get(`tenants/${TENANT}/inventory-locations`);
+    expect(locRes.status()).toBe(200);
+    const locations = await locRes.json();
+    expect(locations.length).toBeGreaterThan(0);
+    const locationId = locations[0].id;
+
+    const sup = await api.post(`tenants/${TENANT}/suppliers`, {
+      data: { code: `SUP-${runId.slice(-12)}`, name, email: `${runId}@test.com`, phone: '0812', address: 'Test' },
+    });
+    expect(sup.status()).toBe(201);
+    const supplierId = (await sup.json()).id;
+
+    const po = await api.post(`tenants/${TENANT}/purchase-orders`, {
+      data: {
+        supplier_id: supplierId,
+        order_date: '2026-07-10',
+        lines: [{ product_id: productId, item_name: 'Bahan Baku', quantity: '1', unit_price: '400000' }],
+      },
+    });
+    expect(po.status()).toBe(201);
+    const poBody = await po.json();
+    const poLineId = poBody.lines[0].id;
+    expect((await api.post(`tenants/${TENANT}/purchase-orders/${poBody.id}/send`)).status()).toBe(200);
+    expect((await api.post(`tenants/${TENANT}/purchase-orders/${poBody.id}/receive`, {
+      data: { location_id: locationId, lines: [{ line_id: poLineId, quantity_received: '1' }] },
+    })).status()).toBe(200);
+
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Aging' }).click();
+
+    const payableTable = page.locator('div.rounded-lg.border').filter({ hasText: 'Pemasok' });
+    await payableTable.locator('input[placeholder="Cari..."]').fill(name);
+    await expect(payableTable.locator('tbody tr', { hasText: name })).toHaveCount(1);
+    await payableTable
+      .locator('tbody tr', { hasText: name })
+      .getByRole('button', { name: 'Kartu hutang' })
+      .click();
+
+    const heading = page.getByRole('heading', { name: new RegExp(`Kartu Hutang · ${name}`) });
+    await expect(heading).toBeVisible();
+    await expect(page.locator('body')).toContainText('Saldo awal Rp 0');
+    await expect(page.locator('body')).toContainText('Saldo akhir Rp 400.000');
+    await expect(page.getByRole('cell', { name: /GR-/ })).toBeVisible();
+
     await api.dispose();
   });
 });

@@ -53,6 +53,7 @@
 
   type PayableAgingReport = {
     rows: { supplierId: string; supplierName: string; received: string; paid: string; outstanding: string; bucket: string; daysSinceReceipt: number }[];
+    buckets: Record<string, { total: string; items: { id: string; reference: string; entryDate: string; supplierId: string; supplierName: string; balanceDue: string; daysSinceReceipt: number }[] }>;
     grandTotal: string;
   };
 
@@ -364,20 +365,36 @@
   };
 
   const receivableByCustomer = $derived(
-    computeReceivableByCustomer(receivableAging)
+    computeAgedByEntity(
+      receivableAging?.buckets ?? {},
+      (item) => item.customerId,
+      (item) => item.customerName,
+    )
   );
 
-  function computeReceivableByCustomer(rep: ReceivableAgingReport | null): AgedCustomer[] {
+  const payableBySupplier = $derived(
+    computeAgedByEntity(
+      payableAging?.buckets ?? {},
+      (item) => item.supplierId,
+      (item) => item.supplierName,
+    )
+  );
+
+  function computeAgedByEntity(
+    buckets: Record<string, { items: any[] } | undefined>,
+    getId: (item: any) => string,
+    getName: (item: any) => string,
+  ): AgedCustomer[] {
     const map = new Map<string, AgedCustomer>();
-    const buckets = rep?.buckets ?? {};
     for (const bucket of BUCKET_ORDER) {
       const data = buckets[bucket];
       if (!data) continue;
       for (const item of data.items) {
-        let row = map.get(item.customerId);
+        const entityId = getId(item);
+        let row = map.get(entityId);
         if (!row) {
-          row = { id: item.customerId, name: item.customerName, current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, total: 0, bucket: 'current' };
-          map.set(item.customerId, row);
+          row = { id: entityId, name: getName(item), current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, total: 0, bucket: 'current' };
+          map.set(entityId, row);
         }
         const amount = toNumber(item.balanceDue);
         row[bucket] += amount;
@@ -899,6 +916,28 @@
         <button
           onclick={() => openCustomerStatement(item.id, item.name)}
           class="text-xs text-[hsl(var(--primary))] hover:underline">Kartu piutang</button>
+      {/snippet}
+    </DataTable>
+    <DataTable
+      columns={[
+        { key: 'name', label: 'Pemasok', sortable: true },
+        { key: 'current', label: 'Lancar', align: 'right', render: (r: any) => money(r.current) },
+        { key: '1_30', label: '1-30', align: 'right', render: (r: any) => money(r['1_30']) },
+        { key: '31_60', label: '31-60', align: 'right', render: (r: any) => money(r['31_60']) },
+        { key: '61_90', label: '61-90', align: 'right', render: (r: any) => money(r['61_90']) },
+        { key: '90_plus', label: '>90', align: 'right', render: (r: any) => money(r['90_plus']) },
+        { key: 'total', label: 'Total', align: 'right', render: (r: any) => money(r.total) },
+        { key: 'bucket', label: 'Bucket Tertua' },
+      ]}
+      data={payableBySupplier}
+      total={payableBySupplier.length}
+      loading={loading}
+      searchable={true}
+    >
+      {#snippet rowActions(item: any)}
+        <button
+          onclick={() => openSupplierStatement(item.id, item.name)}
+          class="text-xs text-[hsl(var(--primary))] hover:underline">Kartu hutang</button>
       {/snippet}
     </DataTable>
   </div>

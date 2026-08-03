@@ -948,6 +948,16 @@ sc, aging_body = jget("/reports/payable-aging")
 check("aging payable 200", sc == 200, f"{sc}")
 ap_row = next((r for r in aging_body.get("rows", []) if r.get("supplierId") == sup_id), None)
 check("aging payable GRN outstanding", ap_row is not None and Decimal(ap_row.get("received", "0")) == Decimal("400000") and Decimal(ap_row.get("paid", "0")) == Decimal("0") and Decimal(ap_row.get("outstanding", "0")) == Decimal("400000"), str(ap_row))
+ap_entry = None
+for ap_buck in ("current", "1_30", "31_60", "61_90", "90_plus"):
+    for it in aging_body.get("buckets", {}).get(ap_buck, {}).get("items", []):
+        if it.get("supplierId") == sup_id:
+            ap_entry = it
+            break
+    if ap_entry:
+        break
+check("aging payable entry supplierId+balance", ap_entry is not None and ap_entry.get("supplierName", "").startswith("FT Pemasok") and ap_entry.get("reference", "").startswith("GR-") and Decimal(ap_entry.get("balanceDue", "0")) == Decimal("400000"), str(ap_entry))
+check("aging payable grandTotal == buckets sum", Decimal(aging_body.get("grandTotal", "0")) == sum(Decimal(b.get("total", "0")) for b in aging_body.get("buckets", {}).values()), f"{aging_body.get('grandTotal')}")
 
 sc, body = jpost("/supplier-payments", {"supplier_id": sup_id, "payment_date": "2026-08-04", "amount": "400000", "method": "transfer"})
 check("supplier stmt payment create 201", sc == 201, f"{sc}")
@@ -973,6 +983,15 @@ check("supplier stmt balance consistent", bal_ok)
 sc, aging_body = jget("/reports/payable-aging")
 ap_row = next((r for r in aging_body.get("rows", []) if r.get("supplierId") == sup_id), None)
 check("aging payable net zero after payment", ap_row is not None and Decimal(ap_row.get("paid", "0")) == Decimal("400000") and Decimal(ap_row.get("outstanding", "0")) == Decimal("0"), str(ap_row))
+ap_entry = None
+for ap_buck in ("current", "1_30", "31_60", "61_90", "90_plus"):
+    for it in aging_body.get("buckets", {}).get(ap_buck, {}).get("items", []):
+        if it.get("supplierId") == sup_id:
+            ap_entry = it
+            break
+    if ap_entry:
+        break
+check("aging payable entry removed after full payment", ap_entry is None, str(ap_entry))
 
 sc, body = jget(f"/supplier-statements?supplierId={sup_id}&startDate=2026-08-04")
 check("supplier stmt startDate opening carries GRN", Decimal(body.get("opening", "0")) == Decimal("400000") and len(body.get("items", [])) == 1, f"{body.get('opening')} {len(body.get('items', []))}")

@@ -841,16 +841,22 @@ async def get_payable_aging(
     _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
 ):
-    """Aging hutang per supplier berbasis goods receipt (jurnal-linked) vs pembayaran supplier."""
+    """Aging hutang per supplier berbasis goods receipt (jurnal-linked) vs pembayaran supplier.
+
+    Pembayaran dialokasikan FIFO ke GRN tertua per supplier; rincian per GRN
+    dikembalikan lewat ``buckets`` (simetris dengan ``receivable-aging``).
+    """
     today = date.today()
 
-    received_rows = (
+    grn_rows = (
         await session.execute(
             select(
+                GoodsReceipt.id.label("grn_id"),
+                GoodsReceipt.receipt_number,
+                GoodsReceipt.received_at,
                 PurchaseOrder.supplier_id.label("supplier_id"),
                 Supplier.name.label("supplier_name"),
                 func.sum(GoodsReceiptLine.quantity * GoodsReceiptLine.unit_cost).label("received"),
-                func.max(GoodsReceipt.received_at).label("last_receipt"),
             )
             .select_from(GoodsReceiptLine)
             .join(GoodsReceipt, GoodsReceipt.id == GoodsReceiptLine.goods_receipt_id)
@@ -860,9 +866,29 @@ async def get_payable_aging(
                 GoodsReceipt.tenant_id == ctx.id,
                 GoodsReceipt.journal_entry_id.is_not(None),
             )
-            .group_by(PurchaseOrder.supplier_id, Supplier.name)
+            .group_by(
+                GoodsReceipt.id,
+                GoodsReceipt.receipt_number,
+                GoodsReceipt.received_at,
+                PurchaseOrder.supplier_id,
+                Supplier.name,
+            )
+            .order_by(GoodsReceipt.received_at, GoodsReceipt.id)
         )
     ).all()
+
+    grns = [
+        {
+            "id": str(row.grn_id),
+            "reference": row.receipt_number,
+            "receivedAt": row.received_at,
+            "supplierId": str(row.supplier_id),
+            "supplierName": row.supplier_name,
+            "received": row.received or Decimal("0"),
+            "paid": Decimal("0"),
+        }
+        for row in grn_rows
+    ]
 
     paid_rows = (
         await session.execute(
@@ -882,32 +908,39 @@ async def get_payable_aging(
         )
     ).all()
 
-    combined: dict[str, dict] = {}
-    for row in received_rows:
-        combined.setdefault(str(row.supplier_id), {
-            "supplierId": str(row.supplier_id),
-            "supplierName": row.supplier_name,
-            "received": Decimal("0"),
-            "paid": Decimal("0"),
-            "lastReceipt": None,
-        })
-        combined[str(row.supplier_id)]["received"] = row.received or Decimal("0")
-        combined[str(row.supplier_id)]["lastReceipt"] = row.last_receipt
+    by_supplier: dict[str, list[dict]] = {}
+    for grn in grns:
+        by_supplier.setdefault(grn["supplierId"], []).append(grn)
     for row in paid_rows:
-        combined.setdefault(str(row.supplier_id), {
-            "supplierId": str(row.supplier_id),
-            "supplierName": row.supplier_name,
+        remaining = row.paid or Decimal("0")
+        for grn in by_supplier.get(str(row.supplier_id), []):
+            if remaining <= 0:
+                break
+            applied = min(remaining, grn["received"] - grn["paid"])
+            grn["paid"] += applied
+            remaining -= applied
+
+    combined: dict[str, dict] = {}
+    for grn in grns:
+        data = combined.setdefault(grn["supplierId"], {
+            "supplierId": grn["supplierId"],
+            "supplierName": grn["supplierName"],
             "received": Decimal("0"),
             "paid": Decimal("0"),
             "lastReceipt": None,
         })
-        combined[str(row.supplier_id)]["paid"] = row.paid or Decimal("0")
+        data["received"] += grn["received"]
+        data["paid"] += grn["paid"]
+        if data["lastReceipt"] is None or grn["receivedAt"] > data["lastReceipt"]:
+            data["lastReceipt"] = grn["receivedAt"]
+
+    bucket_keys = ["current", "1_30", "31_60", "61_90", "90_plus"]
+    buckets: dict[str, list[dict]] = {k: [] for k in bucket_keys}
+    totals: dict[str, Decimal] = {k: Decimal("0") for k in bucket_keys}
 
     items = []
-    grand = Decimal("0")
     for data in combined.values():
         outstanding = data["received"] - data["paid"]
-        grand += outstanding
         if data["lastReceipt"] is not None:
             days = (today - data["lastReceipt"].date()).days
         else:
@@ -932,6 +965,32 @@ async def get_payable_aging(
             "daysSinceReceipt": max(0, days),
         })
 
+    for grn in grns:
+        outstanding = grn["received"] - grn["paid"]
+        if outstanding <= 0:
+            continue
+        days = (today - grn["receivedAt"].date()).days
+        if days <= 0:
+            bucket = "current"
+        elif days <= 30:
+            bucket = "1_30"
+        elif days <= 60:
+            bucket = "31_60"
+        elif days <= 90:
+            bucket = "61_90"
+        else:
+            bucket = "90_plus"
+        buckets[bucket].append({
+            "id": grn["id"],
+            "reference": grn["reference"],
+            "entryDate": grn["receivedAt"].date().isoformat(),
+            "supplierId": grn["supplierId"],
+            "supplierName": grn["supplierName"],
+            "balanceDue": str(outstanding),
+            "daysSinceReceipt": max(0, days),
+        })
+        totals[bucket] += outstanding
+
     items.sort(key=lambda i: i["supplierName"])
     return {
         "metadata": {
@@ -942,7 +1001,14 @@ async def get_payable_aging(
             "generatedAt": datetime.now(timezone.utc).isoformat(),
         },
         "rows": items,
-        "grandTotal": str(grand),
+        "buckets": {
+            "current": {"label": "Current", "total": str(totals["current"]), "items": buckets["current"]},
+            "1_30": {"label": "1-30 Hari", "total": str(totals["1_30"]), "items": buckets["1_30"]},
+            "31_60": {"label": "31-60 Hari", "total": str(totals["31_60"]), "items": buckets["31_60"]},
+            "61_90": {"label": "61-90 Hari", "total": str(totals["61_90"]), "items": buckets["61_90"]},
+            "90_plus": {"label": ">90 Hari", "total": str(totals["90_plus"]), "items": buckets["90_plus"]},
+        },
+        "grandTotal": str(sum(totals.values())),
     }
 
 
