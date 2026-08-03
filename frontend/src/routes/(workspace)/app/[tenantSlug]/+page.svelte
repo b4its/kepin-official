@@ -7,7 +7,9 @@
   import BarChart from '$lib/components/charts/BarChart.svelte';
   import PieChart from '$lib/components/charts/PieChart.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import { api } from '$lib/api/client';
   import { tenantApi } from '$lib/stores/data';
+  import { formatIDR } from '$lib/utils/currency';
   import type { Preset } from '$lib/utils/dateRange';
   import { RefreshCw } from '@lucide/svelte';
 
@@ -22,6 +24,19 @@
     recent_transactions?: { id: string; date: string; description: string; amount: string; type: string; status: string }[];
   };
 
+  type AgingReport = {
+    buckets: Record<string, { label: string; total: string; items: unknown[] }>;
+    grandTotal: string;
+  };
+
+  const AGING_BUCKETS = [
+    { key: 'current', label: 'Lancar' },
+    { key: '1_30', label: '1-30' },
+    { key: '31_60', label: '31-60' },
+    { key: '61_90', label: '61-90' },
+    { key: '90_plus', label: '>90' },
+  ];
+
   const slug = $derived($page.params.tenantSlug || '');
   let startDate = $state('');
   let endDate = $state('');
@@ -33,6 +48,8 @@
   let compareEnd = $state('');
   let compareDashboard = $state<Dashboard | null>(null);
   let compareLoading = $state(false);
+  let receivableAging = $state<AgingReport | null>(null);
+  let payableAging = $state<AgingReport | null>(null);
 
   const income = $derived(number(dashboard?.metrics.income));
   const expense = $derived(number(dashboard?.metrics.expense));
@@ -85,7 +102,14 @@
     loading = true;
     error = '';
     try {
-      dashboard = await tenantApi.getTenantDashboard(slug, { startDate, endDate }) as Dashboard;
+      const [dash, ar, ap] = await Promise.all([
+        tenantApi.getTenantDashboard(slug, { startDate, endDate }) as Promise<Dashboard>,
+        api<AgingReport>(`/tenants/${slug}/reports/receivable-aging`).catch(() => null),
+        api<AgingReport>(`/tenants/${slug}/reports/payable-aging`).catch(() => null),
+      ]);
+      dashboard = dash;
+      receivableAging = ar;
+      payableAging = ap;
     } catch (err: any) {
       error = err?.message || 'Gagal memuat dashboard';
     } finally {
@@ -139,6 +163,51 @@
   <MetricCard label="Pengeluaran" value={expense} previousValue={compareMode ? compareExpense : undefined} loading={loading} format="currency" />
   <MetricCard label="Laba Bersih" value={profit} previousValue={compareMode ? compareProfit : undefined} loading={loading} format="currency" />
   <MetricCard label="Kas & Bank" value={cash} loading={loading} format="currency" />
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6 mb-6">
+  <div class="card p-5">
+    <div class="mb-3 flex items-center justify-between">
+      <h3 class="font-semibold">Piutang Usaha</h3>
+      <a href={`/app/${slug}/reports`} class="text-xs text-[hsl(var(--primary))] hover:underline">Lihat laporan →</a>
+    </div>
+    {#if receivableAging}
+      <p class="mb-3 text-2xl font-semibold tabular-nums">{formatIDR(Number(receivableAging.grandTotal))}</p>
+      <div class="space-y-2">
+        {#each AGING_BUCKETS as b}
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-[hsl(var(--muted-foreground))]">{b.label}</span>
+            <span class="font-medium tabular-nums">{formatIDR(Number(receivableAging.buckets[b.key]?.total ?? 0))}</span>
+          </div>
+        {/each}
+      </div>
+    {:else if loading}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Memuat…</p>
+    {:else}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Belum ada piutang.</p>
+    {/if}
+  </div>
+  <div class="card p-5">
+    <div class="mb-3 flex items-center justify-between">
+      <h3 class="font-semibold">Hutang Usaha</h3>
+      <a href={`/app/${slug}/reports`} class="text-xs text-[hsl(var(--primary))] hover:underline">Lihat laporan →</a>
+    </div>
+    {#if payableAging}
+      <p class="mb-3 text-2xl font-semibold tabular-nums">{formatIDR(Number(payableAging.grandTotal))}</p>
+      <div class="space-y-2">
+        {#each AGING_BUCKETS as b}
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-[hsl(var(--muted-foreground))]">{b.label}</span>
+            <span class="font-medium tabular-nums">{formatIDR(Number(payableAging.buckets[b.key]?.total ?? 0))}</span>
+          </div>
+        {/each}
+      </div>
+    {:else if loading}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Memuat…</p>
+    {:else}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Belum ada hutang.</p>
+    {/if}
+  </div>
 </div>
 
 <div class="grid lg:grid-cols-3 gap-6 mb-6">
