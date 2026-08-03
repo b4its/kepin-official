@@ -840,6 +840,18 @@ st_rows = body.get("items", [])
 check("statement invoice row", len(st_rows) == 1 and st_rows[0]["credit"] == "250000.00" and Decimal(st_rows[0]["balance"]) == inv_total, str(st_rows))
 check("statement closing == invoice total", Decimal(body.get("closing", "0")) == inv_total, body.get("closing"))
 
+sc, aging_body = jget("/reports/receivable-aging")
+check("aging receivable 200", sc == 200, f"{sc}")
+aging_entry = None
+for ag_buck in ("current", "1_30", "31_60", "61_90", "90_plus"):
+    for it in aging_body.get("buckets", {}).get(ag_buck, {}).get("items", []):
+        if it.get("customerId") == cust_id:
+            aging_entry = it
+            break
+    if aging_entry:
+        break
+check("aging receivable entry customerId+balance", aging_entry is not None and aging_entry.get("customerName", "").startswith("FT Customer") and Decimal(aging_entry.get("balanceDue", "0")) == inv_total, str(aging_entry))
+
 sc, body = jpost("/customer-payments", {
     "customer_id": cust_id,
     "payment_date": "2026-06-01",
@@ -866,6 +878,14 @@ for row in st_rows:
         break
     prev_bal = Decimal(row["balance"])
 check("statement balance consistent", bal_ok)
+
+sc, aging_body = jget("/reports/receivable-aging")
+aging_removed = True
+for ag_buck in ("current", "1_30", "31_60", "61_90", "90_plus"):
+    for it in aging_body.get("buckets", {}).get(ag_buck, {}).get("items", []):
+        if it.get("customerId") == cust_id:
+            aging_removed = False
+check("aging receivable removed after full payment", aging_removed, f"open={aging_removed}")
 
 sc, body = jget(f"/customer-statements?customerId={cust_id}&startDate=2026-05-20")
 check("statement startDate opening carries invoice", Decimal(body.get("opening", "0")) == inv_total and len(body.get("items", [])) == 1, f"{body.get('opening')} {len(body.get('items', []))}")
@@ -924,6 +944,11 @@ s_rows = body.get("items", [])
 check("supplier stmt GRN row", len(s_rows) == 1 and s_rows[0]["reference"].startswith("GR-") and s_rows[0]["credit"] == "400000.00" and Decimal(s_rows[0]["balance"]) == Decimal("400000"), str(s_rows))
 check("supplier stmt closing == GRN total", Decimal(body.get("closing", "0")) == Decimal("400000"), body.get("closing"))
 
+sc, aging_body = jget("/reports/payable-aging")
+check("aging payable 200", sc == 200, f"{sc}")
+ap_row = next((r for r in aging_body.get("rows", []) if r.get("supplierId") == sup_id), None)
+check("aging payable GRN outstanding", ap_row is not None and Decimal(ap_row.get("received", "0")) == Decimal("400000") and Decimal(ap_row.get("paid", "0")) == Decimal("0") and Decimal(ap_row.get("outstanding", "0")) == Decimal("400000"), str(ap_row))
+
 sc, body = jpost("/supplier-payments", {"supplier_id": sup_id, "payment_date": "2026-08-04", "amount": "400000", "method": "transfer"})
 check("supplier stmt payment create 201", sc == 201, f"{sc}")
 sup_pay_id = body.get("id", "")
@@ -944,6 +969,10 @@ for row in s_rows:
         break
     prev_bal = Decimal(row["balance"])
 check("supplier stmt balance consistent", bal_ok)
+
+sc, aging_body = jget("/reports/payable-aging")
+ap_row = next((r for r in aging_body.get("rows", []) if r.get("supplierId") == sup_id), None)
+check("aging payable net zero after payment", ap_row is not None and Decimal(ap_row.get("paid", "0")) == Decimal("400000") and Decimal(ap_row.get("outstanding", "0")) == Decimal("0"), str(ap_row))
 
 sc, body = jget(f"/supplier-statements?supplierId={sup_id}&startDate=2026-08-04")
 check("supplier stmt startDate opening carries GRN", Decimal(body.get("opening", "0")) == Decimal("400000") and len(body.get("items", [])) == 1, f"{body.get('opening')} {len(body.get('items', []))}")

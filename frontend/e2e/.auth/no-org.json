@@ -6,11 +6,11 @@
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"5e7a09b6-bd75-f517-f81d-d2b25ab40ce8\",\"name\":\"No Org User\",\"email\":\"e2e.1785707497027-h8ah6g@test.example\",\"phone\":\"\",\"avatar\":\"\"}"
+          "value": "{\"id\":\"05596721-57a1-bfa7-59ae-2508972a948d\",\"name\":\"No Org User\",\"email\":\"e2e.1785714242213-5s7288@test.example\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
           "name": "kepin_token",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZTdhMDliNi1iZDc1LWY1MTctZjgxZC1kMmIyNWFiNDBjZTgiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1NzA3NDk3LCJleHAiOjE3ODU3OTM4OTd9.oSQBRsiCuNSpKH-HJdkiD4NcC1P4jrIFRjoAtIMMXg8"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwNTU5NjcyMS01N2ExLWJmYTctNTlhZS0yNTA4OTcyYTk0OGQiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1NzE0MjQzLCJleHAiOjE3ODU4MDA2NDN9.dq5d5Qlts7rol1bsiyawcJA4Zk7rmJMqL9ufJ6bvMZ0"
         },
         {
           "name": "kepin_tenants",

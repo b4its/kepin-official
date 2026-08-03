@@ -774,6 +774,7 @@ async def get_receivable_aging(
                 Invoice.invoice_date,
                 Invoice.due_date,
                 Invoice.balance_due,
+                Customer.id.label("customer_id"),
                 Customer.name.label("customer_name"),
             )
             .select_from(Invoice)
@@ -807,6 +808,7 @@ async def get_receivable_aging(
             "invoiceNumber": inv.invoice_number,
             "invoiceDate": inv.invoice_date.isoformat(),
             "dueDate": inv.due_date.isoformat(),
+            "customerId": str(inv.customer_id),
             "customerName": inv.customer_name,
             "balanceDue": str(inv.balance_due),
             "daysOverdue": max(0, days_overdue),

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { auditEvents, loadAuditEvents, tenantApi } from '$lib/stores/data';
+  import { auditEvents, loadAuditEvents } from '$lib/stores/data';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import DataTable from '$lib/components/data-display/DataTable.svelte';
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import { getAuditEventTypes } from '$lib/api/tenants';
   import { Download, RefreshCw } from '@lucide/svelte';
 
   const slug = $derived($page.params.tenantSlug || '');
@@ -35,13 +36,15 @@
     loading = true;
     error = '';
     try {
-      const snapshot = filterType
-        ? null
-        : await tenantApi.getAuditEvents(slug, { pageSize: 100 });
-      await loadAuditEvents(slug, filterType ? { objectType: filterType } : undefined);
-      if (snapshot?.items && allTypes.length === 0) {
-        allTypes = [...new Set(snapshot.items.map((a: any) => a.objectType || '').filter(Boolean))].sort();
+      if (!filterType) {
+        try {
+          const types = await getAuditEventTypes(slug);
+          if (Array.isArray(types)) allTypes = types.filter(Boolean).sort();
+        } catch {
+          allTypes = [];
+        }
       }
+      await loadAuditEvents(slug, filterType ? { objectType: filterType } : undefined);
     } catch (err: any) {
       error = err?.message || 'Gagal memuat audit trail';
     } finally {

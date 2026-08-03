@@ -6,7 +6,9 @@
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
   import DateRangeFilter from '$lib/components/filters/DateRangeFilter.svelte';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
+  import { getCustomerStatement, getSupplierStatement } from '$lib/api/tenants';
   import Button from '$lib/components/ui/Button.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import { showToast } from '$lib/stores/toast';
   import { currentRole } from '$lib/stores/data';
@@ -46,7 +48,7 @@
   };
 
   type ReceivableAgingReport = {
-    buckets: Record<string, { total: string; items: unknown[] }>;
+    buckets: Record<string, { total: string; items: { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string; customerId: string; customerName: string; balanceDue: string; daysOverdue: number }[] }>;
     grandTotal: string;
   };
 
@@ -133,6 +135,29 @@
   let compareEnd = $state('');
   let compareSummary = $state<SummaryReport | null>(null);
   let compareLoading = $state(false);
+
+  type StatementRow = {
+    id: string;
+    date: string;
+    reference: string;
+    description: string;
+    debit: string;
+    credit: string;
+    balance: string;
+  };
+  type StatementDoc = {
+    opening: string;
+    closing: string;
+    items: StatementRow[];
+  };
+  let statementKind = $state<'customer' | 'supplier'>('customer');
+  let statementEntityId = $state('');
+  let statementEntityName = $state('');
+  let statementShow = $state(false);
+  let statementLoading = $state(false);
+  let statementStart = $state('');
+  let statementEnd = $state('');
+  let statementDoc = $state<StatementDoc | null>(null);
 
   const tenantSlug = $derived($page.params.tenantSlug || '');
   const periods = $derived(fiscalYears.flatMap((fy) => fy.periods || []));
@@ -334,6 +359,95 @@
     const sign = diff > 0 ? '+' : '';
     const pct = prev !== 0 ? ` (${sign}${((diff / Math.abs(prev)) * 100).toFixed(0)}%)` : '';
     return `${sign}${formatIDR(diff)}${pct}`;
+  }
+
+  const BUCKET_ORDER = ['current', '1_30', '31_60', '61_90', '90_plus'] as const;
+  const BUCKET_LABELS: Record<(typeof BUCKET_ORDER)[number], string> = {
+    current: 'Lancar',
+    '1_30': '1-30',
+    '31_60': '31-60',
+    '61_90': '61-90',
+    '90_plus': '>90',
+  };
+
+  type AgedCustomer = {
+    id: string;
+    name: string;
+    current: number;
+    '1_30': number;
+    '31_60': number;
+    '61_90': number;
+    '90_plus': number;
+    total: number;
+    bucket: (typeof BUCKET_ORDER)[number];
+  };
+
+  const receivableByCustomer = $derived(
+    computeReceivableByCustomer(receivableAging)
+  );
+
+  function computeReceivableByCustomer(rep: ReceivableAgingReport | null): AgedCustomer[] {
+    const map = new Map<string, AgedCustomer>();
+    const buckets = rep?.buckets ?? {};
+    for (const bucket of BUCKET_ORDER) {
+      const data = buckets[bucket];
+      if (!data) continue;
+      for (const item of data.items) {
+        let row = map.get(item.customerId);
+        if (!row) {
+          row = { id: item.customerId, name: item.customerName, current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, total: 0, bucket: 'current' };
+          map.set(item.customerId, row);
+        }
+        const amount = toNumber(item.balanceDue);
+        row[bucket] += amount;
+        row.total += amount;
+        if (BUCKET_ORDER.indexOf(bucket) > BUCKET_ORDER.indexOf(row.bucket)) {
+          row.bucket = bucket;
+        }
+      }
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  function openCustomerStatement(customerId: string, name: string) {
+    statementKind = 'customer';
+    statementEntityId = customerId;
+    statementEntityName = name;
+    statementShow = true;
+    statementDoc = null;
+    statementStart = '';
+    statementEnd = '';
+    void applyStatementRange();
+  }
+
+  function openSupplierStatement(supplierId: string, name: string) {
+    statementKind = 'supplier';
+    statementEntityId = supplierId;
+    statementEntityName = name;
+    statementShow = true;
+    statementDoc = null;
+    statementStart = '';
+    statementEnd = '';
+    void applyStatementRange();
+  }
+
+  async function applyStatementRange() {
+    if (!statementEntityId) return;
+    statementLoading = true;
+    try {
+      const params = [];
+      if (statementStart) params.push(`&startDate=${statementStart}`);
+      if (statementEnd) params.push(`&endDate=${statementEnd}`);
+      if (statementKind === 'customer') {
+        statementDoc = (await getCustomerStatement(tenantSlug, statementEntityId, params.join(''))) as StatementDoc;
+      } else {
+        statementDoc = (await getSupplierStatement(tenantSlug, statementEntityId, params.join(''))) as StatementDoc;
+      }
+    } catch {
+      showToast('Gagal memuat kartu ' + (statementKind === 'customer' ? 'piutang' : 'hutang'), 'error');
+    } finally {
+      statementLoading = false;
+    }
   }
 
   function query(params: Record<string, string | boolean | undefined>) {
@@ -778,19 +892,19 @@
     searchable={true}
   />
 {:else if activeTab === 'aging'}
-  <div class="grid gap-6 lg:grid-cols-2">
-    <div class="card p-5">
-      <h3 class="mb-4 font-semibold">Piutang per Bucket</h3>
-      <div class="space-y-3">
-        {#each Object.entries(receivableAging?.buckets ?? {}) as [bucket, data]}
-          <div class="flex items-center justify-between rounded-md border border-[hsl(var(--border))] px-3 py-2 text-sm">
-            <span class="capitalize">{bucket}</span>
-            <span class="font-medium tabular-nums">{money(data.total)} · {data.items.length} invoice</span>
-          </div>
-        {/each}
+  <div class="space-y-6">
+    <div class="grid gap-6 lg:grid-cols-2">
+      <div class="card p-5">
+        <h3 class="mb-4 font-semibold">Piutang per Bucket</h3>
+        <div class="space-y-3">
+          {#each Object.entries(receivableAging?.buckets ?? {}) as [bucket, data]}
+            <div class="flex items-center justify-between rounded-md border border-[hsl(var(--border))] px-3 py-2 text-sm">
+              <span class="capitalize">{BUCKET_LABELS[bucket as keyof typeof BUCKET_LABELS] ?? bucket}</span>
+              <span class="font-medium tabular-nums">{money(data.total)} · {data.items.length} invoice</span>
+            </div>
+          {/each}
+        </div>
       </div>
-    </div>
-    <div>
       <DataTable
         columns={[
           { key: 'supplierName', label: 'Supplier', sortable: true },
@@ -803,8 +917,36 @@
         total={payableAging?.rows.length ?? 0}
         loading={loading}
         searchable={true}
-      />
+      >
+        {#snippet rowActions(item: any)}
+          <button
+            onclick={() => openSupplierStatement(item.supplierId, item.supplierName)}
+            class="text-xs text-[hsl(var(--primary))] hover:underline">Kartu hutang</button>
+        {/snippet}
+      </DataTable>
     </div>
+    <DataTable
+      columns={[
+        { key: 'name', label: 'Pelanggan', sortable: true },
+        { key: 'current', label: 'Lancar', align: 'right', render: (r: any) => money(r.current) },
+        { key: '1_30', label: '1-30', align: 'right', render: (r: any) => money(r['1_30']) },
+        { key: '31_60', label: '31-60', align: 'right', render: (r: any) => money(r['31_60']) },
+        { key: '61_90', label: '61-90', align: 'right', render: (r: any) => money(r['61_90']) },
+        { key: '90_plus', label: '>90', align: 'right', render: (r: any) => money(r['90_plus']) },
+        { key: 'total', label: 'Total', align: 'right', render: (r: any) => money(r.total) },
+        { key: 'bucket', label: 'Bucket Tertua' },
+      ]}
+      data={receivableByCustomer}
+      total={receivableByCustomer.length}
+      loading={loading}
+      searchable={true}
+    >
+      {#snippet rowActions(item: any)}
+        <button
+          onclick={() => openCustomerStatement(item.id, item.name)}
+          class="text-xs text-[hsl(var(--primary))] hover:underline">Kartu piutang</button>
+      {/snippet}
+    </DataTable>
   </div>
 {:else if activeTab === 'stock'}
   <DataTable
@@ -822,6 +964,68 @@
     searchable={true}
   />
 {/if}
+
+<Modal
+  title={statementKind === 'customer' ? `Kartu Piutang · ${statementEntityName}` : `Kartu Hutang · ${statementEntityName}`}
+  open={statementShow}
+  onclose={() => statementShow = false}
+>
+  <div class="space-y-4">
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <span>Periode:</span>
+      <input type="date" bind:value={statementStart} class="input-field w-40" aria-label="Tanggal mulai kartu" />
+      <span>s.d.</span>
+      <input type="date" bind:value={statementEnd} class="input-field w-40" aria-label="Tanggal akhir kartu" />
+      <Button size="sm" variant="secondary" onclick={applyStatementRange} loading={statementLoading}>Terapkan</Button>
+    </div>
+    {#if statementDoc}
+      <p class="text-xs text-[hsl(var(--muted-foreground))]">
+        Saldo awal {formatIDR(Number(statementDoc.opening))} · Saldo akhir {formatIDR(Number(statementDoc.closing))}
+      </p>
+      <div class="max-h-96 overflow-auto rounded border border-[hsl(var(--border))]">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0 bg-[hsl(var(--card))]">
+            <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+              <th class="px-4 py-2">Tanggal</th>
+              <th class="px-4 py-2">No. Referensi</th>
+              <th class="px-4 py-2">Deskripsi</th>
+              <th class="px-4 py-2 text-right">Debit</th>
+              <th class="px-4 py-2 text-right">Kredit</th>
+              <th class="px-4 py-2 text-right">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-[hsl(var(--border))]">
+              <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="5">Saldo awal</td>
+              <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(statementDoc.opening))}</td>
+            </tr>
+            {#if statementDoc.items.length === 0}
+              <tr class="border-b border-[hsl(var(--border))]">
+                <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="6">Tidak ada mutasi pada periode ini</td>
+              </tr>
+            {/if}
+            {#each statementDoc.items as line}
+              <tr class="border-b border-[hsl(var(--border))]">
+                <td class="px-4 py-2">{line.date}</td>
+                <td class="px-4 py-2 font-mono text-xs">{line.reference}</td>
+                <td class="px-4 py-2 text-[hsl(var(--muted-foreground))]">{line.description}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{Number(line.debit) !== 0 ? formatIDR(Number(line.debit)) : ''}</td>
+                <td class="px-4 py-2 text-right tabular-nums">{Number(line.credit) !== 0 ? formatIDR(Number(line.credit)) : ''}</td>
+                <td class="px-4 py-2 text-right font-medium tabular-nums">{formatIDR(Number(line.balance))}</td>
+              </tr>
+            {/each}
+            <tr>
+              <td class="px-4 py-2 font-semibold" colspan="5">Saldo akhir</td>
+              <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(statementDoc.closing))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {:else if statementLoading}
+      <p class="text-sm text-[hsl(var(--muted-foreground))]">Memuat kartu…</p>
+    {/if}
+  </div>
+</Modal>
 
 <ExportModal
   open={showExport}

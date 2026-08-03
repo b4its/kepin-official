@@ -39,6 +39,7 @@ export async function getAuditEvents(slug: string, params?: { objectType?: strin
   const qs = q.toString();
   return api(`/tenants/${slug}/audit-events${qs ? `?${qs}` : ''}`);
 }
+export async function getAuditEventTypes(slug: string) { return api(`/tenants/${slug}/audit-events/types`); }
 export async function getAccounts(slug: string) { return api(`/tenants/${slug}/accounts`); }
 export async function getAccountBalance(slug: string, id: string) { return api(`/tenants/${slug}/accounts/${id}/balance`); }
 export async function createAccount(slug: string, data: any) { return api(`/tenants/${slug}/accounts`, { method: 'POST', body: JSON.stringify(data) }); }
@@ -73,7 +74,7 @@ export async function createReconciliationMatch(slug: string, data: { bankTransa
 export async function confirmReconciliationMatch(slug: string, id: string) { return api(`/tenants/${slug}/reconciliation/matches/${id}/confirm`, { method: 'POST' }); }
 export async function getReconciliationSuggestions(slug: string, params?: string) { return api(`/tenants/${slug}/reconciliation/suggestions${params || ''}`); }
 export async function bulkAutoMatch(slug: string, data: { bankAccountId?: string; minScore?: number; maxStatements?: number }) { return api(`/tenants/${slug}/reconciliation/matches/bulk`, { method: 'POST', body: JSON.stringify(data) }); }
-export async function getCustomers(slug: string) { return api(`/tenants/${slug}/customers`); }
+export async function getCustomers(slug: string) { return api(`/tenants/${slug}/customers?pageSize=100`); }
 export async function createCustomer(slug: string, data: any) { return api(`/tenants/${slug}/customers`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateCustomer(slug: string, id: string, data: any) { return api(`/tenants/${slug}/customers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
 export async function deleteCustomer(slug: string, id: string) { return api(`/tenants/${slug}/customers/${id}`, { method: 'DELETE' }); }
@@ -83,7 +84,7 @@ export async function updateInvoice(slug: string, id: string, data: any) { retur
 export async function deleteInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}`, { method: 'DELETE' }); }
 export async function postInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}/post`, { method: 'POST', headers: { 'X-Idempotency-Key': crypto.randomUUID() } }); }
 export async function reverseInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}/reverse`, { method: 'POST' }); }
-export async function getSuppliers(slug: string) { return api(`/tenants/${slug}/suppliers`); }
+export async function getSuppliers(slug: string) { return api(`/tenants/${slug}/suppliers?pageSize=100`); }
 export async function createSupplier(slug: string, data: any) { return api(`/tenants/${slug}/suppliers`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateSupplier(slug: string, id: string, data: any) { return api(`/tenants/${slug}/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
 export async function deleteSupplier(slug: string, id: string) { return api(`/tenants/${slug}/suppliers/${id}`, { method: 'DELETE' }); }

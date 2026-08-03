@@ -82,6 +82,27 @@ async def list_audit_events(
     return make_paginated(items, page, page_size, total)
 
 
+@router.get("/types", response_model=list[str])
+async def list_audit_event_types(
+    ctx: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    """Daftar distinct object_type yang pernah tercatat untuk filter audit."""
+    rows = (
+        await session.execute(
+            select(TenantAuditEvent.object_type)
+            .where(
+                TenantAuditEvent.tenant_id == ctx.id,
+                TenantAuditEvent.object_type.is_not(None),
+            )
+            .distinct()
+            .order_by(TenantAuditEvent.object_type)
+        )
+    ).all()
+    return [row[0] for row in rows if row[0]]
+
+
 @router.get("/{event_id}", response_model=AuditEventResponse)
 async def get_audit_event(
     event_id: str = Path(...),
