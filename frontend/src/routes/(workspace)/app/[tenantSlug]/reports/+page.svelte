@@ -6,10 +6,9 @@
   import MetricCard from '$lib/components/data-display/MetricCard.svelte';
   import DateRangeFilter from '$lib/components/filters/DateRangeFilter.svelte';
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
-  import { getCustomerStatement, getSupplierStatement } from '$lib/api/tenants';
   import Button from '$lib/components/ui/Button.svelte';
-  import Modal from '$lib/components/ui/Modal.svelte';
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
+  import StatementModal from '$lib/components/ui/StatementModal.svelte';
   import { showToast } from '$lib/stores/toast';
   import { currentRole } from '$lib/stores/data';
   import { formatIDR, formatNumber } from '$lib/utils/currency';
@@ -136,28 +135,10 @@
   let compareSummary = $state<SummaryReport | null>(null);
   let compareLoading = $state(false);
 
-  type StatementRow = {
-    id: string;
-    date: string;
-    reference: string;
-    description: string;
-    debit: string;
-    credit: string;
-    balance: string;
-  };
-  type StatementDoc = {
-    opening: string;
-    closing: string;
-    items: StatementRow[];
-  };
   let statementKind = $state<'customer' | 'supplier'>('customer');
   let statementEntityId = $state('');
   let statementEntityName = $state('');
   let statementShow = $state(false);
-  let statementLoading = $state(false);
-  let statementStart = $state('');
-  let statementEnd = $state('');
-  let statementDoc = $state<StatementDoc | null>(null);
 
   const tenantSlug = $derived($page.params.tenantSlug || '');
   const periods = $derived(fiscalYears.flatMap((fy) => fy.periods || []));
@@ -414,10 +395,6 @@
     statementEntityId = customerId;
     statementEntityName = name;
     statementShow = true;
-    statementDoc = null;
-    statementStart = '';
-    statementEnd = '';
-    void applyStatementRange();
   }
 
   function openSupplierStatement(supplierId: string, name: string) {
@@ -425,29 +402,6 @@
     statementEntityId = supplierId;
     statementEntityName = name;
     statementShow = true;
-    statementDoc = null;
-    statementStart = '';
-    statementEnd = '';
-    void applyStatementRange();
-  }
-
-  async function applyStatementRange() {
-    if (!statementEntityId) return;
-    statementLoading = true;
-    try {
-      const params = [];
-      if (statementStart) params.push(`&startDate=${statementStart}`);
-      if (statementEnd) params.push(`&endDate=${statementEnd}`);
-      if (statementKind === 'customer') {
-        statementDoc = (await getCustomerStatement(tenantSlug, statementEntityId, params.join(''))) as StatementDoc;
-      } else {
-        statementDoc = (await getSupplierStatement(tenantSlug, statementEntityId, params.join(''))) as StatementDoc;
-      }
-    } catch {
-      showToast('Gagal memuat kartu ' + (statementKind === 'customer' ? 'piutang' : 'hutang'), 'error');
-    } finally {
-      statementLoading = false;
-    }
   }
 
   function query(params: Record<string, string | boolean | undefined>) {
@@ -965,67 +919,13 @@
   />
 {/if}
 
-<Modal
-  title={statementKind === 'customer' ? `Kartu Piutang · ${statementEntityName}` : `Kartu Hutang · ${statementEntityName}`}
+<StatementModal
+  kind={statementKind}
   open={statementShow}
+  entityId={statementEntityId}
+  entityName={statementEntityName}
   onclose={() => statementShow = false}
->
-  <div class="space-y-4">
-    <div class="flex flex-wrap items-center gap-2 text-sm">
-      <span>Periode:</span>
-      <input type="date" bind:value={statementStart} class="input-field w-40" aria-label="Tanggal mulai kartu" />
-      <span>s.d.</span>
-      <input type="date" bind:value={statementEnd} class="input-field w-40" aria-label="Tanggal akhir kartu" />
-      <Button size="sm" variant="secondary" onclick={applyStatementRange} loading={statementLoading}>Terapkan</Button>
-    </div>
-    {#if statementDoc}
-      <p class="text-xs text-[hsl(var(--muted-foreground))]">
-        Saldo awal {formatIDR(Number(statementDoc.opening))} · Saldo akhir {formatIDR(Number(statementDoc.closing))}
-      </p>
-      <div class="max-h-96 overflow-auto rounded border border-[hsl(var(--border))]">
-        <table class="w-full text-sm">
-          <thead class="sticky top-0 bg-[hsl(var(--card))]">
-            <tr class="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
-              <th class="px-4 py-2">Tanggal</th>
-              <th class="px-4 py-2">No. Referensi</th>
-              <th class="px-4 py-2">Deskripsi</th>
-              <th class="px-4 py-2 text-right">Debit</th>
-              <th class="px-4 py-2 text-right">Kredit</th>
-              <th class="px-4 py-2 text-right">Saldo</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="border-b border-[hsl(var(--border))]">
-              <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="5">Saldo awal</td>
-              <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(statementDoc.opening))}</td>
-            </tr>
-            {#if statementDoc.items.length === 0}
-              <tr class="border-b border-[hsl(var(--border))]">
-                <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="6">Tidak ada mutasi pada periode ini</td>
-              </tr>
-            {/if}
-            {#each statementDoc.items as line}
-              <tr class="border-b border-[hsl(var(--border))]">
-                <td class="px-4 py-2">{line.date}</td>
-                <td class="px-4 py-2 font-mono text-xs">{line.reference}</td>
-                <td class="px-4 py-2 text-[hsl(var(--muted-foreground))]">{line.description}</td>
-                <td class="px-4 py-2 text-right tabular-nums">{Number(line.debit) !== 0 ? formatIDR(Number(line.debit)) : ''}</td>
-                <td class="px-4 py-2 text-right tabular-nums">{Number(line.credit) !== 0 ? formatIDR(Number(line.credit)) : ''}</td>
-                <td class="px-4 py-2 text-right font-medium tabular-nums">{formatIDR(Number(line.balance))}</td>
-              </tr>
-            {/each}
-            <tr>
-              <td class="px-4 py-2 font-semibold" colspan="5">Saldo akhir</td>
-              <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(statementDoc.closing))}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    {:else if statementLoading}
-      <p class="text-sm text-[hsl(var(--muted-foreground))]">Memuat kartu…</p>
-    {/if}
-  </div>
-</Modal>
+/>
 
 <ExportModal
   open={showExport}

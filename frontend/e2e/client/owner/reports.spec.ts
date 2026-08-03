@@ -153,6 +153,10 @@ test.describe('Owner Reports & Export', () => {
     await expect(page.locator('body')).toContainText('Saldo akhir Rp 500.000');
     await expect(page.getByRole('cell', { name: /INV-/ })).toBeVisible();
 
+    const pdfDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'PDF' }).click();
+    expect((await pdfDownload).suggestedFilename()).toMatch(/\.pdf$/);
+
     const pay = await api.post(`tenants/${TENANT}/customer-payments`, {
       data: {
         customer_id: customerId,
