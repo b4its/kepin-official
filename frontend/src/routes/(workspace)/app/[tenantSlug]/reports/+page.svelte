@@ -181,6 +181,7 @@
     { value: 'balance-sheet', label: 'Neraca' },
     { value: 'cash-flow', label: 'Arus Kas' },
     { value: 'aging', label: 'Aging' },
+    { value: 'aging-detail', label: 'Aging Detail' },
     { value: 'stock', label: 'Valuasi Stok' },
   ] as const;
 
@@ -229,6 +230,17 @@
       { key: 'label', label: 'Keterangan' },
       { key: 'value', label: 'Nilai' },
     ],
+    'aging-detail': [
+      { key: 'type', label: 'Tipe' },
+      { key: 'name', label: 'Entitas' },
+      { key: 'current', label: 'Lancar' },
+      { key: '1_30', label: '1-30' },
+      { key: '31_60', label: '31-60' },
+      { key: '61_90', label: '61-90' },
+      { key: '90_plus', label: '>90' },
+      { key: 'total', label: 'Total' },
+      { key: 'bucket', label: 'Bucket Tertua' },
+    ],
     stock: [
       { key: 'sku', label: 'SKU' },
       { key: 'productName', label: 'Produk' },
@@ -255,6 +267,14 @@
     'cash-flow': [
       { key: 'inflow', render: (r) => (toNumber(r.inflow) > 0 ? money(r.inflow) : '-') },
       { key: 'outflow', render: (r) => (toNumber(r.outflow) > 0 ? money(r.outflow) : '-') },
+    ],
+    'aging-detail': [
+      { key: 'current', render: (r) => money(r.current) },
+      { key: '1_30', render: (r) => money(r['1_30']) },
+      { key: '31_60', render: (r) => money(r['31_60']) },
+      { key: '61_90', render: (r) => money(r['61_90']) },
+      { key: '90_plus', render: (r) => money(r['90_plus']) },
+      { key: 'total', render: (r) => money(r.total) },
     ],
     stock: [
       { key: 'quantity', render: (r) => formatNumber(toNumber(r.quantity)) },
@@ -292,6 +312,26 @@
           rows.push({ section: 'Hutang', label: `${row.supplierName} (${row.bucket})`, value: money(row.outstanding) });
         }
         rows.push({ section: 'Hutang', label: 'Total Hutang', value: money(payableAging?.grandTotal) });
+        return rows;
+      }
+      case 'aging-detail': {
+        const rows: any[] = [];
+        for (const type of ['Piutang', 'Hutang'] as const) {
+          const group = type === 'Piutang' ? receivableByCustomer : payableBySupplier;
+          for (const row of group) {
+            rows.push({ type, name: row.name, current: row.current, '1_30': row['1_30'], '31_60': row['31_60'], '61_90': row['61_90'], '90_plus': row['90_plus'], total: row.total, bucket: row.bucket });
+          }
+          const agg = { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, total: 0, bucket: '' };
+          for (const row of group) {
+            agg.current += row.current;
+            agg['1_30'] += row['1_30'];
+            agg['31_60'] += row['31_60'];
+            agg['61_90'] += row['61_90'];
+            agg['90_plus'] += row['90_plus'];
+            agg.total += row.total;
+          }
+          rows.push({ type: `Total ${type}`, name: '—', ...agg });
+        }
         return rows;
       }
       case 'summary':

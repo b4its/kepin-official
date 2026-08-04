@@ -7,6 +7,8 @@ const TENANT = 'toko-maju';
 const COUNT = 100;
 const TS = Date.now();
 
+const dayAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+
 let token: string;
 
 async function apiPost(request: APIRequestContext, path: string, body: any) {
@@ -142,7 +144,7 @@ test.describe('SEED DATA: 100 records per CRUD page', () => {
     for (let i = 0; i < COUNT; i++) {
       const txnType = i % 2 === 0 ? 'income' : 'expense';
       await apiPost(request, `tenants/${TENANT}/transactions`, {
-        transaction_date: `2026-07-${String(22 + (i % 7)).padStart(2, '0')}`,
+        transaction_date: dayAgo(i % 7),
         type: txnType,
         description: `Transaksi Seeded ${i + 1}`,
         amount: String(50000 + i * 1000),
@@ -176,7 +178,7 @@ test.describe('SEED DATA: 100 records per CRUD page', () => {
     console.log('\n═══ 8. JOURNALS ═══');
     for (let i = 0; i < COUNT; i++) {
       await apiPost(request, `tenants/${TENANT}/journals`, {
-        journal_date: `2026-07-${String(22 + (i % 7)).padStart(2, '0')}`,
+        journal_date: dayAgo(i % 7),
         description: `Jurnal Seeded ${i + 1}`,
         lines: [
           { account_id: acct1, debit: String(100000 + i * 1000), credit: '0', description: 'Debit line' },

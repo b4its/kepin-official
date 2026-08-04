@@ -65,6 +65,19 @@ test.describe('Owner Reports & Export', () => {
     expect(errors).toEqual([]);
   });
 
+  test('export modal aging detail shows per-entity bucket columns', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Jenis laporan untuk ekspor').selectOption('aging-detail');
+    await page.getByRole('button', { name: /ekspor/i }).first().click();
+    await expect(page.locator('h2', { hasText: 'Aging Detail' })).toBeVisible();
+    await expect(page.getByText('Bucket Tertua', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Lancar', { exact: true }).first()).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test('period comparison toggles and shows delta on metric cards', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
