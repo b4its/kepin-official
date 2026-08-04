@@ -184,6 +184,52 @@ test.describe('Owner Reports & Export', () => {
     await api.dispose();
   });
 
+  test('aging asOf: periode berakhir di masa depan menggeser invoice ke bucket >90', async ({ page }) => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const runId = uniqueId();
+    const name = `0E2E AgingAsOf ${runId}`;
+
+    const c = await api.post(`tenants/${TENANT}/customers`, {
+      data: { code: `C-${runId.slice(-12)}`, name, email: `${runId}@test.com`, phone: '0812', address: 'Test' },
+    });
+    expect(c.status()).toBe(201);
+    const customerId = (await c.json()).id;
+
+    const inv = await api.post(`tenants/${TENANT}/invoices`, {
+      data: {
+        customer_id: customerId,
+        invoice_date: '2026-07-10',
+        due_date: '2026-08-10',
+        lines: [{ item_name: 'Jasa Konsultasi', quantity: '1', unit_price: '500000' }],
+      },
+    });
+    expect(inv.status()).toBe(201);
+    const invoiceId = (await inv.json()).id;
+    expect((await api.post(`tenants/${TENANT}/invoices/${invoiceId}/post`)).status()).toBe(200);
+
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Aging' }).click();
+
+    const receivableTable = page.locator('div.rounded-lg.border').filter({ hasText: 'Pelanggan' });
+    await receivableTable.locator('input[placeholder="Cari..."]').fill(name);
+    const row = receivableTable.locator('tbody tr', { hasText: name });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByRole('cell').nth(1)).toHaveText(/Rp\s*500\.000/);
+    await expect(row.getByRole('cell').nth(5)).toHaveText(/Rp\s*0/);
+
+    await page.getByRole('button', { name: 'Kustom', exact: true }).click();
+    await page.locator('input[type="date"]').nth(0).fill('2026-01-01');
+    await page.locator('input[type="date"]').nth(1).fill('2026-12-31');
+    await page.getByRole('button', { name: 'Terapkan' }).click();
+
+    await expect(row.getByRole('cell').nth(1)).toHaveText(/Rp\s*0/);
+    await expect(row.getByRole('cell').nth(5)).toHaveText(/Rp\s*500\.000/);
+
+    await api.post(`tenants/${TENANT}/invoices/${invoiceId}/void`).catch(() => {});
+    await api.dispose();
+  });
+
   test('aging per-supplier drill-down opens kartu hutang', async ({ page }) => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
     const runId = uniqueId();
