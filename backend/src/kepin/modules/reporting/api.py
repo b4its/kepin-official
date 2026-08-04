@@ -763,8 +763,10 @@ async def get_receivable_aging(
     ctx: TenantContext = Depends(get_tenant_context),
     _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
+    as_of: date | None = Query(None, alias="asOf"),
 ):
-    today = date.today()
+    """Aging piutang per invoice; bucket dihitung terhadap ``asOf`` (default hari ini)."""
+    today = as_of or date.today()
 
     invoices = (
         await session.execute(
@@ -840,13 +842,15 @@ async def get_payable_aging(
     ctx: TenantContext = Depends(get_tenant_context),
     _m: Membership = Depends(get_tenant_membership),
     session: AsyncSession = Depends(get_session),
+    as_of: date | None = Query(None, alias="asOf"),
 ):
     """Aging hutang per supplier berbasis goods receipt (jurnal-linked) vs pembayaran supplier.
 
     Pembayaran dialokasikan FIFO ke GRN tertua per supplier; rincian per GRN
     dikembalikan lewat ``buckets`` (simetris dengan ``receivable-aging``).
+    Bucket dihitung terhadap ``asOf`` (default hari ini).
     """
-    today = date.today()
+    today = as_of or date.today()
 
     grn_rows = (
         await session.execute(

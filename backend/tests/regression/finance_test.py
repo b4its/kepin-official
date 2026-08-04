@@ -852,6 +852,25 @@ for ag_buck in ("current", "1_30", "31_60", "61_90", "90_plus"):
         break
 check("aging receivable entry customerId+balance", aging_entry is not None and aging_entry.get("customerName", "").startswith("FT Customer") and Decimal(aging_entry.get("balanceDue", "0")) == inv_total, str(aging_entry))
 
+def aging_bucket_for(body: dict, entity_key: str, entity_id: str) -> str:
+    for b in ("current", "1_30", "31_60", "61_90", "90_plus"):
+        if any(it.get(entity_key) == entity_id for it in body.get("buckets", {}).get(b, {}).get("items", [])):
+            return b
+    return ""
+
+sc, aging_body = jget("/reports/receivable-aging?asOf=2026-06-15")
+b = aging_bucket_for(aging_body, "customerId", cust_id)
+check("aging receivable asOf overdue bucket 1_30", b == "1_30", f"{b}")
+sc, aging_body = jget("/reports/receivable-aging?asOf=2026-06-10")
+b = aging_bucket_for(aging_body, "customerId", cust_id)
+check("aging receivable asOf due-day bucket current", b == "current", f"{b}")
+sc, aging_body = jget("/reports/receivable-aging?asOf=2100-01-01")
+b = aging_bucket_for(aging_body, "customerId", cust_id)
+check("aging receivable asOf far future 90_plus", b == "90_plus", f"{b}")
+sc, aging_body = jget("/reports/receivable-aging?asOf=2026-06-15")
+entry_15 = next((it for it in aging_body.get("buckets", {}).get("1_30", {}).get("items", []) if it.get("customerId") == cust_id), None)
+check("aging receivable asOf daysOverdue 5", entry_15 is not None and entry_15.get("daysOverdue") == 5, str(entry_15))
+
 sc, body = jpost("/customer-payments", {
     "customer_id": cust_id,
     "payment_date": "2026-06-01",
@@ -959,6 +978,13 @@ for ap_buck in ("current", "1_30", "31_60", "61_90", "90_plus"):
 check("aging payable entry supplierId+balance", ap_entry is not None and ap_entry.get("supplierName", "").startswith("FT Pemasok") and ap_entry.get("reference", "").startswith("GR-") and Decimal(ap_entry.get("balanceDue", "0")) == Decimal("400000"), str(ap_entry))
 check("aging payable grandTotal == buckets sum", Decimal(aging_body.get("grandTotal", "0")) == sum(Decimal(b.get("total", "0")) for b in aging_body.get("buckets", {}).values()), f"{aging_body.get('grandTotal')}")
 
+sc, aging_body = jget("/reports/payable-aging?asOf=2100-01-01")
+b = aging_bucket_for(aging_body, "supplierId", sup_id)
+check("aging payable asOf far future 90_plus", b == "90_plus", f"{b}")
+sc, aging_body = jget("/reports/payable-aging?asOf=2020-01-01")
+b = aging_bucket_for(aging_body, "supplierId", sup_id)
+check("aging payable asOf past current bucket", b == "current", f"{b}")
+
 sc, body = jpost("/supplier-payments", {"supplier_id": sup_id, "payment_date": "2026-08-04", "amount": "400000", "method": "transfer"})
 check("supplier stmt payment create 201", sc == 201, f"{sc}")
 sup_pay_id = body.get("id", "")
@@ -993,8 +1019,11 @@ for ap_buck in ("current", "1_30", "31_60", "61_90", "90_plus"):
         break
 check("aging payable entry removed after full payment", ap_entry is None, str(ap_entry))
 
-sc, body = jget(f"/supplier-statements?supplierId={sup_id}&startDate=2026-08-04")
-check("supplier stmt startDate opening carries GRN", Decimal(body.get("opening", "0")) == Decimal("400000") and len(body.get("items", [])) == 1, f"{body.get('opening')} {len(body.get('items', []))}")
+mid = max(r["date"] for r in s_rows)
+n_after = sum(1 for r in s_rows if r["date"] >= mid)
+opening_exp = sum(Decimal(r["credit"]) for r in s_rows if r["date"] < mid)
+sc, body = jget(f"/supplier-statements?supplierId={sup_id}&startDate={mid}")
+check("supplier stmt startDate opening carries prior activity", len(body.get("items", [])) == n_after and Decimal(body.get("opening", "0")) == opening_exp and Decimal(body.get("closing", "0")) == Decimal("0"), f"{body.get('opening')} items={len(body.get('items', []))}")
 
 sc, body = jget("/supplier-statements?supplierId=00000000-0000-0000-0000-000000000000")
 check("supplier stmt unknown supplier 404", sc == 404, f"{sc}")
