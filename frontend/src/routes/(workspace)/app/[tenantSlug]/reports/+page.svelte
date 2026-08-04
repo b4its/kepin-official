@@ -290,7 +290,7 @@
     })
   );
 
-  const exportRows = $derived(() => {
+  function exportRowsData() {
     switch (exportKind) {
       case 'trial':
         return trialBalance?.rows ?? [];
@@ -349,8 +349,42 @@
           { section: 'Arus Kas', label: 'Net Arus Kas', value: formatIDR(cashNet) },
         ];
     }
-  });
+  }
 
+  const exportRows = $derived(exportRowsData());
+
+  const agingDetailColumns = EXPORT_COLUMNS['aging-detail'];
+  const agingDetailRenders = EXPORT_COLUMN_RENDER['aging-detail'] ?? [];
+
+  const exportSheets = $derived(
+    exportKind === 'aging' || exportKind === 'aging-detail'
+      ? ['Piutang', 'Hutang'].map((type) => {
+          const group = type === 'Piutang' ? receivableByCustomer : payableBySupplier;
+          const rows: any[] = [];
+          for (const row of group) {
+            rows.push({ type, name: row.name, current: row.current, '1_30': row['1_30'], '31_60': row['31_60'], '61_90': row['61_90'], '90_plus': row['90_plus'], total: row.total, bucket: row.bucket });
+          }
+          const agg = { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0, total: 0, bucket: '' };
+          for (const row of group) {
+            agg.current += row.current;
+            agg['1_30'] += row['1_30'];
+            agg['31_60'] += row['31_60'];
+            agg['61_90'] += row['61_90'];
+            agg['90_plus'] += row['90_plus'];
+            agg.total += row.total;
+          }
+          rows.push({ type: `Total ${type}`, name: '—', ...agg });
+          return {
+            name: `${type} (Aging)`,
+            columns: agingDetailColumns.map((col) => {
+              const renderCol = agingDetailRenders.find((c) => c.key === col.key);
+              return renderCol ? { ...col, render: renderCol.render } : col;
+            }),
+            rows,
+          };
+        })
+      : undefined
+  );
 
   function toNumber(value: string | number | null | undefined): number {
     const parsed = Number(value ?? 0);
@@ -1013,5 +1047,6 @@
   subtitle={`Periode ${startDate} s/d ${endDate}`}
   columns={exportColumns}
   rows={exportRows}
+  sheets={exportSheets}
   filename={`laporan-${exportKind}`}
 />

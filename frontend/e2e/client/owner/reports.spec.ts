@@ -78,6 +78,21 @@ test.describe('Owner Reports & Export', () => {
     expect(errors).toEqual([]);
   });
 
+  test('export aging excel downloads multi-sheet workbook', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('pageerror', (err) => errors.push(String(err)));
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Jenis laporan untuk ekspor').selectOption('aging');
+    await page.getByRole('button', { name: /ekspor/i }).first().click();
+    await expect(page.locator('h2', { hasText: 'Aging' })).toBeVisible();
+    const xlsxDownload = page.waitForEvent('download', { timeout: 20000 });
+    await page.getByRole('button', { name: 'Excel (.xlsx)' }).click();
+    expect((await xlsxDownload).suggestedFilename()).toMatch(/\.xlsx$/);
+    expect(errors).toEqual([]);
+  });
+
   test('period comparison toggles and shows delta on metric cards', async ({ page }) => {
     const errors: string[] = [];
     page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });

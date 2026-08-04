@@ -2,7 +2,7 @@
   import { fade, scale } from 'svelte/transition';
   import { X, FileText, Sheet, Download } from '@lucide/svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import type { ExportColumn, ExportOptions } from '$lib/utils/export';
+  import type { ExportColumn, ExportOptions, ExportSheet } from '$lib/utils/export';
   import { downloadPdf, downloadExcel } from '$lib/utils/export';
 
   type Props = {
@@ -13,9 +13,10 @@
     columns: ExportColumn[];
     rows: any[];
     filename?: string;
+    sheets?: ExportSheet[];
   };
 
-  let { open, onclose, title, subtitle, columns, rows, filename }: Props = $props();
+  let { open, onclose, title, subtitle, columns, rows, filename, sheets }: Props = $props();
 
   let pdfLoading = $state(false);
   let xlsxLoading = $state(false);
@@ -38,7 +39,7 @@
   async function handleExcel() {
     xlsxLoading = true;
     try {
-      await downloadExcel({ title, subtitle, columns, rows, filename });
+      await downloadExcel({ title, subtitle, columns, rows, filename, sheets });
     } finally {
       xlsxLoading = false;
     }

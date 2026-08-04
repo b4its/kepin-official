@@ -9,12 +9,20 @@ export interface ExportColumn {
   render?: (row: any) => string;
 }
 
+export interface ExportSheet {
+  name: string;
+  columns: ExportColumn[];
+  rows: any[];
+}
+
 export interface ExportOptions {
   title: string;
   subtitle?: string;
   columns: ExportColumn[];
   rows: any[];
   filename?: string;
+  /** Bila diisi, Excel dikirim sebagai multi-sheet (menggantikan satu sheet tunggal). */
+  sheets?: ExportSheet[];
 }
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -82,20 +90,17 @@ export async function downloadPdf(opts: ExportOptions): Promise<void> {
 
 // ── Excel ─────────────────────────────────────────────────────────────
 
-export async function downloadExcel(opts: ExportOptions): Promise<void> {
-  const XLSX = await import('xlsx');
+function buildSheet(wb: any, XLSX: typeof import('xlsx') extends never ? never : any, name: string, columns: ExportColumn[], rows: any[]): void {
+  const header = buildHead(columns);
+  const data = buildBody(columns, rows);
 
-  const header = buildHead(opts.columns);
-  const data = buildBody(opts.columns, opts.rows);
-
-  const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
 
   // auto column widths
-  const colWidths = opts.columns.map((col, ci) => {
+  const colWidths = columns.map((col, ci) => {
     const maxLen = Math.max(
       col.label.length,
-      ...opts.rows.map((r) => cellValue(col, r).length),
+      ...rows.map((r) => cellValue(col, r).length),
     );
     return { wch: Math.min(Math.max(maxLen, 8), 40) };
   });
@@ -110,6 +115,21 @@ export async function downloadExcel(opts: ExportOptions): Promise<void> {
     }
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, opts.title.slice(0, 31));
+  XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+}
+
+export async function downloadExcel(opts: ExportOptions): Promise<void> {
+  const XLSX = await import('xlsx');
+
+  const wb = XLSX.utils.book_new();
+
+  if (opts.sheets && opts.sheets.length > 0) {
+    for (const sheet of opts.sheets) {
+      buildSheet(wb, XLSX, sheet.name, sheet.columns, sheet.rows);
+    }
+  } else {
+    buildSheet(wb, XLSX, opts.title, opts.columns, opts.rows);
+  }
+
   XLSX.writeFile(wb, `${opts.filename ?? opts.title}.xlsx`);
 }
