@@ -938,6 +938,16 @@
   />
 {:else if activeTab === 'aging'}
   <div class="space-y-6">
+    <div class="grid gap-6 sm:grid-cols-2">
+      <div class="card p-5">
+        <p class="text-xs text-[hsl(var(--muted-foreground))]">Total Piutang</p>
+        <p class="text-2xl font-bold tabular-nums">{money(receivableAging?.grandTotal)}</p>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs text-[hsl(var(--muted-foreground))]">Total Hutang</p>
+        <p class="text-2xl font-bold tabular-nums">{money(payableAging?.grandTotal)}</p>
+      </div>
+    </div>
     <div class="grid gap-6 lg:grid-cols-2">
       <div class="card p-5">
         <h3 class="mb-4 font-semibold">Piutang per Bucket</h3>

@@ -112,6 +112,8 @@ test.describe('Owner Reports & Export', () => {
     const apCard = page.locator('div.card').filter({ hasText: 'Hutang per Bucket' });
     await expect(apCard).toContainText('Lancar');
     await expect(apCard).toContainText('>90');
+    await expect(page.locator('div.card').filter({ hasText: 'Total Piutang' })).toContainText('Rp');
+    await expect(page.locator('div.card').filter({ hasText: 'Total Hutang' })).toContainText('Rp');
   });
 
   test('period comparison toggles and shows delta on metric cards', async ({ page }) => {
