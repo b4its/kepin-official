@@ -950,6 +950,17 @@
           {/each}
         </div>
       </div>
+      <div class="card p-5">
+        <h3 class="mb-4 font-semibold">Hutang per Bucket</h3>
+        <div class="space-y-3">
+          {#each Object.entries(payableAging?.buckets ?? {}) as [bucket, data]}
+            <div class="flex items-center justify-between rounded-md border border-[hsl(var(--border))] px-3 py-2 text-sm">
+              <span class="capitalize">{BUCKET_LABELS[bucket as keyof typeof BUCKET_LABELS] ?? bucket}</span>
+              <span class="font-medium tabular-nums">{money(data.total)} · {data.items.length} GRN</span>
+            </div>
+          {/each}
+        </div>
+      </div>
       <DataTable
         columns={[
           { key: 'supplierName', label: 'Supplier', sortable: true },

@@ -89,8 +89,29 @@ test.describe('Owner Reports & Export', () => {
     await expect(page.locator('h2', { hasText: 'Aging' })).toBeVisible();
     const xlsxDownload = page.waitForEvent('download', { timeout: 20000 });
     await page.getByRole('button', { name: 'Excel (.xlsx)' }).click();
-    expect((await xlsxDownload).suggestedFilename()).toMatch(/\.xlsx$/);
+    const download = await xlsxDownload;
+    expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
+
+    const fs = await import('node:fs');
+    const XLSX = await import('xlsx');
+    const wb = XLSX.read(fs.readFileSync((await download.path()) as string), { type: 'buffer' });
+    expect(wb.SheetNames).toEqual(['Piutang (Aging)', 'Hutang (Aging)']);
+    const arRows = XLSX.utils.sheet_to_json(wb.Sheets['Piutang (Aging)']);
+    const apRows = XLSX.utils.sheet_to_json(wb.Sheets['Hutang (Aging)']);
+    expect(arRows.some((r: any) => r['Tipe'] === 'Total Piutang')).toBeTruthy();
+    expect(apRows.some((r: any) => r['Tipe'] === 'Total Hutang')).toBeTruthy();
     expect(errors).toEqual([]);
+  });
+
+  test('aging tab shows piutang & hutang bucket cards', async ({ page }) => {
+    await page.goto(`/app/${TENANT}/reports`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'Aging' }).click();
+    await expect(page.getByRole('heading', { name: 'Piutang per Bucket' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hutang per Bucket' })).toBeVisible();
+    const apCard = page.locator('div.card').filter({ hasText: 'Hutang per Bucket' });
+    await expect(apCard).toContainText('Lancar');
+    await expect(apCard).toContainText('>90');
   });
 
   test('period comparison toggles and shows delta on metric cards', async ({ page }) => {
