@@ -6,5 +6,8 @@ export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		sveltekit()
-	]
+	],
+	server: {
+		allowedHosts: ['kepin.oryphem.com', 'api.kepin.oryphem.com']
+	}
 });
