@@ -97,6 +97,16 @@
   }
 
   $effect(() => { if (slug) void loadAll(); });
+
+  const YEARS_PAGE_SIZE = 10;
+  let yearPage = $state(1);
+  const yearTotalPages = $derived(Math.max(1, Math.ceil(years.length / YEARS_PAGE_SIZE)));
+  const visibleYears = $derived(years.slice((yearPage - 1) * YEARS_PAGE_SIZE, yearPage * YEARS_PAGE_SIZE));
+
+  function setYearPage(p: number) {
+    if (p < 1 || p > yearTotalPages) return;
+    yearPage = p;
+  }
 </script>
 
 <PageHeader title="Tahun Buku" description="Kelola tahun buku dan periode akuntansi" breadcrumbs={[{ label: 'Akuntansi' }, { label: 'Tahun Buku' }]}>
@@ -112,7 +122,7 @@
 {#if !isOwner}<div class="card p-4 mb-6 text-sm text-[hsl(var(--muted-foreground))]">Tahun buku ditampilkan read-only. Hanya owner yang dapat membuat atau menutup tahun buku.</div>{/if}
 
 <div class="space-y-6">
-  {#each years as year (year.id)}
+  {#each visibleYears as year (year.id)}
     <div class="card p-5">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-3">
@@ -169,6 +179,24 @@
   {:else}
     <div class="card p-10 text-center text-sm text-[hsl(var(--muted-foreground))]">Belum ada tahun buku. Buat tahun buku pertama untuk memulai periode akuntansi.</div>
   {/each}
+  {#if yearTotalPages > 1}
+    <div class="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+      <span>Menampilkan {visibleYears.length} dari {years.length} tahun buku</span>
+      <div class="flex items-center gap-1">
+        <button
+          class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+          disabled={yearPage <= 1}
+          onclick={() => setYearPage(yearPage - 1)}
+        >Sebelumnya</button>
+        <span class="px-2 tabular-nums">Halaman {yearPage} / {yearTotalPages}</span>
+        <button
+          class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+          disabled={yearPage >= yearTotalPages}
+          onclick={() => setYearPage(yearPage + 1)}
+        >Berikutnya</button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <Modal title="Buat Tahun Buku" open={showModal} onclose={() => showModal = false}>

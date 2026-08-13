@@ -15,6 +15,10 @@
   let search = $state('');
   let catalog = $state<any[]>([]);
   let known = $state<Record<string, any>>({});
+  let pageNo = $state(1);
+  let catalogTotal = $state(0);
+  let catalogLoading = $state(false);
+  const PAGE_SIZE = 24;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   let stockProduct = $state<any | null>(null);
@@ -55,21 +59,34 @@
     };
   }
 
-  async function loadCatalog(q = search) {
+  async function loadCatalog(q = search, p = pageNo) {
+    catalogLoading = true;
     try {
-      const res: any = await tenantApi.getProducts(slug, q || undefined, 100);
+      const res: any = await tenantApi.getProducts(slug, q || undefined, PAGE_SIZE, p);
       const items = Array.isArray(res.items) ? res.items : [];
       catalog = items.map(mapProduct);
+      catalogTotal = res.total ?? 0;
       const next = { ...known };
-      for (const p of catalog) next[p.id] = p;
+      for (const item of catalog) next[item.id] = item;
       known = next;
     } catch {
       /* biarkan data lama */
+    } finally {
+      catalogLoading = false;
     }
   }
 
   function productOf(pid: string) {
     return known[pid];
+  }
+
+  const totalPages = $derived(Math.max(1, Math.ceil(catalogTotal / PAGE_SIZE)));
+
+  function goToPage(p: number) {
+    if (p < 1 || p > totalPages || p === pageNo) return;
+    pageNo = p;
+    void loadCatalog(search, p);
+    document.querySelector('main')?.scrollTo({ top: 0 });
   }
 
   $effect(() => {
@@ -79,7 +96,10 @@
   $effect(() => {
     if (!slug) return;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => void loadCatalog(search), search ? 250 : 0);
+    searchTimer = setTimeout(() => {
+      pageNo = 1;
+      void loadCatalog(search, 1);
+    }, search ? 250 : 0);
     return () => clearTimeout(searchTimer);
   });
 
@@ -231,6 +251,22 @@
             </div>
           </div>
         {/each}
+      </div>
+      <div class="flex items-center justify-between mt-4 text-xs text-[hsl(var(--muted-foreground))]">
+        <span>Menampilkan {catalog.length} dari {catalogTotal} produk</span>
+        <div class="flex items-center gap-1">
+          <button
+            class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+            disabled={pageNo <= 1 || catalogLoading}
+            onclick={() => goToPage(pageNo - 1)}
+          >Sebelumnya</button>
+          <span class="px-2 tabular-nums">Halaman {pageNo} / {totalPages}</span>
+          <button
+            class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+            disabled={pageNo >= totalPages || catalogLoading}
+            onclick={() => goToPage(pageNo + 1)}
+          >Berikutnya</button>
+        </div>
       </div>
     {/if}
   </div>

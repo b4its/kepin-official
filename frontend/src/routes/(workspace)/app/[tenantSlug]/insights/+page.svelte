@@ -37,6 +37,8 @@
   const compareIncome = $derived(compareMode ? number(compareData?.metrics.income) : null);
   const compareExpense = $derived(compareMode ? number(compareData?.metrics.expense) : null);
   const compareProfit = $derived(compareMode ? number(compareData?.metrics.grossProfit) : null);
+  let showAllInsights = $state(false);
+  const visibleInsights = $derived((data?.insights ?? []).slice(0, showAllInsights ? undefined : 6));
 
   function number(value: string | number | undefined) { const parsed = Number(value ?? 0); return Number.isFinite(parsed) ? parsed : 0; }
   function onRangeChange(_preset: Preset, start: string, end: string) { startDate = start; endDate = end; }
@@ -119,9 +121,14 @@
 <div class="card p-5 mb-6"><h3 class="font-semibold mb-4">Pendapatan dan Beban Harian</h3><BarChart labels={flow.map((row) => row.date.slice(5))} datasets={[{ label: 'Pendapatan', data: flow.map((row) => number(row.income)), color: '#059669' }, { label: 'Beban', data: flow.map((row) => number(row.expense)), color: '#dc2626' }]} height={220} yFormat="currency" /></div>
 
 <div class="space-y-4">
-  {#each data?.insights ?? [] as insight}
+  {#each visibleInsights as insight}
     <div class="card p-5"><div class="flex items-start gap-4">{#if insight.impact === 'positive'}<TrendingUp class="w-6 h-6 shrink-0 text-[var(--color-kepin-green)]" />{:else}<AlertTriangle class="w-6 h-6 shrink-0 text-[var(--color-kepin-yellow)]" />{/if}<div><h3 class="font-semibold">{insight.title}</h3><p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">{insight.description}</p><p class="text-xs text-[hsl(var(--muted-foreground))] mt-2">Horizon: {insight.horizon} · Faktor: {insight.factors.join(', ')}</p></div></div></div>
   {:else}
     <div class="card p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Belum ada insight untuk periode ini.</div>
   {/each}
+  {#if (data?.insights.length ?? 0) > 6}
+    <button class="w-full text-center text-xs text-[hsl(var(--primary))] hover:underline" onclick={() => showAllInsights = !showAllInsights}>
+      {showAllInsights ? 'Tampilkan lebih sedikit' : `Tampilkan semua (${data?.insights.length ?? 0})`}
+    </button>
+  {/if}
 </div>

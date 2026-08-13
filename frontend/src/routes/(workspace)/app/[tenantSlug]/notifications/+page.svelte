@@ -16,6 +16,11 @@
 
   const unreadCount = $derived($notifications.filter(n => !n.read).length);
 
+  const PAGE_SIZE = 20;
+  let pageNo = $state(1);
+  const totalPages = $derived(Math.max(1, Math.ceil($notifications.length / PAGE_SIZE)));
+  const paged = $derived($notifications.slice((pageNo - 1) * PAGE_SIZE, pageNo * PAGE_SIZE));
+
   const typeIcon = {
     info: 'bg-blue-500/10 text-blue-500',
     warning: 'bg-yellow-500/10 text-yellow-500',
@@ -52,7 +57,7 @@
   </div>
 {:else}
   <div class="space-y-1">
-    {#each $notifications as n}
+    {#each paged as n}
       <button
         onclick={() => goTo(n.id)}
         class="w-full text-left flex items-start gap-3 px-4 py-3 rounded-md hover:bg-[hsl(var(--accent))] transition-colors border border-transparent hover:border-[hsl(var(--border))]"
@@ -66,4 +71,22 @@
       </button>
     {/each}
   </div>
+  {#if totalPages > 1}
+    <div class="flex items-center justify-between mt-4 text-xs text-[hsl(var(--muted-foreground))]">
+      <span>Menampilkan {paged.length} dari {$notifications.length} notifikasi</span>
+      <div class="flex items-center gap-1">
+        <button
+          class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+          disabled={pageNo <= 1}
+          onclick={() => pageNo -= 1}
+        >Sebelumnya</button>
+        <span class="px-2 tabular-nums">Halaman {pageNo} / {totalPages}</span>
+        <button
+          class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+          disabled={pageNo >= totalPages}
+          onclick={() => pageNo += 1}
+        >Berikutnya</button>
+      </div>
+    </div>
+  {/if}
 {/if}

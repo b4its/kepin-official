@@ -25,6 +25,10 @@
   let showLedger = $state(false);
   let ledger = $state<Ledger | null>(null);
   let ledgerLoading = $state(false);
+  let ledgerPage = $state(1);
+  const LEDGER_PAGE_SIZE = 25;
+  const ledgerPageItems = $derived(ledger?.items.slice((ledgerPage - 1) * LEDGER_PAGE_SIZE, ledgerPage * LEDGER_PAGE_SIZE) ?? []);
+  const ledgerTotalPages = $derived(ledger ? Math.max(1, Math.ceil(ledger.items.length / LEDGER_PAGE_SIZE)) : 1);
   let startDate = $state('');
   let endDate = $state('');
   let form = $state({ journalDate: '', reference: '', description: '', lines: [] as Line[] });
@@ -95,6 +99,7 @@
       if (startDate) parts.push(`startDate=${startDate}`);
       if (endDate) parts.push(`endDate=${endDate}`);
       ledger = await tenantApi.getLedger(slug, parts.join('&')) as Ledger;
+      ledgerPage = 1;
     } catch (err: any) {
       ledger = null;
       error = err?.message || 'Gagal memuat buku besar';
@@ -106,6 +111,11 @@
   async function toggleLedger() {
     showLedger = !showLedger;
     if (showLedger) await loadLedger();
+  }
+
+  function setLedgerPage(p: number) {
+    if (p < 1 || p > ledgerTotalPages) return;
+    ledgerPage = p;
   }
 
   async function saveDraft() {
@@ -219,7 +229,7 @@
           <td class="px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]" colspan="5">Saldo awal</td>
           <td class="px-4 py-2 text-right font-semibold tabular-nums">{formatIDR(Number(ledger.opening))}</td>
         </tr>
-        {#each ledger.items as line}
+        {#each ledgerPageItems as line}
           <tr class="border-b border-[hsl(var(--border))]">
             <td class="px-4 py-2">{line.journalDate}</td>
             <td class="px-4 py-2 font-mono text-xs">{line.journalNumber}</td>
@@ -235,6 +245,24 @@
         </tr>
       </tbody>
     </table>
+    {#if ledgerTotalPages > 1}
+      <div class="flex items-center justify-between border-t border-[hsl(var(--border))] px-4 py-2 text-xs text-[hsl(var(--muted-foreground))]">
+        <span>Menampilkan {ledgerPageItems.length} dari {ledger.items.length} baris</span>
+        <div class="flex items-center gap-1">
+          <button
+            class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+            disabled={ledgerPage <= 1}
+            onclick={() => setLedgerPage(ledgerPage - 1)}
+          >Sebelumnya</button>
+          <span class="px-2 tabular-nums">Halaman {ledgerPage} / {ledgerTotalPages}</span>
+          <button
+            class="px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 disabled:pointer-events-none"
+            disabled={ledgerPage >= ledgerTotalPages}
+            onclick={() => setLedgerPage(ledgerPage + 1)}
+          >Berikutnya</button>
+        </div>
+      </div>
+    {/if}
   </div>
 {:else}
 <DataTable

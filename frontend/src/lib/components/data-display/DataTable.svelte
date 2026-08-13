@@ -67,7 +67,7 @@
       : data
   );
 
-  let displayTotal = $derived(searchTerm ? filteredData.length : data.length);
+  let displayTotal = $derived(total > 0 ? total : (searchTerm ? filteredData.length : data.length));
   let displayTotalPages = $derived(Math.max(1, Math.ceil(displayTotal / pageSize)));
 
   let paginatedData = $derived(
@@ -77,6 +77,10 @@
   $effect(() => {
     searchTerm;
     currentPage = 1;
+  });
+
+  $effect(() => {
+    currentPage = page;
   });
 
   function goToPage(p: number) {

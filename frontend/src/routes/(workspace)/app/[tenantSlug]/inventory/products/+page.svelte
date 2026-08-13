@@ -8,16 +8,24 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
-  import { products, createProduct, updateProduct, deleteProduct, tenantApi } from '$lib/stores/data';
+  import { createProduct, updateProduct, deleteProduct, tenantApi } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
-  import { Download } from '@lucide/svelte';
+  import { Download, Search } from '@lucide/svelte';
 
   const slug = $derived($page.params.tenantSlug || '');
 
   let showModal = $state(false);
   let showExport = $state(false);
-  let editingIndex = $state<number | null>(null);
-  let deleteIndex = $state<number | null>(null);
+  let editingId = $state<string | null>(null);
+  let deleteId = $state<string | null>(null);
+
+  let rows = $state<any[]>([]);
+  let search = $state('');
+  let pageNo = $state(1);
+  let total = $state(0);
+  let loading = $state(false);
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  const PAGE_SIZE = 20;
 
   let form = $state({ sku: '', name: '', category: '', unit: 'pcs', minStock: 0, price: 0, cost: 0, status: 'active' });
   let stockMap = $state<Record<string, number>>({});
@@ -36,8 +44,43 @@
     });
   });
 
-  const rows = $derived($products.map((p) => ({ ...p, stock: stockMap[p.id] ?? p.stock ?? 0 })));
-  const totalProduk = $derived($products.length);
+  async function load(q = search, p = pageNo) {
+    loading = true;
+    try {
+      const res: any = await tenantApi.getProducts(slug, q || undefined, PAGE_SIZE, p);
+      const items = Array.isArray(res.items) ? res.items : [];
+      rows = items.map((prod: any) => ({
+        id: prod.id,
+        sku: prod.sku || '',
+        name: prod.name,
+        category: prod.category || '',
+        unit: prod.unit || 'pcs',
+        price: parseFloat(prod.salePrice || prod.sale_price || '0'),
+        cost: parseFloat(prod.costPrice || prod.cost_price || '0'),
+        minStock: parseFloat(prod.minimumStock || prod.minimum_stock || '0'),
+        status: prod.status || 'active',
+        stock: stockMap[prod.id] ?? 0,
+      }));
+      total = res.total ?? 0;
+    } catch {
+      /* biarkan data lama */
+    } finally {
+      loading = false;
+    }
+  }
+
+  $effect(() => {
+    if (!slug) return;
+    void stockMap;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      pageNo = 1;
+      void load(search, 1);
+    }, search ? 250 : 0);
+    return () => clearTimeout(searchTimer);
+  });
+
+  const totalProduk = $derived(total);
   const stokKritis = $derived(rows.filter(p => p.stock > 0 && p.stock <= p.minStock).length);
   const nilaiStok = $derived(rows.reduce((s, p) => s + p.stock * p.cost, 0));
   const deadStock = $derived(rows.filter(p => p.stock > 0 && p.stock <= p.minStock / 2).length);
@@ -55,14 +98,13 @@
 
   function openCreate() {
     form = { sku: '', name: '', category: '', unit: 'pcs', minStock: 0, price: 0, cost: 0, status: 'active' };
-    editingIndex = null;
+    editingId = null;
     showModal = true;
   }
 
-  function openEdit(i: number) {
-    const p = $products[i];
-    form = { sku: p.sku, name: p.name, category: p.category || '', unit: p.unit || 'pcs', minStock: p.minStock, price: p.price, cost: p.cost, status: p.status || 'active' };
-    editingIndex = i;
+  function openEdit(row: any) {
+    form = { sku: row.sku, name: row.name, category: row.category || '', unit: row.unit || 'pcs', minStock: row.minStock, price: row.price, cost: row.cost, status: row.status || 'active' };
+    editingId = row.id;
     showModal = true;
   }
 
@@ -76,26 +118,32 @@
       costPrice: String(form.cost || '0'),
       minimumStock: String(form.minStock || '0'),
     };
-    if (editingIndex !== null) {
+    if (editingId !== null) {
       try {
-        await updateProduct($products[editingIndex].id, { ...data, status: form.status });
+        await updateProduct(editingId, { ...data, status: form.status });
         showToast('Produk berhasil diperbarui', 'success');
         showModal = false;
+        void load(search, pageNo);
       } catch (err: any) { showToast(err?.message || 'Gagal memperbarui produk', 'error'); }
     } else {
       try {
         await createProduct(data);
         showToast('Produk berhasil ditambahkan', 'success');
         showModal = false;
+        void load(search, pageNo);
       } catch (err: any) { showToast(err?.message || 'Gagal menambahkan produk', 'error'); }
     }
   }
 
   async function confirmDelete() {
-    if (deleteIndex !== null) {
-      try { await deleteProduct($products[deleteIndex].id); showToast('Produk berhasil dihapus', 'success'); }
+    if (deleteId !== null) {
+      try {
+        await deleteProduct(deleteId);
+        showToast('Produk berhasil dihapus', 'success');
+        void load(search, pageNo);
+      }
       catch (err: any) { showToast(err?.message || 'Gagal menghapus produk', 'error'); }
-      finally { deleteIndex = null; }
+      finally { deleteId = null; }
     }
   }
 </script>
@@ -114,10 +162,20 @@
   <MetricCard label="Dead Stock" value={deadStock} format="number" />
 </div>
 
+<div class="flex items-center gap-2 mb-4 card px-3 py-2">
+  <Search class="w-4 h-4 shrink-0 text-[hsl(var(--muted-foreground))]" />
+  <input
+    type="search"
+    bind:value={search}
+    placeholder="Cari nama, SKU, kategori..."
+    class="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-[hsl(var(--muted-foreground))]"
+  />
+</div>
+
 <DataTable
   columns={[
-    { key: 'sku', label: 'SKU', sortable: true },
-    { key: 'name', label: 'Nama', sortable: true },
+    { key: 'sku', label: 'SKU', sortable: false },
+    { key: 'name', label: 'Nama' },
     { key: 'category', label: 'Kategori' },
     { key: 'stock', label: 'Stok', align: 'right' },
     { key: 'minStock', label: 'Min. Stok', align: 'right' },
@@ -126,16 +184,19 @@
     { key: 'status', label: 'Status', render: (item: any) => `<span class="badge-${item.status}">${item.status}</span>` },
   ]}
   data={rows}
-  total={totalProduk}
-  searchable={true}
+  loading={loading}
+  total={total}
+  page={pageNo}
+  pageSize={PAGE_SIZE}
+  onpagechange={(p) => { pageNo = p; void load(search, p); }}
 >
-  {#snippet rowActions(item: any, i: number)}
-    <button onclick={() => openEdit(i)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
-    <button onclick={() => deleteIndex = i} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
+  {#snippet rowActions(item: any)}
+    <button onclick={() => openEdit(item)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Edit</button>
+    <button onclick={() => deleteId = item.id} class="text-xs text-[var(--color-kepin-danger)] hover:underline">Hapus</button>
   {/snippet}
 </DataTable>
 
-<Modal title={editingIndex !== null ? 'Edit Produk' : 'Produk Baru'} open={showModal} onclose={() => showModal = false}>
+<Modal title={editingId !== null ? 'Edit Produk' : 'Produk Baru'} open={showModal} onclose={() => showModal = false}>
   <form onsubmit={save} class="space-y-4">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
@@ -171,7 +232,7 @@
         <CurrencyInput value={form.cost} onchange={(v) => form.cost = v} class="input-field mt-1" />
       </div>
     </div>
-    {#if editingIndex !== null}
+    {#if editingId !== null}
       <div>
         <label class="label-text">Status</label>
         <select bind:value={form.status} class="input-field mt-1">
@@ -188,8 +249,8 @@
 </Modal>
 
 <ConfirmDialog
-  open={deleteIndex !== null}
-  onclose={() => deleteIndex = null}
+  open={deleteId !== null}
+  onclose={() => deleteId = null}
   onconfirm={confirmDelete}
   message="Hapus produk ini? Tindakan ini tidak dapat dibatalkan."
 />

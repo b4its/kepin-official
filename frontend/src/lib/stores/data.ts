@@ -146,7 +146,7 @@ export async function deleteSupplier(id: string) { const s = _slug; if (!s) retu
 export const products = writable<Product[]>([]);
 export async function loadProducts(slug?: string) {
   const s = slug || _slug; if (!s) return;
-  const res: any = await tenantApi.getProducts(s);
+  const res: any = await tenantApi.getProducts(s, undefined, 100);
   if (!isActiveTenant(s)) return;
   products.set(res.items?.map((p: any) => ({
     id: p.id, sku: p.sku || '', name: p.name, category: p.category || '',
@@ -291,7 +291,7 @@ export async function deleteNotification(id: string) { const s = _slug; if (!s) 
 export const auditEvents = writable<AuditEvent[]>([]);
 export async function loadAuditEvents(slug?: string, filters?: { objectType?: string; action?: string }) {
   const s = slug || _slug; if (!s) return;
-  const res: any = await tenantApi.getAuditEvents(s, filters);
+  const res: any = await tenantApi.getAuditEvents(s, { ...filters, pageSize: 100 });
   if (!isActiveTenant(s)) return;
   auditEvents.set(res.items?.map((a: any) => ({
     id: a.id, timestamp: a.timestamp || '', actor: a.actorName || a.actor_name || '',
