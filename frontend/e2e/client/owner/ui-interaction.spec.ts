@@ -184,7 +184,7 @@ test.describe('Owner UI Interaction', () => {
     await expect(modal).toBeVisible();
 
     let year = 2035;
-    while (year <= 2054 && existing.some((y: any) => y.name === `Tahun Buku E2E ${year}`)) year += 1;
+    while (year <= 2099 && existing.some((y: any) => y.name === `Tahun Buku E2E ${year}`)) year += 1;
     const start = `${year}-04-01`;
     const end = `${year + 1}-03-31`;
     const name = `Tahun Buku E2E ${year}`;
