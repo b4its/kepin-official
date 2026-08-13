@@ -18,6 +18,19 @@ async function cleanupStatements(api: APIRequestContext, prefix: string, txnDesc
   }
 }
 
+async function fetchAllAccounts(api: APIRequestContext): Promise<any[]> {
+  const all: any[] = [];
+  let page = 1;
+  while (true) {
+    const res = await api.get(`tenants/${TENANT}/accounts?pageSize=100&page=${page}`);
+    const body = await res.json();
+    all.push(...(body.items ?? []));
+    if (all.length >= (body.total ?? 0)) break;
+    page += 1;
+  }
+  return all;
+}
+
 test.describe('Owner Reconciliation Suggestions', () => {
   test('auto-match suggestion applies and marks statement matched', async ({ page, request }) => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
@@ -33,9 +46,9 @@ test.describe('Owner Reconciliation Suggestions', () => {
 
     const accountsRes = await api.get(`tenants/${TENANT}/accounts?pageSize=100`);
     expect(accountsRes.status()).toBe(200);
-    const accounts = await accountsRes.json();
-    const cash = accounts.items.find((a: any) => a.code === '1-1002');
-    const income = accounts.items.find((a: any) => a.type === 'income');
+    const accounts = await fetchAllAccounts(api);
+    const cash = accounts.find((a: any) => a.code === '1-1002');
+    const income = accounts.find((a: any) => a.type === 'income');
     expect(cash && income).toBeTruthy();
 
     const stmtRes = await api.post(`tenants/${TENANT}/bank-transactions`, {
@@ -129,9 +142,9 @@ test.describe('Owner Reconciliation Suggestions', () => {
     expect(bca).toBeTruthy();
 
     const accountsRes = await api.get(`tenants/${TENANT}/accounts?pageSize=100`);
-    const accounts = await accountsRes.json();
-    const cash = accounts.items.find((a: any) => a.code === '1-1002');
-    const income = accounts.items.find((a: any) => a.type === 'income');
+    const accounts = await fetchAllAccounts(api);
+    const cash = accounts.find((a: any) => a.code === '1-1002');
+    const income = accounts.find((a: any) => a.type === 'income');
     expect(cash && income).toBeTruthy();
 
     const stmtRes = await api.post(`tenants/${TENANT}/bank-transactions`, {

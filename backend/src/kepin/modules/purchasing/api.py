@@ -275,10 +275,14 @@ async def _next_po_number(
     session: AsyncSession,
     tenant_id: str,
 ) -> str:
-    cnt = await session.execute(
-        select(func.count(PurchaseOrder.id)).where(PurchaseOrder.tenant_id == tenant_id)
+    rows = await session.execute(
+        select(PurchaseOrder.po_number).where(
+            PurchaseOrder.tenant_id == tenant_id,
+            PurchaseOrder.po_number.like("PO-%"),
+        )
     )
-    return f"PO-{cnt.scalar() or 0 + 1:06d}"
+    nums = [int(n.split("-")[1]) for n in rows.scalars().all() if n.startswith("PO-")]
+    return f"PO-{max(nums, default=0) + 1:06d}"
 
 
 async def _build_po_lines(
@@ -975,10 +979,23 @@ async def _next_supplier_payment_number(
     session: AsyncSession,
     tenant_id: str,
 ) -> str:
-    cnt = await session.execute(
-        select(func.count(SupplierPayment.id)).where(SupplierPayment.tenant_id == tenant_id)
+    rows = await session.execute(
+        select(SupplierPayment.payment_number).where(
+            SupplierPayment.tenant_id == tenant_id,
+            SupplierPayment.payment_number.like("SPAY-%"),
+        )
     )
-    return f"SPAY-{cnt.scalar() or 0 + 1:06d}"
+    nums = [int(n.split("-")[1]) for n in rows.scalars().all() if n.startswith("SPAY-")]
+    # Subledger memakai payment_number sebagai journal_number — pastikan nomor
+    # tidak bentrok dengan jurnal yang sudah ada walau payment pernah dihapus.
+    jrows = await session.execute(
+        select(JournalEntry.journal_number).where(
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.journal_number.like("SPAY-%"),
+        )
+    )
+    jnums = [int(n.split("-")[1]) for n in jrows.scalars().all() if n.startswith("SPAY-")]
+    return f"SPAY-{max(nums + jnums, default=0) + 1:06d}"
 
 
 @router.get("/supplier-payments", response_model=PaginatedResponse[SupplierPaymentSchema], summary="Daftar Pembayaran Supplier", description="Mengembalikan daftar pembayaran ke supplier")

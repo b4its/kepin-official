@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from kepin.core.config import get_settings
+from kepin.core.periods import ensure_fiscal_year
 from kepin.db.base import Base
 from kepin.db.models import (
     Account,
@@ -346,6 +347,9 @@ TENANT_AUDIT_ACTIONS = [
     ("stock.adjustment", "inventory", "stock"),
     ("journal.posted", "accounting", "journal"),
     ("journal.reversed", "accounting", "journal"),
+    ("bank_account.created", "accounting", "bank_account"),
+    ("bank_account.updated", "accounting", "bank_account"),
+    ("reconciliation.matched", "accounting", "reconciliation"),
     ("settings.updated", "system", "settings"),
     ("membership.added", "system", "membership"),
     ("report.generated", "reporting", "report"),
@@ -551,6 +555,7 @@ async def main():
         users = [
             User(id=UID_ADMIN, name="Admin KePin", email="admin@kepin.io",
                  password_hash=hash_password("admin123"),
+                 is_superadmin=True,
                  status="active", email_verified_at=NOW, created_at=NOW, updated_at=NOW),
             User(id=UID_BUDI, name="Budi Santoso", email="budi@tokomaju.com",
                  password_hash=hash_password("budi123"),
@@ -1042,6 +1047,12 @@ async def main():
                     object_id=str(random.randint(1, 9999)),
                 ))
             session.add_all(audit_events)
+
+            # Tahun buku + 12 periode bulanan mencakup tanggal hari ini,
+            # agar transaksi/stock movement/checkout POS selalu menemukan
+            # periode akuntansi yang valid.
+            await ensure_fiscal_year(session, tid, date.today())
+            await session.flush()
 
         incidents = [
             Incident(

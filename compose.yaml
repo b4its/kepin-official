@@ -29,7 +29,7 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       DATABASE_URL: postgresql+psycopg://kepin:kepin@db:5432/kepin
-      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://frontend:3000
+      CORS_ORIGINS: "*"
       AUTHORIZATION_ENABLED: "false"
       SQL_ECHO: "false"
       LOG_LEVEL: INFO
@@ -37,7 +37,7 @@ services:
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
       SMTP_FROM: noreply@kepin.io
-      PUBLIC_APP_URL: http://localhost:3001
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3001}
     ports:
       - "8001:8000"
     volumes:
@@ -74,7 +74,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        PUBLIC_API_URL: http://localhost:8001/api/v1
+        PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8001/api/v1}
     ports:
       - "3001:3000"
     depends_on:

@@ -13,6 +13,7 @@
 - [API Endpoints](#api-endpoints)
 - [Autentikasi & Otorisasi](#autentikasi--otorisasi)
 - [Sidebar Customization](#sidebar-customization)
+- [Makefile (Quick Start)](#makefile-quick-start)
 - [Pengembangan Lokal](#pengembangan-lokal)
 - [Docker Compose](#docker-compose)
 - [Environment Variables](#environment-variables)
@@ -27,8 +28,8 @@
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │   Frontend   │────▶│   Backend    │────▶│  PostgreSQL  │
 │ SvelteKit 5  │     │  FastAPI     │     │    16-alpine  │
-│  (Vite HMR)  │◀────│  Python 3.14 │◀────│   port 5433  │
-│   port 5173  │     │   port 8000  │     └──────────────┘
+│  (Vite HMR)  │◀────│  Python 3.14 │◀────│   port 5434  │
+│   port 3001  │     │   port 8001  │     └──────────────┘
 └──────────────┘     └──────────────┘
                             │
                     ┌───────┴───────┐
@@ -258,6 +259,67 @@ Semua query tenant-scoped memfilter dengan `tenant_id`. Setiap modul menggunakan
 
 ---
 
+## Makefile (Quick Start)
+
+Makefile menyediakan dua **mode** dan tiga **varian** per mode, dengan domain default `kepin.oryphem.com` (frontend) dan `api.kepin.oryphem.com` (backend).
+
+### Mode
+| Mode | Deskripsi |
+|---|---|
+| `dev` | Frontend vite dev (HMR) di host + backend/db/smtp di docker |
+| `local` | Seluruh stack (frontend+backend+db+smtp) di docker |
+
+### Varian per mode
+| Varian | Perintah | Keterangan |
+|---|---|---|
+| Run | `make dev` / `make local` | Jalankan stack tanpa build ulang image |
+| Build | `make dev-build` / `make local-build` | Build ulang image lalu jalankan |
+| Build + Seed | `make dev-build-seed` / `make local-build-seed` | Build ulang + database fresh + **seed demo lengkap** (semua tenant & modul) lalu jalankan |
+
+### Contoh penggunaan
+```bash
+# Mode development (HMR) — frontend di http://localhost:3001, backend :8001/docs
+make dev
+
+# Mode development + build backend
+make dev-build
+
+# Mode development + build + seed lengkap dari nol
+make dev-build-seed
+
+# Mode local (semua docker) — frontend :3001, backend :8001/docs
+make local
+make local-build
+make local-build-seed
+```
+
+### Domain
+```
+kepin.oryphem.com     → frontend (port 3001)
+api.kepin.oryphem.com → backend  (port 8001)
+```
+
+Semua URL domain dapat di-override:
+```bash
+# Contoh: pakai localhost alih-alih domain
+make dev DOMAIN=localhost API_DOMAIN=localhost
+
+# Override penuh URL API (mis. backend di port lokal)
+make local-build PUBLIC_API_URL=http://localhost:8001/api/v1
+```
+
+### Utilitas
+```bash
+make seed          # wipe DB + seed demo lengkap (image yang sudah ada)
+make seed-dev      # wipe DB + seed lengkap (hanya backend, untuk mode dev)
+make ps            # status container
+make logs          # tail log semua service
+make down          # stop + hapus container (volume tetap)
+make reset-db      # hapus container + volume DB (fresh total)
+```
+
+---
+
 ## Pengembangan Lokal
 
 ### Prasyarat
@@ -265,28 +327,24 @@ Semua query tenant-scoped memfilter dengan `tenant_id`. Setiap modul menggunakan
 - Node.js 22+
 - pnpm
 - Docker & Docker Compose
+- GNU Make
 
 ### Setup
-
 ```bash
 # 1. Clone repo
 git clone <repo-url>
 cd kepin
 
-# 2. Jalankan database + backend
-docker compose up -d db
-docker compose --profile full up -d backend
+# 2. Jalankan backend + database (docker) & frontend vite dev (HMR)
+make dev
 
-# 3. Setup frontend
-cd frontend
-pnpm install
-
-# 4. Jalankan frontend (HMR aktif)
-pnpm dev --host 0.0.0.0
+# 3. (Opsional) Tanpa Makefile — manual:
+#    docker compose --profile full up -d backend
+#    cd frontend && pnpm install && pnpm dev --host 0.0.0.0
 ```
 
 ### Seed Data
-Backend secara otomatis menjalankan `alembic upgrade head && python -m kepin.scripts.seed_demo` saat startup.
+Backend secara otomatis menjalankan `alembic upgrade head && python -m kepin.scripts.seed_demo` saat startup. Untuk regenerate seed lengkap dari nol (semua tenant & modul): `make dev-build-seed`, `make local-build-seed`, atau `make seed`.
 
 Akun demo:
 | Email | Password | Tenant |
@@ -297,10 +355,10 @@ Akun demo:
 | `admin@kepin.io` | `admin123` | — (platform admin) |
 
 ### Verifikasi
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000/api/v1
-- API Docs: http://localhost:8000/docs
-- DB: `psql -h localhost -p 5433 -U kepin -d kepin` (password: `kepin`)
+- Frontend: http://localhost:3001
+- Backend API: http://localhost:8001/api/v1
+- API Docs: http://localhost:8001/docs
+- DB: `psql -h localhost -p 5434 -U kepin -d kepin` (password: `kepin`)
 
 ### Commands Penting
 
@@ -310,10 +368,13 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend python -m kepin.scripts.seed_demo
 docker compose logs -f backend
 
-# Frontend
-cd frontend && pnpm dev --host 0.0.0.0
+# Frontend (dev HMR — atau gunakan `make dev`)
+cd frontend && pnpm dev --host 0.0.0.0 --port 3001
 cd frontend && pnpm build
 cd frontend && pnpm check
+
+# Build + jalankan frontend container (production build)
+docker compose --profile full build frontend && docker compose --profile full up -d frontend
 ```
 
 ---
@@ -324,9 +385,9 @@ cd frontend && pnpm check
 
 | Service | Image | Port | Profiles |
 |---|---|---|---|
-| `db` | postgres:16-alpine | 5433 | default |
-| `backend` | python:3.14-slim (build) | 8000 | `full` |
-| `frontend` | node:22-alpine (build) | 5173 | `full` |
+| `db` | postgres:16-alpine | 5434 | default |
+| `backend` | python:3.14-slim (build) | 8001 | `full` |
+| `frontend` | node:22-alpine (build) | 3001 | `full` |
 
 ### Profiles
 - **Default** (`docker compose up -d`) — hanya database
@@ -337,16 +398,17 @@ cd frontend && pnpm check
 APP_ENV: production
 APP_DEBUG: "false"
 DATABASE_URL: postgresql+psycopg://kepin:kepin@db:5432/kepin
-CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://frontend:3000
+CORS_ORIGINS: "*"
 AUTHORIZATION_ENABLED: "false"
 SQL_ECHO: "false"
 LOG_LEVEL: INFO
-SMTP_HOST: 127.0.0.1
+SMTP_HOST: smtp-sink
 SMTP_PORT: "1025"
 SMTP_TLS: "false"
 SMTP_FROM: noreply@kepin.io
-PUBLIC_APP_URL: http://localhost:5173
+PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3001}   # default, override via make/domain
 ```
+`PUBLIC_API_URL` (build arg frontend): `${PUBLIC_API_URL:-http://localhost:8001/api/v1}` — default localhost, di-override jadi `http://api.kepin.oryphem.com/api/v1` lewat Makefile.
 
 ### Volume & Bind Mount
 - `pgdata` — persistent PostgreSQL data (local driver)
@@ -381,20 +443,20 @@ docker compose build frontend && docker compose up -d frontend
 | `SECRET_KEY` | `kepin-dev-secret-key-change-in-production` | Secret untuk JWT |
 | `JWT_ALGORITHM` | `HS256` | Algoritma JWT |
 | `JWT_EXPIRE_MINUTES` | `1440` | Expiry token (24 jam) |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Origin CORS |
+| `CORS_ORIGINS` | `*` | Origin CORS |
 | `AUTHORIZATION_ENABLED` | `false` | Otorisasi aktif/nonaktif |
 | `SQL_ECHO` | `false` | Log query SQL |
 | `LOG_LEVEL` | `INFO` | Level logging |
-| `SMTP_HOST` | `127.0.0.1` | Host SMTP untuk email (reset password) |
+| `SMTP_HOST` | `smtp-sink` | Host SMTP untuk email (reset password) |
 | `SMTP_PORT` | `1025` | Port SMTP |
 | `SMTP_TLS` | `false` | TLS SMTP |
 | `SMTP_FROM` | `noreply@kepin.io` | Pengirim email |
-| `PUBLIC_APP_URL` | `http://localhost:5173` | URL publik untuk link di email |
+| `PUBLIC_APP_URL` | `http://localhost:3001` | URL publik untuk link di email (default; via Makefile → `http://kepin.oryphem.com`) |
 
 ### Frontend
 | Variable | Contoh | Keterangan |
 |---|---|---|
-| `PUBLIC_API_URL` | `http://localhost:8000/api/v1` | Base URL API |
+| `PUBLIC_API_URL` | `http://localhost:8001/api/v1` | Base URL API (via Makefile → `http://api.kepin.oryphem.com/api/v1`) |
 
 ---
 

@@ -18,26 +18,36 @@ Dokumen ini adalah pintu masuk utama untuk seluruh aktivitas pengujian sistem Ke
 
 ## Prasyarat Sistem
 
-Sebelum menjalankan pengujian, pastikan seluruh komponen sistem berjalan:
+Sebelum menjalankan pengujian, pastikan seluruh komponen sistem berjalan. Gunakan Makefile di root proyek:
 
 ```bash
-# 1. Build dan jalankan seluruh stack
+# 1. Build dan jalankan seluruh stack (mode local, semua docker)
 cd /home/xmitsu/programming/python/kepin
-docker compose --profile full build
-docker compose --profile full up -d
+make local-build          # atau `make local` jika image sudah ada
 
-# 2. Verifikasi semua service hidup
-docker compose ps
+# 2. (Opsional) Seed demo lengkap dari nol
+make local-build-seed     # build + database fresh + seed semua tenant/modul
 
-# 3. Tunggu hingga backend siap (max 2 menit)
-curl --retry 30 --retry-delay 4 --fail http://127.0.0.1:8000/api/v1/health/ready
+# 3. Verifikasi semua service hidup
+make ps
 
-# 4. Verifikasi frontend siap
-curl --fail http://127.0.0.1:5173/
+# 4. Tunggu hingga backend siap (max 2 menit)
+curl --retry 30 --retry-delay 4 --fail http://127.0.0.1:8001/api/v1/health/ready
 
-# 5. Cek Swagger UI bisa diakses
-curl --fail http://127.0.0.1:8000/docs
+# 5. Verifikasi frontend siap
+curl --fail http://127.0.0.1:3001/
+
+# 6. Cek Swagger UI bisa diakses
+curl --fail http://127.0.0.1:8001/docs
 ```
+
+Untuk mode development (frontend HMR di host):
+```bash
+make dev                  # backend/db docker + frontend vite dev di :3001
+```
+
+Domain default (dapat di-override): `kepin.oryphem.com` → frontend, `api.kepin.oryphem.com` → backend.
+Lihat `make help` untuk semua varian: `make dev`, `make dev-build`, `make dev-build-seed`, `make local`, `make local-build`, `make local-build-seed`, `make seed`, `make seed-dev`, `make ps`, `make logs`, `make down`, `make reset-db`.
 
 ## Instalasi Playwright
 
@@ -222,9 +232,9 @@ Pipeline lokal untuk pull request:
 
 ```bash
 # 1. Pastikan service hidup
-curl --fail http://127.0.0.1:8000/api/v1/health/live
-curl --fail http://127.0.0.1:8000/api/v1/health/ready
-curl --fail http://127.0.0.1:5173/
+curl --fail http://127.0.0.1:8001/api/v1/health/live
+curl --fail http://127.0.0.1:8001/api/v1/health/ready
+curl --fail http://127.0.0.1:3001/
 
 # 2. API test (paling cepat, tanpa browser)
 bash node_modules/.bin/playwright test --project=api
