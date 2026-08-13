@@ -194,7 +194,7 @@
               <Button size="sm" class="flex-1" onclick={() => addToCart(p.id)}>
                 <Plus class="w-3.5 h-3.5" /> Keranjang
               </Button>
-              <Button size="sm" variant="secondary" onclick={() => openStock(p)} title="Tambah / kurangi stok">
+              <Button size="sm" variant="secondary" onclick={() => openStock(p)}>
                 <Boxes class="w-3.5 h-3.5" /> Stok
               </Button>
             </div>
