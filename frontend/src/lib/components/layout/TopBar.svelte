@@ -8,6 +8,7 @@
   import { formatRelativeTime } from '$lib/utils/time';
   import { currentUser, logout, updateProfile } from '$lib/stores/auth';
   import { notifications, markAllNotifRead } from '$lib/stores/data';
+  import { tourRunning } from '$lib/stores/tour';
 
   type Props = {
     title: string;
@@ -125,6 +126,14 @@
       </div>
     {/if}
     <div class="flex items-center gap-1">
+      <button
+        onclick={() => tourRunning.set(true)}
+        class="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-[hsl(var(--accent))]"
+        aria-label="Panduan aplikasi"
+        title="Mulai Tur Panduan"
+      >
+        <HelpCircle class="w-4 h-4" />
+      </button>
       <ThemeMenu />
       <div class="relative">
         {#if notifOpen}

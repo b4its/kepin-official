@@ -11,6 +11,9 @@ importers:
       chart.js:
         specifier: ^4.5.1
         version: 4.5.1
+      driver.js:
+        specifier: ^1.8.0
+        version: 1.8.0
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1
@@ -650,6 +653,9 @@ packages:
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
+
+  driver.js@1.8.0:
+    resolution: {integrity: sha512-+8/IO7h1v14IzWh2GP60N7T3PFZweXwdn5e5POuxRSBoCYUojsBxzqawPeXh3YZIibRy7EehYNEyxe7slwwtdg==}
 
   enhanced-resolve@5.24.3:
     resolution: {integrity: sha512-PwKooW9JUzh5chmYfHM3IQl5OkK2u2Nm011MgeZrss3JmFraUx/fqrf78kk8GUMYoibx/14MdwTl/1WKkG7TpQ==}
@@ -1555,6 +1561,8 @@ snapshots:
     optional: true
 
   dotenv@17.4.2: {}
+
+  driver.js@1.8.0: {}
 
   enhanced-resolve@5.24.3:
     dependencies:

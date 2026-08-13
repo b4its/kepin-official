@@ -25,6 +25,7 @@
   } from '$lib/stores/data';
   import { logout } from '$lib/stores/auth';
   import { api, type ApiError } from '$lib/api/client';
+  import Tour from '$lib/components/tour/Tour.svelte';
 
   let { children } = $props();
 
@@ -123,3 +124,5 @@
     </div>
   </div>
 {/if}
+
+<Tour />
