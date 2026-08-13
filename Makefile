@@ -30,6 +30,15 @@ DB_PORT       ?= 5434
 APP_URL       ?= http://$(DOMAIN)
 API_URL       ?= http://$(API_DOMAIN)/api/v1
 
+# ── Tooling: pastikan node & pnpm ditemukan oleh make ────────────────────────
+# Make menjalankan recipe dengan /bin/sh. Di server yang memakai nvm, node/pnpm
+# hanya aktif di shell interaktif, sehingga perlu dicari manual (fallback nvm).
+NODE_BIN := $(shell command -v pnpm 2>/dev/null | xargs -r dirname 2>/dev/null)
+ifeq ($(NODE_BIN),)
+NODE_BIN := $(shell ls -d $(HOME)/.nvm/versions/node/*/bin 2>/dev/null | tail -n1)
+endif
+export PATH := $(NODE_BIN):$(PATH)
+
 COMPOSE      := docker compose
 COMPOSE_FULL := $(COMPOSE) --profile full
 
