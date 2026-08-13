@@ -105,7 +105,7 @@ test.describe('Owner Purchasing & Inventory Workflow', () => {
     expect(body.closing).toBe('400000.00');
 
     const pay = await api.post(`tenants/${TENANT}/supplier-payments`, {
-      data: { supplier_id: supplierId, payment_date: '2026-08-04', amount: '400000', method: 'transfer' },
+      data: { supplier_id: supplierId, payment_date: new Date().toISOString().slice(0, 10), amount: '400000', method: 'transfer' },
     });
     expect(pay.status()).toBe(201);
     const paymentId = (await pay.json()).id;

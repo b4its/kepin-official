@@ -1,5 +1,6 @@
 import sys
 import time
+from datetime import date
 
 from decimal import Decimal
 
@@ -985,7 +986,10 @@ sc, aging_body = jget("/reports/payable-aging?asOf=2020-01-01")
 b = aging_bucket_for(aging_body, "supplierId", sup_id)
 check("aging payable asOf past current bucket", b == "current", f"{b}")
 
-sc, body = jpost("/supplier-payments", {"supplier_id": sup_id, "payment_date": "2026-08-04", "amount": "400000", "method": "transfer"})
+# payment di tanggal hari ini (sama dengan tanggal penerimaan barang/GRN) agar
+# urutan statement stabil terlepas dari tanggal kalender saat tes dijalankan
+today = date.today().isoformat()
+sc, body = jpost("/supplier-payments", {"supplier_id": sup_id, "payment_date": today, "amount": "400000", "method": "transfer"})
 check("supplier stmt payment create 201", sc == 201, f"{sc}")
 sup_pay_id = body.get("id", "")
 sc, body = jpost(f"/supplier-payments/{sup_pay_id}/post")
