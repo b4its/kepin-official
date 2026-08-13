@@ -3,7 +3,7 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
-  import { products, inventoryLocations, loadStockMovements, tenantApi } from '$lib/stores/data';
+  import { inventoryLocations, loadStockMovements, tenantApi } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
   import { formatIDR } from '$lib/utils/currency';
   import { Boxes, Minus, Plus, Search, Trash2 } from '@lucide/svelte';
@@ -13,6 +13,9 @@
   let stockMap = $state<Record<string, number>>({});
   let cart = $state<Record<string, number>>({});
   let search = $state('');
+  let catalog = $state<any[]>([]);
+  let known = $state<Record<string, any>>({});
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   let stockProduct = $state<any | null>(null);
   let stockMode = $state<'in' | 'out'>('in');
@@ -36,21 +39,49 @@
     }
   }
 
+  function mapProduct(p: any) {
+    return {
+      id: p.id,
+      sku: p.sku || '',
+      name: p.name,
+      category: p.category || '',
+      unit: p.unit || 'pcs',
+      price: parseFloat(p.salePrice || p.sale_price || '0'),
+      cost: parseFloat(p.costPrice || p.cost_price || '0'),
+      stock: parseFloat(p.stock || '0'),
+      minStock: parseFloat(p.minimumStock || p.minimum_stock || '0'),
+      location: p.location || '',
+      status: p.status,
+    };
+  }
+
+  async function loadCatalog(q = search) {
+    try {
+      const res: any = await tenantApi.getProducts(slug, q || undefined, 100);
+      const items = Array.isArray(res.items) ? res.items : [];
+      catalog = items.map(mapProduct);
+      const next = { ...known };
+      for (const p of catalog) next[p.id] = p;
+      known = next;
+    } catch {
+      /* biarkan data lama */
+    }
+  }
+
+  function productOf(pid: string) {
+    return known[pid];
+  }
+
   $effect(() => {
     if (slug) void refreshStock();
   });
 
-  const filtered = $derived(
-    $products.filter((p) => {
-      const q = search.toLowerCase();
-      return (
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        (p.category || '').toLowerCase().includes(q)
-      );
-    })
-  );
+  $effect(() => {
+    if (!slug) return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => void loadCatalog(search), search ? 250 : 0);
+    return () => clearTimeout(searchTimer);
+  });
 
   const locationId = $derived(
     $inventoryLocations.find((l) => l.status === 'active')?.id ||
@@ -62,8 +93,7 @@
   const cartCount = $derived(cartEntries.reduce((s, [, qty]) => s + qty, 0));
   const cartTotal = $derived(
     cartEntries.reduce((sum, [pid, qty]) => {
-      const p = $products.find((pr) => pr.id === pid);
-      return sum + qty * (p?.price || 0);
+      return sum + qty * (productOf(pid)?.price || 0);
     }, 0)
   );
 
@@ -113,6 +143,7 @@
           productId: stockProduct.id,
           locationId,
           quantity: String(qty),
+          unitCost: String(stockProduct.cost || '0'),
           reason: stockReason || 'Penambahan stok manual (POS)',
         });
       } else {
@@ -168,13 +199,13 @@
       />
     </div>
 
-    {#if filtered.length === 0}
+    {#if catalog.length === 0}
       <div class="card p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
         Tidak ada produk. Tambahkan produk di menu Inventaris → Produk.
       </div>
     {:else}
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {#each filtered as p}
+        {#each catalog as p}
           <div class="card p-4 flex flex-col gap-3">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
@@ -214,12 +245,12 @@
       {:else}
         <div class="space-y-3 mb-4 max-h-72 overflow-y-auto pr-1">
           {#each cartEntries as [pid, qty]}
-            {#if ($products.find((pr) => pr.id === pid))}
+            {#if productOf(pid)}
               <div class="flex items-center justify-between gap-2 border-b border-[hsl(var(--border))] pb-2">
                 <div class="min-w-0">
-                  <p class="text-sm font-medium truncate">{$products.find((pr) => pr.id === pid)?.name}</p>
+                  <p class="text-sm font-medium truncate">{productOf(pid)?.name}</p>
                   <p class="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
-                    {formatIDR(($products.find((pr) => pr.id === pid)?.price || 0) * qty)}
+                    {formatIDR((productOf(pid)?.price || 0) * qty)}
                   </p>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">

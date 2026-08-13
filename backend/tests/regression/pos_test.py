@@ -226,6 +226,21 @@ check("POS checkout empty cart 422", sc == 422, f"{sc} {body}")
 sc, body = jpost("/pos/checkout", {"items": [{"product_id": pid, "quantity": "0"}]})
 check("POS checkout zero qty 422", sc == 422, f"{sc} {body}")
 
+# ── unit_cost 0/kosong → jatuh ke cost_price produk ───────────────────
+sc, body0 = jpost("/stock-movements/receipts", {
+    "product_id": pid,
+    "location_id": loc_id,
+    "quantity": "2",
+    "unit_cost": "0",
+    "reason": "Receipt tanpa unit cost",
+})
+check("POS receipt no unit_cost 201", sc == 201, f"{sc}")
+check("POS receipt unit_cost fallback cost_price", okv(body0, "unit_cost", "unitCost") == "15000.00", f"{okv(body0, 'unit_cost', 'unitCost')}")
+sc, body = jpost("/pos/checkout", {
+    "items": [{"product_id": pid, "quantity": "1"}],
+})
+check("POS checkout after zero-cost receipt 201", sc == 201, f"{sc} {body}")
+
 purge_pos_fixtures()
 
 print()

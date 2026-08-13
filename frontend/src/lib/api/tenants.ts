@@ -101,7 +101,7 @@ export async function getSupplierPayments(slug: string) { return api(`/tenants/$
 export async function createSupplierPayment(slug: string, data: { supplierId: string; paymentDate: string; amount: string; method?: string; reference?: string }) { return api(`/tenants/${slug}/supplier-payments`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function postSupplierPayment(slug: string, id: string) { return api(`/tenants/${slug}/supplier-payments/${id}/post`, { method: 'POST' }); }
 export async function voidSupplierPayment(slug: string, id: string) { return api(`/tenants/${slug}/supplier-payments/${id}/void`, { method: 'POST' }); }
-export async function getProducts(slug: string) { return api(`/tenants/${slug}/products`); }
+export async function getProducts(slug: string, search?: string, pageSize?: number) { return api(`/tenants/${slug}/products?${search ? `search=${encodeURIComponent(search)}&` : ''}${pageSize ? `pageSize=${pageSize}` : ''}`); }
 export async function getStockBalances(slug: string) { return api(`/tenants/${slug}/stock-balances`); }
 export async function getStockMovements(slug: string) { return api(`/tenants/${slug}/stock-movements`); }
 export async function createStockReceipt(slug: string, data: { productId: string; locationId: string; quantity: string; unitCost?: string; reason?: string }) { return api(`/tenants/${slug}/stock-movements/receipts`, { method: 'POST', body: JSON.stringify({ product_id: data.productId, location_id: data.locationId, quantity: data.quantity, unit_cost: data.unitCost || '0', reason: data.reason || '' }) }); }

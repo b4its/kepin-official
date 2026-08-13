@@ -497,6 +497,8 @@ async def create_stock_receipt(
 
     receipt_qty = to_quantity(body.quantity)
     unit_cost = to_money(body.unit_cost)
+    if unit_cost <= ZERO:
+        unit_cost = to_money(p.cost_price)
     today = datetime.now(timezone.utc).date()
 
     sb = await _lock_stock_balance(session, tenant.id, body.product_id, body.location_id)
