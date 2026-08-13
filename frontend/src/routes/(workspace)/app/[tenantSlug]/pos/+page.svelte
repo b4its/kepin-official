@@ -6,6 +6,7 @@
   import { inventoryLocations, loadStockMovements, tenantApi } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
   import { formatIDR } from '$lib/utils/currency';
+  import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
   import { Boxes, Minus, Plus, Search, Trash2 } from '@lucide/svelte';
 
   const slug = $derived($page.params.tenantSlug || '');
@@ -27,6 +28,7 @@
   let stockReason = $state('');
   let stockSaving = $state(false);
   let checkoutSaving = $state(false);
+  let amountPaid = $state(0);
 
   async function refreshStock() {
     try {
@@ -117,6 +119,13 @@
     }, 0)
   );
 
+  const change = $derived(amountPaid - cartTotal);
+  const changeSufficient = $derived(change >= 0);
+
+  function setAmountPaid(value: number) {
+    amountPaid = Number.isFinite(value) ? value : 0;
+  }
+
   function addToCart(pid: string) {
     cart = { ...cart, [pid]: (cart[pid] || 0) + 1 };
   }
@@ -195,6 +204,7 @@
       const res: any = await tenantApi.createPosCheckout(slug, { items });
       showToast(`Checkout ${res.checkoutNumber || 'POS'} berhasil — stok terpotong & tercatat`, 'success');
       cart = {};
+      amountPaid = 0;
       await refreshStock();
     } catch (err: any) {
       showToast(err?.message || 'Gagal checkout', 'error');
@@ -319,12 +329,52 @@
         </div>
       {/if}
 
-      <div class="flex items-center justify-between border-t border-[hsl(var(--border))] pt-3 mb-4">
+      <div class="flex items-center justify-between border-t border-[hsl(var(--border))] pt-3 mb-3">
         <span class="text-sm text-[hsl(var(--muted-foreground))]">Total</span>
         <span class="text-lg font-semibold tabular-nums">{formatIDR(cartTotal)}</span>
       </div>
 
-      <Button class="w-full" disabled={cartEntries.length === 0} loading={checkoutSaving} onclick={checkout}>
+      {#if cartEntries.length > 0}
+        <div class="mb-4 space-y-3 rounded-md border border-[hsl(var(--border))] p-3">
+          <div>
+            <label class="label-text">Jumlah Dibayarkan (Rp)</label>
+            <div class="flex items-center gap-1 mt-1">
+              <CurrencyInput
+                value={amountPaid}
+                onchange={setAmountPaid}
+                class="input-field flex-1"
+                placeholder="0"
+              />
+              <Button size="sm" variant="secondary" onclick={() => setAmountPaid(cartTotal)}>
+                Uang Pas
+              </Button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-[hsl(var(--muted-foreground))]">Kembalian</span>
+            <span
+              class="text-lg font-semibold tabular-nums {changeSufficient
+                ? 'text-[var(--color-kepin-green)]'
+                : 'text-[var(--color-kepin-danger)]'}"
+            >
+              {formatIDR(Math.max(0, change))}
+            </span>
+          </div>
+          {#if !changeSufficient && amountPaid > 0}
+            <p class="text-xs text-[var(--color-kepin-danger)]">
+              Uang dibayarkan kurang {formatIDR(Math.abs(change))} dari total.
+            </p>
+          {/if}
+        </div>
+      {/if}
+
+      <Button
+        class="w-full"
+        disabled={cartEntries.length === 0 || (amountPaid > 0 && !changeSufficient)}
+        loading={checkoutSaving}
+        onclick={checkout}
+      >
         Bayar & Kurangi Stok
       </Button>
       <p class="text-xs text-[hsl(var(--muted-foreground))] mt-2">

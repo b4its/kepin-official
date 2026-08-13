@@ -113,4 +113,53 @@ test.describe('Owner POS Workflow', () => {
     expect(posMvs[0].referenceType).toBe('pos');
     await api.dispose();
   });
+
+  test('POS page: jumlah dibayarkan menghitung kembalian secara real-time', async ({ page }) => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const runId = uniqueId();
+    const sku = `CHK-${runId.slice(-10)}`;
+    const name = `E2E Change ${runId.slice(-6)}`;
+
+    const prod = await api.post(`tenants/${TENANT}/products`, {
+      data: { sku, name, category: 'POS', unit: 'pcs', salePrice: '25000', costPrice: '15000', minimumStock: '2' },
+    });
+    expect(prod.status()).toBe(201);
+    const productId = (await prod.json()).id;
+
+    const locs = await (await api.get(`tenants/${TENANT}/inventory-locations`)).json();
+    const loc = locs[0].id;
+    await api.post(`tenants/${TENANT}/stock-movements/receipts`, {
+      data: { product_id: productId, location_id: loc, quantity: '10', unit_cost: '15000' },
+    });
+
+    await page.goto(`/app/${TENANT}/pos`);
+    await expect(page.getByRole('heading', { name: 'Point of Sales' })).toBeVisible();
+    await page.getByPlaceholder('Cari produk, SKU, kategori...').fill(sku);
+    const card = page.locator('div.card', { hasText: name }).first();
+    await expect(card).toBeVisible();
+    await card.getByRole('button', { name: 'Keranjang' }).click();
+    await card.getByRole('button', { name: 'Keranjang' }).click();
+    await expect(page.getByText('Keranjang (2)')).toBeVisible();
+
+    // total = 2 x 25000 = 50000
+    const changeRow = page.getByText('Kembalian').locator('..');
+    const paidInput = page.locator('input[inputmode="numeric"]').first();
+    await expect(paidInput).toBeVisible();
+
+    // dibayar 100000 → kembalian 50000 (real-time)
+    await paidInput.fill('100000');
+    await expect(changeRow).toContainText('Rp 50.000');
+
+    // dibayar 30000 → uang kurang, checkout terkunci
+    await paidInput.fill('30000');
+    await expect(page.getByText('Uang dibayarkan kurang Rp 20.000')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bayar & Kurangi Stok' })).toBeDisabled();
+
+    // tombol Uang Pas → set ke total, kembalian 0, checkout aktif
+    await page.getByRole('button', { name: 'Uang Pas' }).click();
+    await expect(changeRow).toContainText('Rp 0');
+    await expect(page.getByRole('button', { name: 'Bayar & Kurangi Stok' })).toBeEnabled();
+
+    await api.dispose();
+  });
 });
