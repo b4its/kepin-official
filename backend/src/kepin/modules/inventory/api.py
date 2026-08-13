@@ -447,10 +447,14 @@ async def _next_movement_number(
     session: AsyncSession,
     tenant_id: str,
 ) -> str:
-    cnt = await session.execute(
-        select(func.count(StockMovement.id)).where(StockMovement.tenant_id == tenant_id)
+    rows = await session.execute(
+        select(StockMovement.movement_number).where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.movement_number.like("MOV-%"),
+        )
     )
-    return f"MOV-{cnt.scalar() or 0 + 1:06d}"
+    nums = [int(n.split("-")[1]) for n in rows.scalars().all() if n.startswith("MOV-")]
+    return f"MOV-{max(nums, default=0) + 1:06d}"
 
 
 async def _lock_stock_balance(
@@ -812,13 +816,18 @@ async def _next_checkout_number(
     session: AsyncSession,
     tenant_id: str,
 ) -> str:
-    cnt = await session.execute(
-        select(func.count(StockMovement.id)).where(
+    rows = await session.execute(
+        select(StockMovement.movement_number).where(
             StockMovement.tenant_id == tenant_id,
             StockMovement.reference_type == "pos",
         )
     )
-    return f"POS-{cnt.scalar() or 0 + 1:05d}"
+    nums = [
+        int(n.split("-")[1])
+        for n in rows.scalars().all()
+        if n.startswith("POS-") and len(n.split("-")) > 1 and n.split("-")[1].isdigit()
+    ]
+    return f"POS-{max(nums, default=0) + 1:05d}"
 
 
 @router.post("/pos/checkout", response_model=PosCheckoutSchema, status_code=201, summary="Checkout POS", description="Mengeluarkan stok untuk penjualan POS. Setiap produk dicatat sebagai pergerakan stok (type 'out', reference 'pos') dan saldo stok terkalkulasi otomatis.")
