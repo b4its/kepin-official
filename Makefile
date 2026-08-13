@@ -39,6 +39,13 @@ NODE_BIN := $(shell ls -d $(HOME)/.nvm/versions/node/*/bin 2>/dev/null | tail -n
 endif
 export PATH := $(NODE_BIN):$(PATH)
 
+# Pastikan pnpm benar-benar terpasang. Corepack sudah tidak dibundel sejak
+# Node 25, jadi install global via npm bila belum ada (satu kali saja).
+ifeq ($(shell command -v pnpm 2>/dev/null),)
+$(info ⚠ pnpm belum terpasang — menginstall "npm install -g pnpm" ...)
+$(shell npm install -g pnpm >/dev/null 2>&1)
+endif
+
 COMPOSE      := docker compose
 COMPOSE_FULL := $(COMPOSE) --profile full
 
