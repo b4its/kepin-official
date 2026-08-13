@@ -64,11 +64,21 @@ test.describe('Owner Organization, Members & Sidebar', () => {
     const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
     const get = await api.get(`tenants/${TENANT}/sidebar-settings`);
     expect(get.status()).toBe(200);
+    const original = await get.json();
 
-    const put = await api.put(`tenants/${TENANT}/sidebar-settings`, {
-      data: { enabledItems: { sales_invoices: true, inventory_products: false } },
-    });
-    expect(put.status()).toBe(200);
+    try {
+      const put = await api.put(`tenants/${TENANT}/sidebar-settings`, {
+        data: { enabledItems: { sales_invoices: true, inventory_products: false } },
+      });
+      expect(put.status()).toBe(200);
+    } finally {
+      // Restore pengaturan asli agar test tidak menonaktifkan menu tenant demo
+      await api
+        .put(`tenants/${TENANT}/sidebar-settings`, {
+          data: { enabledItems: original.enabledItems ?? {} },
+        })
+        .catch(() => {});
+    }
     await api.dispose();
   });
 });
