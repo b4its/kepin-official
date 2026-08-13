@@ -37,13 +37,11 @@ test.describe('Kode Bergabung', () => {
     const body = await res.json();
     expect(body.tenant.slug).toBe(TENANT);
 
-    // 5) Menu profil memuat pintu masuk "Gabung Perusahaan Lain"
+    // 5) Owner TIDAK melihat opsi gabung/keluar perusahaan di menu profil
+    //    (owner tidak bisa keluar; single-company: yang punya perusahaan
+    //    tidak melihat opsi bergabung).
     await page.locator('header').getByRole('button', { name: /Profil/i }).first().click();
-    const menu = page.locator('header').getByRole('button', { name: /Gabung Perusahaan Lain/i }).first();
-    await expect(menu).toBeVisible();
-    // Navigasi ke halaman Gabung Perusahaan berfungsi
-    await menu.click();
-    await expect(page).toHaveURL(/\/auth\/join-company/, { timeout: 15000 });
-    await expect(page.getByLabel(/Kode Bergabung/i)).toBeVisible();
+    await expect(page.locator('header').getByRole('button', { name: /Gabung Perusahaan/i })).toHaveCount(0);
+    await expect(page.locator('header').getByRole('button', { name: /Keluar dari Perusahaan/i })).toHaveCount(0);
   });
 });

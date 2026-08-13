@@ -28,5 +28,21 @@ test.describe('Anggota Tim — non-owner', () => {
 
     // 6) Tombol "Undang Anggota" tidak tampil untuk non-owner
     await expect(page.getByRole('button', { name: /Undang Anggota/i })).toHaveCount(0);
+
+    // 7) Karyawan TIDAK melihat opsi "Gabung Perusahaan" (single-company),
+    //    tetapi melihat "Keluar dari Perusahaan Ini" di menu profil.
+    await page.locator('header').getByRole('button', { name: /Profil/i }).first().click();
+    await expect(page.locator('header').getByRole('button', { name: /Gabung Perusahaan/i })).toHaveCount(0);
+    await expect(page.locator('header').getByRole('button', { name: /Keluar dari Perusahaan Ini/i }).first()).toBeVisible();
+  });
+
+  test('halaman Gabung Perusahaan menampilkan peringatan karena sudah punya perusahaan', async ({ page }) => {
+    await page.goto(`${WEB}/auth/join-company`);
+    await page.waitForLoadState('networkidle');
+
+    // Karyawan yang sudah punya perusahaan tidak melihat form kode,
+    // melainkan peringatan single-company.
+    await expect(page.getByLabel(/Kode Bergabung/i)).toHaveCount(0);
+    await expect(page.getByText(/sudah menjadi anggota perusahaan/i)).toBeVisible();
   });
 });
