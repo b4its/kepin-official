@@ -12,6 +12,46 @@ export type Paginated<T> = {
   total: number;
 };
 
+export type BankTransaction = {
+  id: string;
+  bankAccountId: string;
+  externalId: string;
+  transactionDate: string;
+  description: string;
+  amount: string;
+  matched?: boolean;
+};
+
+export type MatchCandidate = {
+  id: string;
+  transactionNumber: string;
+  transactionDate: string;
+  description: string;
+  amount: string;
+  score: number;
+};
+
+export type Suggestion = {
+  bankTransaction: BankTransaction;
+  candidates: MatchCandidate[];
+};
+
+export type ImportCsvResult = {
+  created: number;
+  skipped: number;
+  errors: string[];
+};
+
+export type ReconciliationMatch = {
+  id: string;
+  bankTransactionId: string;
+  transactionId: string;
+  confidence: string;
+  status: string;
+  matchedAt?: string | null;
+  note?: string;
+};
+
 export type Tenant = {
   id: string;
   slug: string;

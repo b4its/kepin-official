@@ -8,13 +8,11 @@
   import { accounts, currentRole, tenantApi, transactions } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
   import { formatIDR } from '$lib/utils/currency';
+  import { type BankTransaction, type MatchCandidate, type ReconciliationMatch, type Suggestion } from '$lib/api/types';
   import { Pencil, RefreshCw, Trash2 } from '@lucide/svelte';
 
   type BankAccount = { id: string; accountId: string; accountName?: string; bankName: string; maskedNumber: string; status: string; glBalance?: string; statementCount?: number; statementTotal?: string; unmatchedCount?: number; unmatchedTotal?: string };
-  type BankTransaction = { id: string; bankAccountId: string; externalId: string; transactionDate: string; description: string; amount: string; matched?: boolean };
-  type Match = { id: string; bankTransactionId: string; transactionId: string; confidence: string; status: string; matchedAt?: string | null; note?: string };
-  type MatchCandidate = { id: string; transactionNumber: string; transactionDate: string; description: string; amount: string; score: number };
-  type Suggestion = { bankTransaction: BankTransaction; candidates: MatchCandidate[] };
+  type Match = ReconciliationMatch;
 
   const slug = $derived($page.params.tenantSlug || '');
   const isOwner = $derived($currentRole === 'tenant_owner');

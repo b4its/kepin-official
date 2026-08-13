@@ -1,5 +1,6 @@
 import { api } from './client';
 import { createId } from '$lib/utils/id';
+import { type ImportCsvResult, type ReconciliationMatch, type Suggestion } from './types';
 
 export async function getTenantContext(slug: string) { return api(`/tenants/${slug}/context`); }
 export async function getJoinCode(slug: string) { return api(`/tenants/${slug}/join-code`); }
@@ -65,7 +66,7 @@ export async function getBankTransactions(slug: string, params?: string) { retur
 export async function getCustomerStatement(slug: string, customerId: string, params?: string) { return api(`/tenants/${slug}/customer-statements?customerId=${customerId}${params || ''}`); }
 export async function getSupplierStatement(slug: string, supplierId: string, params?: string) { return api(`/tenants/${slug}/supplier-statements?supplierId=${supplierId}${params || ''}`); }
 export async function createBankTransaction(slug: string, data: { bankAccountId: string; externalId: string; transactionDate: string; description?: string; amount: string }) { return api(`/tenants/${slug}/bank-transactions`, { method: 'POST', body: JSON.stringify(data) }); }
-export async function importBankTransactionsCsv(slug: string, data: { bankAccountId: string; csv: string }) { return api(`/tenants/${slug}/bank-transactions/import`, { method: 'POST', body: JSON.stringify(data) }); }
+export async function importBankTransactionsCsv(slug: string, data: { bankAccountId: string; csv: string }): Promise<ImportCsvResult> { return api(`/tenants/${slug}/bank-transactions/import`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function deleteBankTransaction(slug: string, id: string) { return api(`/tenants/${slug}/bank-transactions/${id}`, { method: 'DELETE' }); }
 export async function getFiscalYears(slug: string) { return api(`/tenants/${slug}/fiscal-years`); }
 export async function createFiscalYear(slug: string, data: { name?: string; startDate: string; endDate: string }) { return api(`/tenants/${slug}/fiscal-years`, { method: 'POST', body: JSON.stringify(data) }); }
@@ -73,9 +74,9 @@ export async function closeFiscalYear(slug: string, id: string) { return api(`/t
 export async function reopenFiscalYear(slug: string, id: string) { return api(`/tenants/${slug}/fiscal-years/${id}/reopen`, { method: 'POST' }); }
 export async function closePeriod(slug: string, id: string) { return api(`/tenants/${slug}/periods/${id}/close`, { method: 'POST' }); }
 export async function reopenPeriod(slug: string, id: string) { return api(`/tenants/${slug}/periods/${id}/reopen`, { method: 'POST' }); }
-export async function createReconciliationMatch(slug: string, data: { bankTransactionId: string; transactionId: string; confidence?: string; note?: string }) { return api(`/tenants/${slug}/reconciliation/matches`, { method: 'POST', body: JSON.stringify(data) }); }
+export async function createReconciliationMatch(slug: string, data: { bankTransactionId: string; transactionId: string; confidence?: string; note?: string }): Promise<ReconciliationMatch> { return api(`/tenants/${slug}/reconciliation/matches`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function confirmReconciliationMatch(slug: string, id: string) { return api(`/tenants/${slug}/reconciliation/matches/${id}/confirm`, { method: 'POST' }); }
-export async function getReconciliationSuggestions(slug: string, params?: string) { return api(`/tenants/${slug}/reconciliation/suggestions${params || ''}`); }
+export async function getReconciliationSuggestions(slug: string, params?: string): Promise<{ items: Suggestion[] }> { return api(`/tenants/${slug}/reconciliation/suggestions${params || ''}`); }
 export async function bulkAutoMatch(slug: string, data: { bankAccountId?: string; minScore?: number; maxStatements?: number }) { return api(`/tenants/${slug}/reconciliation/matches/bulk`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function getCustomers(slug: string, search?: string) { return api(`/tenants/${slug}/customers?pageSize=100${search ? `&search=${encodeURIComponent(search)}` : ''}`); }
 export async function createCustomer(slug: string, data: any) { return api(`/tenants/${slug}/customers`, { method: 'POST', body: JSON.stringify(data) }); }
