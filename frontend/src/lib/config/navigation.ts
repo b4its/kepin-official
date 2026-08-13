@@ -64,6 +64,7 @@ export const clientNavigation: NavigationGroup[] = [
     label: 'Penjualan',
     key: 'group_penjualan',
     items: [
+      { key: 'sales_pos', label: 'Point of Sales', href: '/pos', icon: ShoppingCart },
       { key: 'sales_invoices', label: 'Invoice', href: '/sales/invoices', icon: Receipt },
       { key: 'sales_customers', label: 'Pelanggan', href: '/sales/customers', icon: Users },
     ],

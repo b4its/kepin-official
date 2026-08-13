@@ -1,4 +1,5 @@
 import { api } from './client';
+import { createId } from '$lib/utils/id';
 
 export async function getTenantContext(slug: string) { return api(`/tenants/${slug}/context`); }
 export async function getTenantDashboard(slug: string, params?: { preset?: string; startDate?: string; endDate?: string }) {
@@ -52,7 +53,7 @@ export async function voidTransaction(slug: string, id: string) { return api(`/t
 export async function getJournals(slug: string, params?: string) { return api(`/tenants/${slug}/journals${params || ''}`); }
 export async function getLedger(slug: string, params?: string) { return api(`/tenants/${slug}/journals/ledger${params || ''}`); }
 export async function createJournal(slug: string, data: { journalDate: string; reference?: string; description?: string; lines: { accountId: string; description?: string; debit: string; credit: string }[] }) { return api(`/tenants/${slug}/journals`, { method: 'POST', body: JSON.stringify(data) }); }
-export async function postJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/post`, { method: 'POST', headers: { 'X-Idempotency-Key': crypto.randomUUID() } }); }
+export async function postJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/post`, { method: 'POST', headers: { 'X-Idempotency-Key': createId() } }); }
 export async function reverseJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/reverse`, { method: 'POST' }); }
 export async function getBankAccounts(slug: string) { return api(`/tenants/${slug}/bank-accounts`); }
 export async function createBankAccount(slug: string, data: { accountId: string; bankName: string; maskedNumber?: string }) { return api(`/tenants/${slug}/bank-accounts`, { method: 'POST', body: JSON.stringify(data) }); }
@@ -82,7 +83,7 @@ export async function getInvoices(slug: string, params?: string) { return api(`/
 export async function createInvoice(slug: string, data: any) { return api(`/tenants/${slug}/invoices`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateInvoice(slug: string, id: string, data: any) { return api(`/tenants/${slug}/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
 export async function deleteInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}`, { method: 'DELETE' }); }
-export async function postInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}/post`, { method: 'POST', headers: { 'X-Idempotency-Key': crypto.randomUUID() } }); }
+export async function postInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}/post`, { method: 'POST', headers: { 'X-Idempotency-Key': createId() } }); }
 export async function reverseInvoice(slug: string, id: string) { return api(`/tenants/${slug}/invoices/${id}/reverse`, { method: 'POST' }); }
 export async function getSuppliers(slug: string) { return api(`/tenants/${slug}/suppliers?pageSize=100`); }
 export async function createSupplier(slug: string, data: any) { return api(`/tenants/${slug}/suppliers`, { method: 'POST', body: JSON.stringify(data) }); }
@@ -103,6 +104,9 @@ export async function voidSupplierPayment(slug: string, id: string) { return api
 export async function getProducts(slug: string) { return api(`/tenants/${slug}/products`); }
 export async function getStockBalances(slug: string) { return api(`/tenants/${slug}/stock-balances`); }
 export async function getStockMovements(slug: string) { return api(`/tenants/${slug}/stock-movements`); }
+export async function createStockReceipt(slug: string, data: { productId: string; locationId: string; quantity: string; unitCost?: string; reason?: string }) { return api(`/tenants/${slug}/stock-movements/receipts`, { method: 'POST', body: JSON.stringify({ product_id: data.productId, location_id: data.locationId, quantity: data.quantity, unit_cost: data.unitCost || '0', reason: data.reason || '' }) }); }
+export async function createStockIssue(slug: string, data: { productId: string; locationId: string; quantity: string; reason?: string }) { return api(`/tenants/${slug}/stock-movements/issues`, { method: 'POST', body: JSON.stringify({ product_id: data.productId, location_id: data.locationId, quantity: data.quantity, reason: data.reason || '' }) }); }
+export async function createPosCheckout(slug: string, data: { items: { product_id: string; quantity: string }[]; reason?: string }) { return api(`/tenants/${slug}/pos/checkout`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function getReports(slug: string, type: string, params?: string) { return api(`/tenants/${slug}/reports/${type}${params || ''}`); }
 export async function getSidebarSettings(slug: string) { return api(`/tenants/${slug}/sidebar-settings`); }
 export async function updateSidebarSettings(slug: string, enabledItems: Record<string, boolean>) { return api(`/tenants/${slug}/sidebar-settings`, { method: 'PUT', body: JSON.stringify({ enabledItems }) }); }
