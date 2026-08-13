@@ -3,7 +3,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
   import { showToast } from '$lib/stores/toast';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { getApiUrl } from '$lib/config/api';
 
   let joinCode = $state('');
   let loading = $state(false);
@@ -13,7 +13,7 @@
   async function lookupCode() {
     if (joinCode.length < 3) return;
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/auth/join-info?code=${encodeURIComponent(joinCode)}`);
+      const res = await fetch(`${getApiUrl()}/auth/join-info?code=${encodeURIComponent(joinCode)}`);
       if (res.ok) {
         const data = await res.json();
         companyInfo = data.tenant;
@@ -32,7 +32,7 @@
 
     const token = localStorage.getItem('kepin_token');
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/auth/join-by-code`, {
+      const res = await fetch(`${getApiUrl()}/auth/join-by-code`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify({ join_code: joinCode }),

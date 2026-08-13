@@ -2,15 +2,15 @@
   "cookies": [],
   "origins": [
     {
-      "origin": "http://127.0.0.1:5173",
+      "origin": "http://127.0.0.1:3001",
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"d095472b-ef41-4040-b566-f685da15c299\",\"name\":\"Ani Lestari\",\"email\":\"ani@tokomaju.com\",\"phone\":\"\",\"avatar\":\"\"}"
+          "value": "{\"id\":\"3160168c-894f-47f6-b906-27f56e6ca5e6\",\"name\":\"Ani Lestari\",\"email\":\"ani@tokomaju.com\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
           "name": "kepin_token",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMDk1NDcyYi1lZjQxLTQwNDAtYjU2Ni1mNjg1ZGExNWMyOTkiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1ODIzMTgyLCJleHAiOjE3ODU5MDk1ODJ9.4nz8PZzow82LFXqkR01oJPwQmGxD9-Dd1lsLdLh-m_0"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTYwMTY4Yy04OTRmLTQ3ZjYtYjkwNi0yN2Y1NmU2Y2E1ZTYiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg2NjE5MDc0LCJleHAiOjE3ODY3MDU0NzR9.r0iJ_6UviavzbV-R7gvN3QgnGBQ55jHmdk5UNf3twXk"
         },
         {
           "name": "kepin_tenants",

@@ -3,7 +3,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
   import { showToast } from '$lib/stores/toast';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { getApiUrl } from '$lib/config/api';
 
   let name = $state('');
   let slug = $state('');
@@ -26,7 +26,7 @@
 
     const token = localStorage.getItem('kepin_token');
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/auth/create-organization`, {
+      const res = await fetch(`${getApiUrl()}/auth/create-organization`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify({ name, slug, plan }),

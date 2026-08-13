@@ -75,6 +75,10 @@ test.describe('Owner Dashboard Aging Summary', () => {
     const apTotal = Number((await apCard.locator('p.text-2xl').textContent())?.replace(/[^\d]/g, '') ?? '0');
     expect(apTotal).toBeGreaterThanOrEqual(400000);
 
+    await arCard.getByRole('link', { name: /Lihat laporan/ }).click();
+    await expect(page.getByRole('heading', { name: 'Piutang per Bucket' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hutang per Bucket' })).toBeVisible();
+
     await api.dispose();
   });
 });

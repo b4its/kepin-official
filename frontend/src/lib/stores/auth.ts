@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { getApiUrl } from '$lib/config/api';
 
 export type AuthUser = {
   id: string;
@@ -43,7 +43,7 @@ export type LoginResult = {
 
 export async function login(email: string, password: string): Promise<LoginResult> {
   try {
-    const response = await fetch(`${PUBLIC_API_URL}/auth/login`, {
+    const response = await fetch(`${getApiUrl()}/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -93,7 +93,7 @@ export async function verifyMfa(code: string): Promise<LoginResult> {
   try {
     const mfaToken = localStorage.getItem('kepin_mfa_token') || '';
     if (!mfaToken) return { success: false, error: 'Sesi verifikasi MFA tidak ditemukan. Silakan login ulang.' };
-    const response = await fetch(`${PUBLIC_API_URL}/auth/mfa/verify`, {
+    const response = await fetch(`${getApiUrl()}/auth/mfa/verify`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ mfa_token: mfaToken, code }),
@@ -112,7 +112,7 @@ export async function verifyMfa(code: string): Promise<LoginResult> {
 
 export async function register(name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${PUBLIC_API_URL}/auth/register`, {
+    const response = await fetch(`${getApiUrl()}/auth/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
@@ -129,7 +129,7 @@ export async function register(name: string, email: string, password: string): P
 
 export async function forgotPassword(email: string): Promise<{ success: boolean; error?: string; devToken?: string }> {
   try {
-    const response = await fetch(`${PUBLIC_API_URL}/auth/forgot-password`, {
+    const response = await fetch(`${getApiUrl()}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email }),
@@ -147,7 +147,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
 
 export async function resetPassword(token: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${PUBLIC_API_URL}/auth/reset-password`, {
+    const response = await fetch(`${getApiUrl()}/auth/reset-password`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token, new_password: newPassword }),
@@ -165,7 +165,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
 export async function changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
   try {
     const token = localStorage.getItem(TOKEN_KEY) || '';
-    const response = await fetch(`${PUBLIC_API_URL}/auth/change-password`, {
+    const response = await fetch(`${getApiUrl()}/auth/change-password`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),

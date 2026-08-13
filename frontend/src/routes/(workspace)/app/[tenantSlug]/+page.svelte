@@ -169,7 +169,7 @@
   <div class="card p-5">
     <div class="mb-3 flex items-center justify-between">
       <h3 class="font-semibold">Piutang Usaha</h3>
-      <a href={`/app/${slug}/reports`} class="text-xs text-[hsl(var(--primary))] hover:underline">Lihat laporan →</a>
+      <a href={`/app/${slug}/reports?tab=aging`} class="text-xs text-[hsl(var(--primary))] hover:underline">Lihat laporan →</a>
     </div>
     {#if receivableAging}
       <p class="mb-3 text-2xl font-semibold tabular-nums">{formatIDR(Number(receivableAging.grandTotal))}</p>
@@ -190,7 +190,7 @@
   <div class="card p-5">
     <div class="mb-3 flex items-center justify-between">
       <h3 class="font-semibold">Hutang Usaha</h3>
-      <a href={`/app/${slug}/reports`} class="text-xs text-[hsl(var(--primary))] hover:underline">Lihat laporan →</a>
+      <a href={`/app/${slug}/reports?tab=aging`} class="text-xs text-[hsl(var(--primary))] hover:underline">Lihat laporan →</a>
     </div>
     {#if payableAging}
       <p class="mb-3 text-2xl font-semibold tabular-nums">{formatIDR(Number(payableAging.grandTotal))}</p>

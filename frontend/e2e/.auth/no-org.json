@@ -2,15 +2,15 @@
   "cookies": [],
   "origins": [
     {
-      "origin": "http://127.0.0.1:5173",
+      "origin": "http://127.0.0.1:3001",
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"f5231c67-ecc0-10f6-6be5-b71128156b79\",\"name\":\"No Org User\",\"email\":\"e2e.1785823186268-vgrpp9@test.example\",\"phone\":\"\",\"avatar\":\"\"}"
+          "value": "{\"id\":\"deae8516-e277-72fd-3228-734e264f99d8\",\"name\":\"No Org User\",\"email\":\"e2e.1786619078495-rbfi82@test.example\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
           "name": "kepin_token",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNTIzMWM2Ny1lY2MwLTEwZjYtNmJlNS1iNzExMjgxNTZiNzkiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1ODIzMTg3LCJleHAiOjE3ODU5MDk1ODd9.E_aL6uy3zFhjdKz7NUbPnVePGAuprLrzeKggmg9pyK0"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZWFlODUxNi1lMjc3LTcyZmQtMzIyOC03MzRlMjY0Zjk5ZDgiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg2NjE5MDc5LCJleHAiOjE3ODY3MDU0Nzl9.rbi7Uq9P79a8erwy-2-cClmrePebvQCZNXgPQKgLtD0"
         },
         {
           "name": "kepin_tenants",

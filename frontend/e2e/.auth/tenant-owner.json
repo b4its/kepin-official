@@ -2,15 +2,15 @@
   "cookies": [],
   "origins": [
     {
-      "origin": "http://127.0.0.1:5173",
+      "origin": "http://127.0.0.1:3001",
       "localStorage": [
         {
           "name": "kepin_session",
-          "value": "{\"id\":\"a1304fe4-b6f2-42b6-8cae-baf00d2ce5dd\",\"name\":\"Budi Santoso\",\"email\":\"budi@tokomaju.com\",\"phone\":\"\",\"avatar\":\"\"}"
+          "value": "{\"id\":\"aeae235b-8c80-4cd8-a440-323950977334\",\"name\":\"Budi Santoso\",\"email\":\"budi@tokomaju.com\",\"phone\":\"\",\"avatar\":\"\"}"
         },
         {
           "name": "kepin_token",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMTMwNGZlNC1iNmYyLTQyYjYtOGNhZS1iYWYwMGQyY2U1ZGQiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg1ODIzMTc4LCJleHAiOjE3ODU5MDk1Nzh9.kqYZ4L3RgYoJ1vvCV_hPB2faDdA8vMhcAlTlLaboEhE"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZWFlMjM1Yi04YzgwLTRjZDgtYTQ0MC0zMjM5NTA5NzczMzQiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg2NjE5MDcwLCJleHAiOjE3ODY3MDU0NzB9.YIBDvr-Pvdxlzo_JIomLIrlP38JTGCwc_fynsVY5zO8"
         },
         {
           "name": "kepin_tenants",

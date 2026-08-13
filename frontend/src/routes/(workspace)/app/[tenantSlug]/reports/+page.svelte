@@ -114,7 +114,10 @@
   let actionLoading = $state(false);
   let error = $state('');
   let activeTab = $state<(typeof tabs)[number]['id']>('summary');
-  let includeClosing = $state(false);
+  const tabFromUrl = $page.url.searchParams.get('tab');
+  if (tabFromUrl && tabs.some((t) => t.id === tabFromUrl)) {
+    activeTab = tabFromUrl as (typeof tabs)[number]['id'];
+  }  let includeClosing = $state(false);
   let showExport = $state(false);
   let requestSeq = 0;
 
