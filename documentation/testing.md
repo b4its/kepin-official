@@ -130,6 +130,7 @@ Cakupan:
 | Playwright | API system test + Browser E2E test |
 | Google Chrome | Browser utama (channel: 'chrome') |
 | Docker Compose | Menjalankan stack (backend, frontend, db) |
+| Makefile | Quick start: `make local`, `make local-build`, `make local-build-seed`, `make seed` (lihat `make help`) |
 | dotenv | Mengelola environment test |
 | SvelteKit check | Validasi tipe frontend |
 | HTML reporter | Report Playwright |

@@ -1,6 +1,6 @@
 # Dokumentasi API / Swagger KePin
 
-Dokumen ini berisi daftar lengkap seluruh endpoint REST API KePin yang dapat diakses melalui Swagger UI di `http://127.0.0.1:8000/docs`.
+Dokumen ini berisi daftar lengkap seluruh endpoint REST API KePin yang dapat diakses melalui Swagger UI di `http://127.0.0.1:8001/docs`.
 
 ## Informasi Sistem
 
@@ -1032,7 +1032,7 @@ Response:
 ## Cara Mengakses Swagger UI
 
 1. Pastikan backend berjalan: `docker compose --profile full up -d`
-2. Buka browser: `http://127.0.0.1:8000/docs`
+2. Buka browser: `http://127.0.0.1:8001/docs`
 3. Klik "Authorize" dan masukkan token: `Bearer <access_token>`
 4. Coba endpoint langsung dari Swagger UI
 

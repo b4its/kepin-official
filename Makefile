@@ -75,7 +75,7 @@ dev: ## jalankan backend/db docker + frontend vite dev (HMR) — tanpa build
 	@echo ""
 	@echo "→ Frontend dev: http://localhost:$(FRONTEND_PORT)  (API: $(API_URL))"
 	@echo "→ Backend:      http://localhost:$(BACKEND_PORT)/docs"
-	@cd frontend && PUBLIC_API_URL=$(API_URL) pnpm dev -- --host 0.0.0.0 --port $(FRONTEND_PORT)
+	@cd frontend && PUBLIC_API_URL=$(API_URL) pnpm exec vite dev --host 0.0.0.0 --port $(FRONTEND_PORT)
 
 .PHONY: dev-build
 dev-build: ## build ulang image backend + jalankan mode development
@@ -85,7 +85,7 @@ dev-build: ## build ulang image backend + jalankan mode development
 	@echo ""
 	@echo "→ Frontend dev: http://localhost:$(FRONTEND_PORT)  (API: $(API_URL))"
 	@echo "→ Backend:      http://localhost:$(BACKEND_PORT)/docs"
-	@cd frontend && PUBLIC_API_URL=$(API_URL) pnpm dev -- --host 0.0.0.0 --port $(FRONTEND_PORT)
+	@cd frontend && PUBLIC_API_URL=$(API_URL) pnpm exec vite dev --host 0.0.0.0 --port $(FRONTEND_PORT)
 
 .PHONY: dev-build-seed
 dev-build-seed: ## build + database fresh + seed demo lengkap + jalankan mode development
@@ -96,7 +96,7 @@ dev-build-seed: ## build + database fresh + seed demo lengkap + jalankan mode de
 	@echo "→ Seed demo lengkap sudah digenerate (semua tenant & modul)."
 	@echo "→ Frontend dev: http://localhost:$(FRONTEND_PORT)  (API: $(API_URL))"
 	@echo "→ Backend:      http://localhost:$(BACKEND_PORT)/docs"
-	@cd frontend && PUBLIC_API_URL=$(API_URL) pnpm dev -- --host 0.0.0.0 --port $(FRONTEND_PORT)
+	@cd frontend && PUBLIC_API_URL=$(API_URL) pnpm exec vite dev --host 0.0.0.0 --port $(FRONTEND_PORT)
 
 # ────────────────────────────── Mode Local ───────────────────────────────────
 

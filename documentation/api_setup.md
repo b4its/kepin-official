@@ -13,7 +13,7 @@ Semua endpoint REST API berada di bawah prefix:
 Base URL untuk testing (dari `.env.e2e`):
 
 ```
-E2E_API_URL=http://127.0.0.1:8000/api/v1
+E2E_API_URL=http://127.0.0.1:8001/api/v1
 ```
 
 Jika backend berjalan di port berbeda, sesuaikan variable `E2E_API_URL`.
@@ -23,8 +23,8 @@ Jika backend berjalan di port berbeda, sesuaikan variable `E2E_API_URL`.
 Buat file `frontend/.env.e2e`:
 
 ```env
-E2E_WEB_URL=http://127.0.0.1:5173
-E2E_API_URL=http://127.0.0.1:8000/api/v1
+E2E_WEB_URL=http://127.0.0.1:3001
+E2E_API_URL=http://127.0.0.1:8001/api/v1
 E2E_OWNER_EMAIL=budi@tokomaju.com
 E2E_OWNER_PASSWORD=budi123
 E2E_OWNER_TENANT=toko-maju
@@ -44,7 +44,7 @@ Global setup (`e2e/setup/global.ts`) akan memuat file ini sebelum worker Playwri
 Backend menggunakan JWT. Login dilakukan via `POST /auth/login`:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
+curl -X POST http://127.0.0.1:8001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "budi@tokomaju.com", "password": "budi123"}'
 ```
