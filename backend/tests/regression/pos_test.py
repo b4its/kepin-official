@@ -61,7 +61,14 @@ def purge_pos_fixtures():
     from sqlalchemy import delete, select
 
     from kepin.db.session import get_session
-    from kepin.db.models import Product, StockBalance, StockMovement, Tenant
+    from kepin.db.models import (
+        JournalEntry,
+        JournalLine,
+        Product,
+        StockBalance,
+        StockMovement,
+        Tenant,
+    )
 
     async def _purge():
         async for s in get_session():
@@ -76,6 +83,15 @@ def purge_pos_fixtures():
                     )
                 )
             ).scalars().all()
+            if not pids:
+                await s.commit()
+                return
+            mv_rows = (
+                await s.execute(
+                    select(StockMovement).where(StockMovement.product_id.in_(pids))
+                )
+            ).scalars().all()
+            jids = [row.journal_entry_id for row in mv_rows if row.journal_entry_id]
             for pid in pids:
                 await s.execute(
                     delete(StockMovement).where(StockMovement.product_id == pid)
@@ -84,6 +100,11 @@ def purge_pos_fixtures():
                     delete(StockBalance).where(StockBalance.product_id == pid)
                 )
                 await s.execute(delete(Product).where(Product.id == pid))
+            for jid in jids:
+                await s.execute(
+                    delete(JournalLine).where(JournalLine.journal_entry_id == jid)
+                )
+                await s.execute(delete(JournalEntry).where(JournalEntry.id == jid))
             await s.commit()
 
     asyncio.run(_purge())
