@@ -233,11 +233,13 @@ test.describe('Owner Reports & Export', () => {
     expect(c.status()).toBe(201);
     const customerId = (await c.json()).id;
 
+    const dueDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const invDate = new Date(Date.now() - 23 * 86400000).toISOString().slice(0, 10);
     const inv = await api.post(`tenants/${TENANT}/invoices`, {
       data: {
         customer_id: customerId,
-        invoice_date: '2026-07-10',
-        due_date: '2026-08-10',
+        invoice_date: invDate,
+        due_date: dueDate,
         lines: [{ item_name: 'Jasa Konsultasi', quantity: '1', unit_price: '500000' }],
       },
     });
