@@ -341,3 +341,20 @@ async def regenerate_join_code(
     await session.flush()
     await session.commit()
     return JoinCodeResponse(joinCode=t.join_code)
+
+
+@router.post("/membership/leave", summary="Keluar dari Perusahaan")
+async def leave_membership(
+    tenant: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    """Karyawan (non-pemilik) keluar dari perusahaan. Pemilik tidak dapat keluar."""
+    if membership.role_name == "tenant_owner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pemilik tidak dapat keluar dari perusahaan. Hubungi dukungan bila ingin menutup perusahaan.",
+        )
+    await session.delete(membership)
+    await session.commit()
+    return {"message": "Berhasil keluar dari perusahaan", "tenantSlug": tenant.slug}

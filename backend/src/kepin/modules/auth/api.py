@@ -122,6 +122,26 @@ PLANS: dict[str, dict] = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+async def _ensure_no_other_membership(
+    session: AsyncSession,
+    user_id: str,
+    tenant_id: str,
+) -> None:
+    """Satu pengguna hanya boleh menjadi anggota satu perusahaan (single-company)."""
+    other = await session.execute(
+        select(Membership).where(
+            Membership.user_id == user_id,
+            Membership.status == "active",
+            Membership.tenant_id != tenant_id,
+        )
+    )
+    if other.scalar_one_or_none():
+        raise ConflictError(
+            code="ALREADY_IN_COMPANY",
+            message="Anda sudah menjadi anggota perusahaan lain. Keluar dari perusahaan tersebut terlebih dahulu untuk bergabung ke perusahaan baru.",
+        )
+
+
 async def _user_tenants(session: AsyncSession, user_id: str) -> list[dict]:
     stmt = (
         select(Tenant, Membership.role_name)
@@ -539,6 +559,8 @@ async def join_organization(
             message="ID tenant atau kode bergabung tidak valid",
         )
 
+    await _ensure_no_other_membership(session, user.id, tenant.id)
+
     existing = await session.execute(
         select(Membership).where(
             Membership.tenant_id == tenant.id,
@@ -617,6 +639,8 @@ async def join_by_code(
             code="INVALID_JOIN_CODE",
             message="Kode bergabung tidak valid",
         )
+
+    await _ensure_no_other_membership(session, user.id, tenant.id)
 
     existing = await session.execute(
         select(Membership).where(

@@ -258,5 +258,34 @@ check("join-code employee forbidden", c == 403, f"({c})")
 c, b = jpost("/join-code/regenerate", headers=HA)
 check("join-code regenerate employee forbidden", c == 403, f"({c})")
 
+# ── single-company: anggota satu perusahaan tidak bisa bergabung ke yang lain ──
+siti_login = C.post("/auth/login", json={"email": "siti@warungsegar.com", "password": "siti123"}).json()
+warung_code = siti_login["tenants"][0]["joinCode"]
+r = C.post("/auth/join-by-code", json={"join_code": warung_code}, headers=HA)
+check("member cannot join other company", r.status_code == 409 and r.json().get("code") == "ALREADY_IN_COMPANY", f"({r.status_code})")
+
+# ── leave company (non-owner) dengan user throwaway ──
+r = C.post(f"/tenants/{S}/membership/leave", headers=H)
+check("owner cannot leave company", r.status_code == 400, f"({r.status_code})")
+rid2 = str(uuid.uuid4())[:8]
+email2 = f"leavetest{rid2}@x.com"
+C.post("/auth/register", json={"name": "Leave Test", "email": email2, "password": "leavetest123"})
+LE = login(email2, "leavetest123")
+HLE = {"authorization": f"Bearer {LE}"}
+budi_login = C.post("/auth/login", json={"email": "budi@tokomaju.com", "password": "budi123"}).json()
+toko_code = budi_login["tenants"][0]["joinCode"]
+r = C.post("/auth/join-by-code", json={"join_code": toko_code}, headers=HLE)
+check("throwaway joins toko-maju", r.status_code == 200, f"({r.status_code})")
+r = C.post("/auth/join-by-code", json={"join_code": warung_code}, headers=HLE)
+check("throwaway blocked from second company", r.status_code == 409, f"({r.status_code})")
+r = C.post(f"/tenants/{S}/membership/leave", headers=HLE)
+check("throwaway leaves company", r.status_code == 200, f"({r.status_code})")
+r = C.get(f"/tenants/{S}/context", headers=HLE)
+check("throwaway context forbidden after leave", r.status_code == 403, f"({r.status_code})")
+r = C.post("/auth/join-by-code", json={"join_code": warung_code}, headers=HLE)
+check("throwaway can join other company after leave", r.status_code == 200, f"({r.status_code})")
+r = C.post("/tenants/warung-segar/membership/leave", headers=HLE)
+check("throwaway leaves warung-segar (cleanup)", r.status_code == 200, f"({r.status_code})")
+
 print("\n" + ("ALL TENANT CHECKS PASS" if ok else "SOME CHECKS FAILED"))
 sys.exit(0 if ok else 1)
