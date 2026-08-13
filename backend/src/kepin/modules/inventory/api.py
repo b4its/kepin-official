@@ -119,6 +119,35 @@ class StockAdjustmentCreate(ApiSchema):
     reason: str = ""
 
 
+class PosCheckoutItem(ApiSchema):
+    product_id: str
+    quantity: str
+
+
+class PosCheckoutCreate(ApiSchema):
+    items: list[PosCheckoutItem]
+    reason: str = ""
+
+
+class PosCheckoutMovementSchema(ApiSchema):
+    movement_number: str
+    product_id: str
+    product_name: str = ""
+    location_id: str
+    location_name: str = ""
+    quantity: str
+    before_stock: str
+    after_stock: str
+    unit_cost: str
+
+
+class PosCheckoutSchema(ApiSchema):
+    checkout_number: str
+    total_quantity: str
+    movements: list[PosCheckoutMovementSchema]
+    created_at: datetime | None = None
+
+
 def _product_schema(p: Product) -> ProductSchema:
     return ProductSchema(
         id=str(p.id),
@@ -772,4 +801,160 @@ async def create_stock_adjustment(
         reference_id=str(mov.reference_id) if mov.reference_id else None,
         journal_entry_id=str(mov.journal_entry_id) if mov.journal_entry_id else None,
         created_at=mov.created_at,
+    )
+
+
+# ── Point of Sales ────────────────────────────────────────────────────
+
+
+async def _next_checkout_number(
+    session: AsyncSession,
+    tenant_id: str,
+) -> str:
+    cnt = await session.execute(
+        select(func.count(StockMovement.id)).where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.reference_type == "pos",
+        )
+    )
+    return f"POS-{cnt.scalar() or 0 + 1:05d}"
+
+
+@router.post("/pos/checkout", response_model=PosCheckoutSchema, status_code=201, summary="Checkout POS", description="Mengeluarkan stok untuk penjualan POS. Setiap produk dicatat sebagai pergerakan stok (type 'out', reference 'pos') dan saldo stok terkalkulasi otomatis.")
+async def create_pos_checkout(
+    body: PosCheckoutCreate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if not body.items:
+        raise ValidationError(message="Keranjang POS kosong")
+
+    grouped: dict[str, Decimal] = {}
+    for item in body.items:
+        qty = to_quantity(item.quantity)
+        if qty <= ZERO:
+            raise ValidationError(message="Jumlah produk harus lebih dari 0")
+        grouped[item.product_id] = grouped.get(item.product_id, ZERO) + qty
+
+    products: dict[str, Product] = {}
+    for pid in grouped:
+        p = await session.execute(
+            select(Product).where(Product.id == pid, Product.tenant_id == tenant.id)
+        )
+        product = p.scalar_one_or_none()
+        if not product:
+            raise NotFoundError(message="Produk tidak ditemukan")
+        products[pid] = product
+
+    loc_rows = await session.execute(
+        select(InventoryLocation).where(InventoryLocation.tenant_id == tenant.id)
+    )
+    locations = {str(loc.id): loc for loc in loc_rows.scalars().all()}
+
+    today = datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc)
+    checkout_id = new_uuid()
+    checkout_number = await _next_checkout_number(session, tenant.id)
+    total_qty = ZERO
+
+    movements_out: list[tuple[StockMovement, str, str]] = []
+    for pid, qty in grouped.items():
+        remaining = qty
+        bal_rows = await session.execute(
+            select(StockBalance)
+            .where(
+                StockBalance.tenant_id == tenant.id,
+                StockBalance.product_id == pid,
+                StockBalance.quantity > ZERO,
+            )
+            .order_by(StockBalance.location_id)
+            .with_for_update()
+        )
+        balances = bal_rows.scalars().all()
+        available = sum((b.quantity for b in balances), ZERO)
+        if available < remaining:
+            raise ValidationError(
+                message=f"Stok {products[pid].name} tidak mencukupi (tersedia {available})"
+            )
+
+        for sb in balances:
+            if remaining <= ZERO:
+                break
+            take = min(sb.quantity, remaining)
+            before_stock = sb.quantity
+            sb.quantity = before_stock - take
+            remaining -= take
+            total_qty += take
+
+            mn = await _next_movement_number(session, tenant.id)
+            mov = StockMovement(
+                id=new_uuid(),
+                tenant_id=tenant.id,
+                product_id=pid,
+                location_id=str(sb.location_id),
+                movement_number=mn,
+                movement_date=today,
+                type="out",
+                quantity=take,
+                before_stock=before_stock,
+                after_stock=sb.quantity,
+                unit_cost=sb.average_cost,
+                reason=body.reason or f"Penjualan POS ({checkout_number})",
+                reference_type="pos",
+                reference_id=checkout_id,
+                created_at=now,
+            )
+            session.add(mov)
+            await session.flush()
+
+            cogs_account = await get_account_by_code(session, tenant.id, GL["cogs"])
+            await post_stock_movement_journal(
+                session=session,
+                tenant_id=tenant.id,
+                user_id=str(user.id),
+                movement=mov,
+                counterpart_account=cogs_account,
+                description=f"Penjualan POS {products[pid].name} ({mov.movement_number})",
+            )
+
+            location = locations.get(str(sb.location_id))
+            movements_out.append((mov, products[pid].name, location.name if location else ""))
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="pos.checkout",
+        module="inventory",
+        object_type="pos_checkout",
+        object_id=str(checkout_id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        after={
+            "checkoutNumber": checkout_number,
+            "totalQuantity": money_str(total_qty),
+            "items": [{"productId": pid, "quantity": money_str(q)} for pid, q in grouped.items()],
+        },
+    )
+    await session.commit()
+
+    return PosCheckoutSchema(
+        checkout_number=checkout_number,
+        total_quantity=money_str(total_qty),
+        movements=[
+            PosCheckoutMovementSchema(
+                movement_number=m.movement_number,
+                product_id=str(m.product_id),
+                product_name=name,
+                location_id=str(m.location_id),
+                location_name=loc_name,
+                quantity=money_str(m.quantity),
+                before_stock=money_str(m.before_stock),
+                after_stock=money_str(m.after_stock),
+                unit_cost=money_str(m.unit_cost),
+            )
+            for m, name, loc_name in movements_out
+        ],
+        created_at=now,
     )
