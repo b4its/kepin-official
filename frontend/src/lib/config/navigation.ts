@@ -114,6 +114,7 @@ export const clientNavigation: NavigationGroup[] = [
     items: [
       { key: 'audit_trail', label: 'Audit Trail', href: '/audit', icon: Shield },
       { key: 'notifications', label: 'Notifikasi', href: '/notifications', icon: Bell },
+      { key: 'settings_members', label: 'Anggota Tim', href: '/settings/members', icon: Users },
       { key: 'settings_org', label: 'Pengaturan', href: '/settings/organization', icon: Settings, pinned: true },
       { key: 'settings_security', label: 'Keamanan Akun', href: '/settings/security', icon: KeyRound, pinned: true },
     ],
