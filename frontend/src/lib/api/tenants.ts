@@ -75,7 +75,7 @@ export async function createReconciliationMatch(slug: string, data: { bankTransa
 export async function confirmReconciliationMatch(slug: string, id: string) { return api(`/tenants/${slug}/reconciliation/matches/${id}/confirm`, { method: 'POST' }); }
 export async function getReconciliationSuggestions(slug: string, params?: string) { return api(`/tenants/${slug}/reconciliation/suggestions${params || ''}`); }
 export async function bulkAutoMatch(slug: string, data: { bankAccountId?: string; minScore?: number; maxStatements?: number }) { return api(`/tenants/${slug}/reconciliation/matches/bulk`, { method: 'POST', body: JSON.stringify(data) }); }
-export async function getCustomers(slug: string) { return api(`/tenants/${slug}/customers?pageSize=100`); }
+export async function getCustomers(slug: string, search?: string) { return api(`/tenants/${slug}/customers?pageSize=100${search ? `&search=${encodeURIComponent(search)}` : ''}`); }
 export async function createCustomer(slug: string, data: any) { return api(`/tenants/${slug}/customers`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateCustomer(slug: string, id: string, data: any) { return api(`/tenants/${slug}/customers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
 export async function deleteCustomer(slug: string, id: string) { return api(`/tenants/${slug}/customers/${id}`, { method: 'DELETE' }); }

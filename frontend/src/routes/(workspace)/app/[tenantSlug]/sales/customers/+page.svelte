@@ -6,9 +6,38 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import StatementModal from '$lib/components/ui/StatementModal.svelte';
-  import { customers, createCustomer, updateCustomer, deleteCustomer } from '$lib/stores/data';
+  import { customers, createCustomer, updateCustomer, deleteCustomer, tenantApi } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
-  import { Download } from '@lucide/svelte';
+  import { Download, Search } from '@lucide/svelte';
+  import { page } from '$app/stores';
+
+  const slug = $derived($page.params.tenantSlug || '');
+
+  let items = $state<any[]>([]);
+  let search = $state('');
+  let loading = $state(false);
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function loadCatalog(q = search) {
+    loading = true;
+    try {
+      const res: any = await tenantApi.getCustomers(slug, q || undefined);
+      items = (res.items ?? []).map((c: any) => ({
+        id: c.id, code: c.code || '', name: c.name, email: c.email || '', phone: c.phone || '', address: c.address || '', createdAt: c.createdAt,
+      }));
+    } catch {
+      /* biarkan data lama */
+    } finally {
+      loading = false;
+    }
+  }
+
+  $effect(() => {
+    if (!slug) return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => void loadCatalog(search), search ? 250 : 0);
+    return () => clearTimeout(searchTimer);
+  });
 
   let showModal = $state(false);
   let showExport = $state(false);
@@ -36,7 +65,7 @@
   }
 
   function openEdit(i: number) {
-    const item = $customers[i];
+    const item = items[i];
     form = { code: item.code || '', name: item.name, email: item.email, phone: item.phone, address: item.address };
     editingIndex = i;
     showModal = true;
@@ -45,20 +74,22 @@
   async function save() {
     const data = { code: form.code, name: form.name, email: form.email, phone: form.phone, address: form.address };
     if (editingIndex !== null) {
-      await updateCustomer($customers[editingIndex].id, data);
+      await updateCustomer(items[editingIndex].id, data);
       showToast('Pelanggan berhasil diperbarui', 'success');
     } else {
       await createCustomer(data);
       showToast('Pelanggan berhasil ditambahkan', 'success');
     }
     showModal = false;
+    void loadCatalog();
   }
 
   async function confirmDelete() {
     if (deleteIndex !== null) {
-      await deleteCustomer($customers[deleteIndex].id);
+      await deleteCustomer(items[deleteIndex].id);
       deleteIndex = null;
       showToast('Pelanggan berhasil dihapus', 'success');
+      void loadCatalog();
     }
   }
 
@@ -75,6 +106,16 @@
   {/snippet}
 </PageHeader>
 
+<div class="flex items-center gap-2 mb-4 card px-3 py-2">
+  <Search class="w-4 h-4 shrink-0 text-[hsl(var(--muted-foreground))]" />
+  <input
+    type="search"
+    bind:value={search}
+    placeholder="Cari..."
+    class="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-[hsl(var(--muted-foreground))]"
+  />
+</div>
+
 <DataTable
   columns={[
     { key: 'code', label: 'Kode', sortable: true },
@@ -83,9 +124,9 @@
     { key: 'phone', label: 'Telepon' },
     { key: 'createdAt', label: 'Bergabung' },
   ]}
-  data={$customers}
-  total={$customers.length}
-  searchable={true}
+  data={items}
+  total={items.length}
+  loading={loading}
 >
   {#snippet rowActions(item: any, i: number)}
     <button onclick={() => openStatement(item)} class="text-xs text-[hsl(var(--primary))] hover:underline mr-2">Statement</button>
