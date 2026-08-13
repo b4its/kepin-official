@@ -1,3 +1,4 @@
 allowBuilds:
-  core-js: set this to true or false
+  # core-js postinstall hanya menampilkan pesan donasi — tidak diperlukan.
+  core-js: false
   esbuild: true
