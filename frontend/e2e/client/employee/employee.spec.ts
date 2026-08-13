@@ -119,3 +119,44 @@ test.describe('Employee Notifications & Audit', () => {
     expect(errors).toEqual([]);
   });
 });
+
+test.describe('Employee POS', () => {
+  test('POS page loads and employee can adjust stok', async ({ page }) => {
+    const { api } = await loginApi(apiURL, DEMO_EMPLOYEE.email, DEMO_EMPLOYEE.password);
+    const runId = uniqueId();
+    const sku = `POS-EMP-${runId.slice(-10)}`;
+    const name = `E2E POS EMP ${runId.slice(-6)}`;
+
+    const prod = await api.post(`tenants/${TENANT}/products`, {
+      data: { sku, name, category: 'POS', unit: 'pcs', salePrice: '10000', costPrice: '5000' },
+    });
+    expect(prod.status()).toBe(201);
+
+    const errors: string[] = [];
+    page.on('response', (res) => { if (res.status() >= 500) errors.push(`${res.status()} ${res.url()}`); });
+
+    await page.goto(`/app/${TENANT}/pos`);
+    await expect(page.getByRole('heading', { name: 'Point of Sales' })).toBeVisible();
+    await page.getByPlaceholder('Cari produk, SKU, kategori...').fill(sku);
+    const card = page.locator('div.card', { hasText: name }).first();
+    await expect(card).toBeVisible();
+
+    // employee menambah stok lewat UI
+    await card.getByRole('button', { name: 'Stok' }).click();
+    await page.getByRole('button', { name: '+ Tambah stok' }).click();
+    await page.getByLabel('Jumlah stok').fill('7');
+    await page.getByRole('button', { name: 'Tambah Stok', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(card).toContainText('Stok 7');
+
+    // employee checkout lewat UI
+    await card.getByRole('button', { name: 'Keranjang' }).click();
+    await page.getByRole('button', { name: 'Keranjang' }).click();
+    await page.getByRole('button', { name: 'Bayar & Kurangi Stok' }).click();
+    await expect(page.locator('body')).toContainText('berhasil', { timeout: 10_000 });
+    await expect(card).toContainText('Stok 5');
+
+    expect(errors).toEqual([]);
+    await api.dispose();
+  });
+});
