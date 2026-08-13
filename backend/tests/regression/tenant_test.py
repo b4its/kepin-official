@@ -243,5 +243,20 @@ else:
 c, b = jget("/context", headers=HA)
 check("employee context ok", c == 200, f"({c})")
 
+# ── join code: tenant-scoped, owner/admin only ──
+c, b = jget("/join-code")
+code = b.get("joinCode", "") if isinstance(b, dict) else ""
+check("join-code owner GET", c == 200 and len(code) >= 8, f"({c}) code={code!r}")
+c, b = jpost("/join-code/regenerate")
+new_code = b.get("joinCode", "") if isinstance(b, dict) else ""
+check("join-code owner regenerate", c == 200 and len(new_code) >= 8, f"({c})")
+check("join-code regenerated differs", bool(new_code) and new_code != code, f"({new_code!r})")
+r = C.get(f"/auth/join-info?code={new_code}")
+check("join-info accepts new code", r.status_code == 200 and r.json().get("tenant", {}).get("slug") == S, f"({r.status_code})")
+c, b = jget("/join-code", headers=HA)
+check("join-code employee forbidden", c == 403, f"({c})")
+c, b = jpost("/join-code/regenerate", headers=HA)
+check("join-code regenerate employee forbidden", c == 403, f"({c})")
+
 print("\n" + ("ALL TENANT CHECKS PASS" if ok else "SOME CHECKS FAILED"))
 sys.exit(0 if ok else 1)

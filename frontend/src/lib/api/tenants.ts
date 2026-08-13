@@ -2,6 +2,8 @@ import { api } from './client';
 import { createId } from '$lib/utils/id';
 
 export async function getTenantContext(slug: string) { return api(`/tenants/${slug}/context`); }
+export async function getJoinCode(slug: string) { return api(`/tenants/${slug}/join-code`); }
+export async function regenerateJoinCode(slug: string) { return api(`/tenants/${slug}/join-code/regenerate`, { method: 'POST' }); }
 export async function getTenantDashboard(slug: string, params?: { preset?: string; startDate?: string; endDate?: string }) {
   const search = new URLSearchParams();
   if (params?.preset) search.set('preset', params.preset);

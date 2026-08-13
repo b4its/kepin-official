@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from kepin.api.dependencies import (
     get_tenant_membership,
 )
 from kepin.api.errors import NotFoundError
+from kepin.core.auth import generate_join_code
 from kepin.core.money import money_str
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.time import resolve_period
@@ -295,3 +296,48 @@ async def get_dashboard(
         insights=insights,
         recent_transactions=recent_transactions,
     )
+
+
+class JoinCodeResponse(ApiSchema):
+    joinCode: str
+
+
+async def _require_owner_or_admin(
+    membership: Membership = Depends(get_tenant_membership),
+) -> Membership:
+    if membership.role_name not in ("tenant_owner", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Hanya pemilik atau admin organisasi yang dapat mengakses",
+        )
+    return membership
+
+
+@router.get("/join-code", response_model=JoinCodeResponse, summary="Kode Bergabung Tenant")
+async def get_join_code(
+    tenant: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(_require_owner_or_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Mengembalikan join_code tenant (khusus pemilik/admin)."""
+    t = (await session.execute(select(Tenant).where(Tenant.id == tenant.id))).scalar_one_or_none()
+    if not t:
+        raise NotFoundError(code="TENANT_NOT_FOUND", message="Tenant tidak ditemukan")
+    return JoinCodeResponse(joinCode=t.join_code)
+
+
+@router.post("/join-code/regenerate", response_model=JoinCodeResponse, summary="Perbarui Kode Bergabung")
+async def regenerate_join_code(
+    tenant: TenantContext = Depends(get_tenant_context),
+    membership: Membership = Depends(_require_owner_or_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Menghasilkan ulang join_code tenant (khusus pemilik/admin)."""
+    t = (await session.execute(select(Tenant).where(Tenant.id == tenant.id))).scalar_one_or_none()
+    if not t:
+        raise NotFoundError(code="TENANT_NOT_FOUND", message="Tenant tidak ditemukan")
+    t.join_code = generate_join_code()
+    t.updated_at = datetime.now(timezone.utc)
+    await session.flush()
+    await session.commit()
+    return JoinCodeResponse(joinCode=t.join_code)

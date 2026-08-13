@@ -17,11 +17,12 @@ setup('setup tenant owner storage state', async ({ page }) => {
   await ctx.dispose();
 
   await page.goto(webURL + '/auth/login');
+  await page.waitForLoadState('networkidle');
   await page.evaluate((data) => {
     localStorage.setItem('kepin_token', data.access_token);
     const user = { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone || '', avatar: data.user.avatarUrl };
     localStorage.setItem('kepin_session', JSON.stringify(user));
-    const tenants = (data.tenants || []).map((t: any) => ({ slug: t.slug, role: t.role }));
+    const tenants = (data.tenants || []).map((t: any) => ({ slug: t.slug, role: t.role, id: t.id, joinCode: t.joinCode }));
     localStorage.setItem('kepin_tenants', JSON.stringify(tenants));
   }, loginBody);
 

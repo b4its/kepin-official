@@ -2,7 +2,7 @@
   "cookies": [],
   "origins": [
     {
-      "origin": "http://127.0.0.1:3001",
+      "origin": "http://127.0.0.1:5173",
       "localStorage": [
         {
           "name": "kepin_session",
@@ -10,11 +10,11 @@
         },
         {
           "name": "kepin_token",
-          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZWFlMjM1Yi04YzgwLTRjZDgtYTQ0MC0zMjM5NTA5NzczMzQiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg2NjIxMjQzLCJleHAiOjE3ODY3MDc2NDN9.7CGV1IQ6hOCT7OTjPRJ5eJnicat2nl2tRD7Vd0z9Vj8"
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZWFlMjM1Yi04YzgwLTRjZDgtYTQ0MC0zMjM5NTA5NzczMzQiLCJwdXJwb3NlIjoiYWNjZXNzIiwiaWF0IjoxNzg2NjM4NTY0LCJleHAiOjE3ODY3MjQ5NjR9.IDXMea6TNAFJC93V5E5dXAyDupOBZTpMeh0ZJhRMfqo"
         },
         {
           "name": "kepin_tenants",
-          "value": "[{\"slug\":\"toko-maju\",\"role\":\"tenant_owner\"}]"
+          "value": "[{\"slug\":\"toko-maju\",\"role\":\"tenant_owner\",\"id\":\"3f9dba24-f016-495b-b709-e34878010cef\",\"joinCode\":\"dca3f423e947a283\"}]"
         }
       ]
     }

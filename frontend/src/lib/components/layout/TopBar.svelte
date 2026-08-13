@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Menu, Bell, HelpCircle, User, LogOut, ArrowLeft, UserCircle, List } from '@lucide/svelte';
+  import { Menu, Bell, HelpCircle, User, LogOut, ArrowLeft, UserCircle, List, UserPlus } from '@lucide/svelte';
   import ThemeMenu from '$lib/components/layout/ThemeMenu.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
@@ -217,6 +217,13 @@
               >
                 <ArrowLeft class="w-4 h-4 shrink-0" />
                 Kembali ke Beranda
+              </button>
+              <button
+                onclick={() => { window.location.href = '/auth/join-company'; }}
+                class="flex items-center gap-3 w-full px-4 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+              >
+                <UserPlus class="w-4 h-4 shrink-0" />
+                Gabung Perusahaan Lain
               </button>
               <button
                 onclick={openLogout}
