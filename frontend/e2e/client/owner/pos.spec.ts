@@ -162,4 +162,55 @@ test.describe('Owner POS Workflow', () => {
 
     await api.dispose();
   });
+
+  test('POS transactions page records checkout: produk, dibayar, total, kembalian', async ({ page }) => {
+    const { api } = await loginApi(apiURL, DEMO_OWNER.email, DEMO_OWNER.password);
+    const runId = uniqueId();
+    const sku = `TXN-${runId.slice(-10)}`;
+    const name = `E2E Txn ${runId.slice(-6)}`;
+
+    const prod = await api.post(`tenants/${TENANT}/products`, {
+      data: { sku, name, category: 'POS', unit: 'pcs', salePrice: '40000', costPrice: '20000', minimumStock: '2' },
+    });
+    expect(prod.status()).toBe(201);
+    const productId = (await prod.json()).id;
+
+    const locs = await (await api.get(`tenants/${TENANT}/inventory-locations`)).json();
+    const loc = locs[0].id;
+    await api.post(`tenants/${TENANT}/stock-movements/receipts`, {
+      data: { product_id: productId, location_id: loc, quantity: '10', unit_cost: '20000' },
+    });
+
+    // checkout 2 pcs @40000 = 80000, bayar 100000 → kembalian 20000
+    const co = await api.post(`tenants/${TENANT}/pos/checkout`, {
+      data: { items: [{ product_id: productId, quantity: '2' }], amount_paid: '100000' },
+    });
+    expect(co.status()).toBe(201);
+    const coBody = await co.json();
+    expect(coBody.checkoutNumber).toMatch(/^POS-/);
+    expect(coBody.totalAmount).toBe('80000.00');
+    expect(coBody.amountPaid).toBe('100000.00');
+    expect(coBody.changeAmount).toBe('20000.00');
+
+    // halaman transaksi produk menampilkan transaksi
+    await page.goto(`/app/${TENANT}/inventory/transactions`);
+    await expect(page.getByRole('heading', { name: 'Transaksi Produk' })).toBeVisible();
+    await page.getByPlaceholder('Cari no. checkout atau nama produk...').fill(name);
+    const row = page.getByRole('row').filter({ hasText: name }).first();
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(coBody.checkoutNumber);
+    await expect(row).toContainText('Rp 80.000');
+    await expect(row).toContainText('Rp 100.000');
+    await expect(row).toContainText('Rp 20.000');
+
+    // detail menampilkan produk, harga satuan, subtotal
+    await row.getByRole('button', { name: 'Detail' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText(name);
+    await expect(dialog).toContainText('Rp 40.000');
+    await expect(dialog).toContainText('Rp 80.000');
+    await dialog.getByRole('button', { name: 'Tutup', exact: true }).last().click();
+
+    await api.dispose();
+  });
 });

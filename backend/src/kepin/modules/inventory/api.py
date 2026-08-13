@@ -18,6 +18,8 @@ from kepin.core.audit import record_audit
 from kepin.core.subledger import post_stock_movement_journal
 from kepin.db.models import (
     Membership,
+    PosTransaction,
+    PosTransactionLine,
     Product,
     InventoryLocation,
     StockBalance,
@@ -127,6 +129,7 @@ class PosCheckoutItem(ApiSchema):
 class PosCheckoutCreate(ApiSchema):
     items: list[PosCheckoutItem]
     reason: str = ""
+    amount_paid: str = "0"
 
 
 class PosCheckoutMovementSchema(ApiSchema):
@@ -142,9 +145,35 @@ class PosCheckoutMovementSchema(ApiSchema):
     unit_cost: str
 
 
+class PosTransactionLineSchema(ApiSchema):
+    id: str
+    product_id: str
+    product_name: str = ""
+    quantity: str
+    unit_price: str
+    line_total: str
+
+
+class PosTransactionSchema(ApiSchema):
+    id: str
+    checkout_number: str
+    transaction_date: date | None = None
+    total_amount: str
+    amount_paid: str
+    change_amount: str
+    items_count: str
+    status: str
+    created_by: str | None = None
+    created_at: datetime | None = None
+    lines: list[PosTransactionLineSchema] = []
+
+
 class PosCheckoutSchema(ApiSchema):
     checkout_number: str
     total_quantity: str
+    total_amount: str = "0"
+    amount_paid: str = "0"
+    change_amount: str = "0"
     movements: list[PosCheckoutMovementSchema]
     created_at: datetime | None = None
 
@@ -819,9 +848,9 @@ async def _next_checkout_number(
     tenant_id: str,
 ) -> str:
     rows = await session.execute(
-        select(StockMovement.movement_number).where(
-            StockMovement.tenant_id == tenant_id,
-            StockMovement.reference_type == "pos",
+        select(PosTransaction.checkout_number).where(
+            PosTransaction.tenant_id == tenant_id,
+            PosTransaction.checkout_number.like("POS-%"),
         )
     )
     nums = [
@@ -934,6 +963,52 @@ async def create_pos_checkout(
             location = locations.get(str(sb.location_id))
             movements_out.append((mov, products[pid].name, location.name if location else ""))
 
+    # ── Detail transaksi: total harga, jumlah dibayarkan, kembalian ──
+    total_amount = ZERO
+    lines_data: list[tuple[Product, Decimal, Decimal, Decimal]] = []
+    for pid, qty in grouped.items():
+        unit_price = products[pid].sale_price
+        line_total = unit_price * qty
+        total_amount += line_total
+        lines_data.append((products[pid], qty, unit_price, line_total))
+
+    amount_paid = to_money(body.amount_paid) if body.amount_paid else ZERO
+    if amount_paid < ZERO:
+        raise ValidationError(message="Jumlah dibayarkan tidak boleh negatif")
+    if amount_paid > ZERO and amount_paid < total_amount:
+        raise ValidationError(message="Jumlah dibayarkan kurang dari total")
+    change_amount = amount_paid - total_amount if amount_paid > ZERO else ZERO
+
+    pos_txn = PosTransaction(
+        id=checkout_id,
+        tenant_id=tenant.id,
+        checkout_number=checkout_number,
+        transaction_date=today,
+        total_amount=total_amount,
+        amount_paid=amount_paid,
+        change_amount=change_amount,
+        items_count=total_qty,
+        status="completed",
+        created_by=user.id,
+        created_at=now,
+    )
+    session.add(pos_txn)
+    await session.flush()
+    session.add_all(
+        [
+            PosTransactionLine(
+                id=new_uuid(),
+                pos_transaction_id=pos_txn.id,
+                product_id=p.id,
+                product_name=p.name,
+                quantity=qty,
+                unit_price=unit_price,
+                line_total=line_total,
+            )
+            for p, qty, unit_price, line_total in lines_data
+        ]
+    )
+
     await record_audit(
         session=session,
         tenant_id=tenant.id,
@@ -946,6 +1021,9 @@ async def create_pos_checkout(
         after={
             "checkoutNumber": checkout_number,
             "totalQuantity": money_str(total_qty),
+            "totalAmount": money_str(total_amount),
+            "amountPaid": money_str(amount_paid),
+            "changeAmount": money_str(change_amount),
             "items": [{"productId": pid, "quantity": money_str(q)} for pid, q in grouped.items()],
         },
     )
@@ -954,6 +1032,9 @@ async def create_pos_checkout(
     return PosCheckoutSchema(
         checkout_number=checkout_number,
         total_quantity=money_str(total_qty),
+        total_amount=money_str(total_amount),
+        amount_paid=money_str(amount_paid),
+        change_amount=money_str(change_amount),
         movements=[
             PosCheckoutMovementSchema(
                 movement_number=m.movement_number,
@@ -971,3 +1052,110 @@ async def create_pos_checkout(
         ],
         created_at=now,
     )
+
+
+@router.get(
+    "/pos/transactions",
+    response_model=PaginatedResponse[PosTransactionSchema],
+    summary="Daftar Transaksi POS",
+    description="Mengembalikan seluruh transaksi penjualan dari Point of Sales beserta item, total harga, jumlah dibayarkan, dan kembalian.",
+)
+async def list_pos_transactions(
+    params: ListParams = Depends(),
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    conditions = [PosTransaction.tenant_id == tenant.id]
+    if params.search:
+        like = f"%{params.search}%"
+        conditions.append(
+            or_(
+                PosTransaction.checkout_number.ilike(like),
+                PosTransactionLine.product_name.ilike(like),
+            )
+        )
+
+    where = and_(*conditions)
+
+    total = (
+        await session.execute(
+            select(func.count(func.distinct(PosTransaction.id))).select_from(PosTransaction).join(
+                PosTransactionLine,
+                PosTransactionLine.pos_transaction_id == PosTransaction.id,
+                isouter=True,
+            ).where(where)
+        )
+    ).scalar() or 0
+
+    stmt = (
+        select(PosTransaction)
+        .where(and_(PosTransaction.tenant_id == tenant.id))
+        .order_by(PosTransaction.created_at.desc())
+        .offset((params.page - 1) * params.page_size)
+        .limit(params.page_size)
+    )
+    # pencarian dengan join ke lines: filter id yang cocok
+    if params.search:
+        like = f"%{params.search}%"
+        matched = (
+            await session.execute(
+                select(func.distinct(PosTransaction.id))
+                .select_from(PosTransaction)
+                .join(PosTransactionLine, PosTransactionLine.pos_transaction_id == PosTransaction.id, isouter=True)
+                .where(
+                    and_(
+                        PosTransaction.tenant_id == tenant.id,
+                        or_(
+                            PosTransaction.checkout_number.ilike(like),
+                            PosTransactionLine.product_name.ilike(like),
+                        ),
+                    )
+                )
+            )
+        ).scalars().all()
+        stmt = (
+            select(PosTransaction)
+            .where(PosTransaction.tenant_id == tenant.id, PosTransaction.id.in_(matched))
+            .order_by(PosTransaction.created_at.desc())
+            .offset((params.page - 1) * params.page_size)
+            .limit(params.page_size)
+        )
+
+    rows = (await session.execute(stmt)).scalars().all()
+
+    items = []
+    for txn in rows:
+        line_rows = await session.execute(
+            select(PosTransactionLine).where(
+                PosTransactionLine.pos_transaction_id == txn.id
+            )
+        )
+        lines = [
+            PosTransactionLineSchema(
+                id=str(l.id),
+                product_id=str(l.product_id),
+                product_name=l.product_name,
+                quantity=money_str(l.quantity),
+                unit_price=money_str(l.unit_price),
+                line_total=money_str(l.line_total),
+            )
+            for l in line_rows.scalars().all()
+        ]
+        items.append(
+            PosTransactionSchema(
+                id=str(txn.id),
+                checkout_number=txn.checkout_number,
+                transaction_date=txn.transaction_date,
+                total_amount=money_str(txn.total_amount),
+                amount_paid=money_str(txn.amount_paid),
+                change_amount=money_str(txn.change_amount),
+                items_count=money_str(txn.items_count),
+                status=txn.status,
+                created_by=str(txn.created_by) if txn.created_by else None,
+                created_at=txn.created_at,
+                lines=lines,
+            )
+        )
+
+    return make_paginated(items, params.page, params.page_size, total)

@@ -33,6 +33,8 @@ from kepin.db.models import (
     OutboxEvent,
     Plan,
     PlatformAuditEvent,
+    PosTransaction,
+    PosTransactionLine,
     Product,
     PurchaseOrder,
     PurchaseOrderLine,
@@ -756,6 +758,50 @@ async def main():
                     created_at=datetime.combine(movement_date, NOW.time(), tzinfo=timezone.utc),
                 ))
             session.add_all(extra_stock_movements)
+
+            # ── Transaksi POS (penjualan produk) untuk demo ──
+            pos_transactions = []
+            for i in range(60):
+                txn_date = TODAY - timedelta(days=random.randint(0, 29))
+                sample = random.sample(products, k=random.randint(1, 4))
+                lines = []
+                total = Decimal("0")
+                items_count = Decimal("0")
+                for p in sample:
+                    qty = Decimal(str(random.randint(1, 5)))
+                    line_total = p.sale_price * qty
+                    total += line_total
+                    items_count += qty
+                    lines.append(PosTransactionLine(
+                        id=str(uuid4()),
+                        pos_transaction_id=None,
+                        product_id=p.id,
+                        product_name=p.name,
+                        quantity=qty,
+                        unit_price=p.sale_price,
+                        line_total=line_total,
+                    ))
+                amount_paid = total if random.random() < 0.5 else total + Decimal(str(random.choice([5000, 10000, 20000, 50000])))
+                pos_txn = PosTransaction(
+                    id=str(uuid4()),
+                    tenant_id=tid,
+                    checkout_number=f"POS-SEED-{i + 1:06d}",
+                    transaction_date=txn_date,
+                    total_amount=total,
+                    amount_paid=amount_paid,
+                    change_amount=amount_paid - total,
+                    items_count=items_count,
+                    status="completed",
+                    created_by=random.choice([UID_ADMIN, UID_BUDI, UID_ANI]),
+                    created_at=datetime.combine(txn_date, NOW.time(), tzinfo=timezone.utc),
+                )
+                session.add(pos_txn)
+                await session.flush()
+                for line in lines:
+                    line.pos_transaction_id = pos_txn.id
+                session.add_all(lines)
+                pos_transactions.append(pos_txn)
+            session.add_all(pos_transactions)
 
             income_accts = [a for a in accounts if a.type == "income"]
             expense_accts = [a for a in accounts if a.type == "expense"]

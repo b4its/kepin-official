@@ -885,6 +885,55 @@ class StockMovement(Base):
     )
 
 
+class PosTransaction(Base):
+    """Transaksi penjualan dari Point of Sales (checkout)."""
+
+    __tablename__ = "pos_transactions"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "checkout_number", name="uq_pos_transaction_checkout_tenant"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"))
+    checkout_number: Mapped[str] = mapped_column(String(40))
+    transaction_date: Mapped[date] = mapped_column(Date)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
+    amount_paid: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
+    change_amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
+    items_count: Mapped[Decimal] = mapped_column(Numeric(20, 4), default=0)
+    status: Mapped[str] = mapped_column(
+        String(24),
+        CheckConstraint("status IN ('completed', 'voided')", name="ck_pos_transaction_status"),
+        default="completed",
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=datetime.now
+    )
+
+    lines: Mapped[list["PosTransactionLine"]] = relationship(
+        back_populates="transaction",
+        cascade="all, delete-orphan",
+        order_by="PosTransactionLine.id",
+    )
+
+
+class PosTransactionLine(Base):
+    __tablename__ = "pos_transaction_lines"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    pos_transaction_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("pos_transactions.id"), index=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("products.id"))
+    product_name: Mapped[str] = mapped_column(String(255), default="")
+    quantity: Mapped[Decimal] = mapped_column(Numeric(20, 4), default=0)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
+    line_total: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0)
+
+    transaction: Mapped[PosTransaction] = relationship(back_populates="lines")
+
+
 # ---------------------------------------------------------------------------
 # Accounting Kernel (Idempotency, Fiscal Year, Periods)
 # ---------------------------------------------------------------------------

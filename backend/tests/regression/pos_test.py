@@ -64,6 +64,8 @@ def purge_pos_fixtures():
     from kepin.db.models import (
         JournalEntry,
         JournalLine,
+        PosTransaction,
+        PosTransactionLine,
         Product,
         StockBalance,
         StockMovement,
@@ -92,6 +94,13 @@ def purge_pos_fixtures():
                 )
             ).scalars().all()
             jids = [row.journal_entry_id for row in mv_rows if row.journal_entry_id]
+            pt_ids = (
+                await s.execute(
+                    select(PosTransactionLine.pos_transaction_id).where(
+                        PosTransactionLine.product_id.in_(pids)
+                    )
+                )
+            ).scalars().all()
             for pid in pids:
                 await s.execute(
                     delete(StockMovement).where(StockMovement.product_id == pid)
@@ -99,7 +108,14 @@ def purge_pos_fixtures():
                 await s.execute(
                     delete(StockBalance).where(StockBalance.product_id == pid)
                 )
+                await s.execute(
+                    delete(PosTransactionLine).where(PosTransactionLine.product_id == pid)
+                )
                 await s.execute(delete(Product).where(Product.id == pid))
+            if pt_ids:
+                await s.execute(
+                    delete(PosTransaction).where(PosTransaction.id.in_(pt_ids))
+                )
             for jid in jids:
                 await s.execute(
                     delete(JournalLine).where(JournalLine.journal_entry_id == jid)

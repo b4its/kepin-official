@@ -84,6 +84,7 @@ export const clientNavigation: NavigationGroup[] = [
     items: [
       { key: 'inventory_products', label: 'Produk', href: '/inventory/products', icon: Package },
       { key: 'inventory_movements', label: 'Pergerakan Stok', href: '/inventory/movements', icon: Warehouse },
+      { key: 'inventory_transactions', label: 'Transaksi Produk', href: '/inventory/transactions', icon: Receipt },
     ],
   },
   {

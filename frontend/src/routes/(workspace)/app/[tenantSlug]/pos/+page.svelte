@@ -201,7 +201,10 @@
     if (!items.length) return;
     checkoutSaving = true;
     try {
-      const res: any = await tenantApi.createPosCheckout(slug, { items });
+      const res: any = await tenantApi.createPosCheckout(slug, {
+        items,
+        amount_paid: amountPaid > 0 ? String(amountPaid) : '0',
+      });
       showToast(`Checkout ${res.checkoutNumber || 'POS'} berhasil — stok terpotong & tercatat`, 'success');
       cart = {};
       amountPaid = 0;
