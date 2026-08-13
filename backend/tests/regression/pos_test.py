@@ -118,8 +118,8 @@ sc, body = jpost("/stock-movements/receipts", {
     "reason": "Penerimaan awal POS test",
 })
 check("POS receipt 201", sc == 201, f"{sc}")
-check("POS receipt type in", okv(body, "type", "type") == "in", str(body.get("type")))
-check("POS receipt before/after", okv(body, "before_stock", "beforeStock") == "0.00" and okv(body, "after_stock", "afterStock") == "10.00", f"{body.get('before_stock')} → {body.get('after_stock')}")
+check("POS receipt type in", okv(body, "type", "type") == "in", str(okv(body, "type", "type")))
+check("POS receipt before/after", okv(body, "before_stock", "beforeStock") == "0.00" and okv(body, "after_stock", "afterStock") == "10.00", f"{okv(body, 'before_stock', 'beforeStock')} → {okv(body, 'after_stock', 'afterStock')}")
 
 sc, body = jget("/stock-balances")
 row = next((r for r in body if okv(r, "product_id", "productId") == pid), None)
@@ -139,8 +139,8 @@ sc, body = jpost("/stock-movements/issues", {
     "reason": "Pengurangan manual POS test",
 })
 check("POS issue 201", sc == 201, f"{sc}")
-check("POS issue type out", okv(body, "type", "type") == "out", str(body.get("type")))
-check("POS issue before/after", okv(body, "before_stock", "beforeStock") == "10.00" and okv(body, "after_stock", "afterStock") == "6.00", f"{body.get('before_stock')} → {body.get('after_stock')}")
+check("POS issue type out", okv(body, "type", "type") == "out", str(okv(body, "type", "type")))
+check("POS issue before/after", okv(body, "before_stock", "beforeStock") == "10.00" and okv(body, "after_stock", "afterStock") == "6.00", f"{okv(body, 'before_stock', 'beforeStock')} → {okv(body, 'after_stock', 'afterStock')}")
 
 sc, body = jget("/stock-balances")
 row = next((r for r in body if okv(r, "product_id", "productId") == pid), None)
@@ -149,15 +149,14 @@ check("POS balance after issue", row is not None and Decimal(okv(row, "quantity"
 # ── Checkout POS (multi-item, stok terpotong otomatis) ───────────────
 sc, body = jpost("/pos/checkout", {
     "items": [{"product_id": pid, "quantity": "2"}, {"product_id": pid, "quantity": "1"}],
-    "reason": "Checkout test",
 })
-check("POS checkout 201", sc == 201, f"{sc} {body}")
-check("POS checkout number", (okv(body, "checkout_number", "checkoutNumber") or "").startswith("POS-"), str(body.get("checkout_number")))
-check("POS checkout total qty", Decimal(okv(body, "total_quantity", "totalQuantity") or "0") == Decimal("3"), str(body.get("total_quantity")))
+check("POS checkout 201", sc == 201, f"{sc}")
+check("POS checkout number", (okv(body, "checkout_number", "checkoutNumber") or "").startswith("POS-"), str(okv(body, "checkout_number", "checkoutNumber")))
+check("POS checkout total qty", Decimal(okv(body, "total_quantity", "totalQuantity") or "0") == Decimal("3"), str(okv(body, "total_quantity", "totalQuantity")))
 mvs = okv(body, "movements", "movements") or []
 check("POS checkout movements single", len(mvs) == 1, f"{len(mvs)}")
 check("POS checkout movement type out", okv(mvs[0], "type", "type") == "out", str(mvs))
-check("POS checkout movement before/after", okv(mvs[0], "before_stock", "beforeStock") == "6.00" and okv(mvs[0], "after_stock", "afterStock") == "3.00", f"{mvs[0]}")
+check("POS checkout movement before/after", okv(mvs[0], "before_stock", "beforeStock") == "6.00" and okv(mvs[0], "after_stock", "afterStock") == "3.00", f"{okv(mvs[0], 'before_stock', 'beforeStock')} → {okv(mvs[0], 'after_stock', 'afterStock')}")
 check("POS checkout movement product", okv(mvs[0], "product_id", "productId") == pid and okv(mvs[0], "product_name", "productName").startswith("POS Barang"), str(mvs[0]))
 
 sc, body = jget("/stock-balances")

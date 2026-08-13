@@ -131,6 +131,7 @@ class PosCheckoutCreate(ApiSchema):
 
 class PosCheckoutMovementSchema(ApiSchema):
     movement_number: str
+    type: str = "out"
     product_id: str
     product_name: str = ""
     location_id: str
@@ -945,6 +946,7 @@ async def create_pos_checkout(
         movements=[
             PosCheckoutMovementSchema(
                 movement_number=m.movement_number,
+                type=m.type,
                 product_id=str(m.product_id),
                 product_name=name,
                 location_id=str(m.location_id),
