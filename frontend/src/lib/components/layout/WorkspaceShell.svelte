@@ -40,6 +40,7 @@
     class="hidden lg:block shrink-0 border-r border-[hsl(var(--border))] transition-all duration-200"
     class:w-16={sidebarCollapsed}
     class:w-64={!sidebarCollapsed}
+    data-tour="workspace-sidebar"
   >
     <WorkspaceSidebarContent
       {currentPath}

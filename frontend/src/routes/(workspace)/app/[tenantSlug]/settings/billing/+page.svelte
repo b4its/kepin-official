@@ -111,7 +111,7 @@
     <p class="text-sm text-[hsl(var(--muted-foreground))]">Belum ada riwayat langganan.</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="w-full text-sm" data-tour="billing-table">
         <thead>
           <tr class="text-left text-xs uppercase text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
             <th class="py-2 pr-4 font-medium">Paket</th>

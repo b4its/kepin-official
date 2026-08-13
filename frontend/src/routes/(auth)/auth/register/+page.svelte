@@ -38,7 +38,7 @@
     <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">Buat akun untuk memulai</p>
   </div>
 
-  <form onsubmit={handleRegister} class="space-y-4">
+  <form onsubmit={handleRegister} class="space-y-4" data-tour="auth-form">
     <div>
       <label class="label-text mb-1 block" for="name">Nama Lengkap</label>
       <div class="relative">

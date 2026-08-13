@@ -25,7 +25,6 @@
   } from '$lib/stores/data';
   import { logout } from '$lib/stores/auth';
   import { api, type ApiError } from '$lib/api/client';
-  import Tour from '$lib/components/tour/Tour.svelte';
 
   let { children } = $props();
 
@@ -121,8 +120,7 @@
         <p class="text-sm text-[hsl(var(--muted-foreground))] mb-4">{errorMessage}</p>
         <button class="text-sm text-[hsl(var(--primary))] hover:underline" onclick={() => tenantSlug && loadTenant(tenantSlug)}>Coba lagi</button>
       {/if}
+      </div>
     </div>
-  </div>
-{/if}
+  {/if}
 
-<Tour />

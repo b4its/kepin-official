@@ -108,7 +108,7 @@
     Menu yang terkunci (<Lock class="w-3 h-3 inline mb-0.5" />) selalu tampil dan tidak dapat dinonaktifkan.
   </div>
 
-  <div class="grid gap-5">
+  <div class="grid gap-5" data-tour="sidebar-settings">
     {#each clientNavigation as group}
       <div class="card overflow-hidden">
         <!-- group header -->

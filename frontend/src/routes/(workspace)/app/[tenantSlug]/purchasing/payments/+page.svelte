@@ -85,6 +85,7 @@
 </div>
 
 <DataTable
+  tourHook="payments-table"
   columns={[
     { key: 'number', label: 'No. Pembayaran', sortable: true },
     { key: 'supplierName', label: 'Pemasok', sortable: true },

@@ -287,7 +287,7 @@
     {#each bankAccounts as bank}<option value={bank.id}>{bank.bankName} · {bank.maskedNumber || '-'}</option>{/each}
   </select>
 </div>
-<DataTable columns={[
+<DataTable tourHook="reconciliation-table" columns={[
   { key: 'transactionDate', label: 'Tanggal' },
   { key: 'externalId', label: 'External ID' },
   { key: 'description', label: 'Deskripsi' },

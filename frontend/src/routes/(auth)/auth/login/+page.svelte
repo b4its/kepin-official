@@ -48,7 +48,7 @@
     <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">Masuk ke workspace KePin Anda</p>
   </div>
 
-  <form onsubmit={handleLogin} class="space-y-4">
+  <form onsubmit={handleLogin} class="space-y-4" data-tour="auth-form">
     <div>
       <label class="label-text mb-1 block" for="email">Email</label>
       <div class="relative">

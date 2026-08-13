@@ -90,6 +90,7 @@
 </PageHeader>
 
 <DataTable
+  tourHook="coa-table"
   columns={[
     { key: 'code', label: 'Kode', sortable: true },
     { key: 'name', label: 'Nama Akun', sortable: true },

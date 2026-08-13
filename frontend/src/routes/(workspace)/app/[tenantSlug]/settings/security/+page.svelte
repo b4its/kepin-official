@@ -154,7 +154,7 @@
   <div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
 {/if}
 
-<div class="card p-6 max-w-2xl space-y-4">
+<div class="card p-6 max-w-2xl space-y-4" data-tour="security-settings">
   {#if loading}
     <p class="text-sm text-[hsl(var(--muted-foreground))]">Memuat status keamanan…</p>
   {:else if enabled}

@@ -165,7 +165,7 @@
   {#snippet actions()}
     <Button variant="secondary" onclick={() => showExport = true} disabled={Boolean(error) || loading}><Download class="w-4 h-4" /> Ekspor</Button>
     <Button variant="secondary" onclick={refresh} loading={loading}><RefreshCw class="w-4 h-4" /> Refresh</Button>
-    {#if isOwner}<Button onclick={openCreate}><Plus class="w-4 h-4" /> Jurnal Baru</Button>{/if}
+    {#if isOwner}<Button onclick={openCreate} tourHook="add-journal"><Plus class="w-4 h-4" /> Jurnal Baru</Button>{/if}
   {/snippet}
 </PageHeader>
 
@@ -266,6 +266,7 @@
   </div>
 {:else}
 <DataTable
+  tourHook="journals-table"
   columns={[
     { key: 'date', label: 'Tanggal', sortable: true },
     { key: 'reference', label: 'Nomor/Referensi' },

@@ -92,6 +92,7 @@
 </div>
 
 <DataTable
+  tourHook="transactions-table"
   columns={[
     { key: 'date', label: 'Tanggal', sortable: true },
     { key: 'description', label: 'Deskripsi', sortable: true },

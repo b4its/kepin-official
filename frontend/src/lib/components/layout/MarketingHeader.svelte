@@ -1,13 +1,19 @@
 <script lang="ts">
-  import { Menu, X, Building2 } from '@lucide/svelte';
+  import { Menu, X, Building2, HelpCircle } from '@lucide/svelte';
   import ThemeMenu from '$lib/components/layout/ThemeMenu.svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
   import { landingAnchors } from '$lib/config/navigation';
+  import { mainTour } from '$lib/config/tour';
+  import { requestTourStart } from '$lib/stores/tour';
 
   let mobileOpen = $state(false);
   let scrolled = $state(false);
   let linkHref = $state('');
   let linkText = $state('');
+
+  function startTour() {
+    requestTourStart(mainTour, 0);
+  }
 
   function onScroll() {
     scrolled = window.scrollY > 20;
@@ -37,6 +43,7 @@
 </script>
 
 <header
+  data-tour="landing-header"
   class="fixed top-0 left-0 right-0 z-50 transition-all duration-200"
   class:bg-[hsl(var(--card))]= {scrolled}
   class:shadow-sm= {scrolled}
@@ -60,6 +67,14 @@
       </nav>
 
       <div class="flex items-center gap-2 sm:gap-3">
+        <button
+          onclick={startTour}
+          class="inline-flex items-center justify-center w-9 h-9 rounded-md hover:bg-[hsl(var(--accent))]"
+          aria-label="Buka tutorial langkah demi langkah"
+          title="Tutorial langkah demi langkah"
+        >
+          <HelpCircle class="w-4 h-4" />
+        </button>
         <ThemeMenu />
         {#if linkHref}
           <a href={linkHref} class="btn-primary btn-sm hidden sm:inline-flex">
@@ -67,10 +82,10 @@
             {linkText}
           </a>
         {:else}
-          <a href="/auth/login" class="btn-ghost btn-sm hidden sm:inline-flex">
+          <a href="/auth/login" class="btn-ghost btn-sm hidden sm:inline-flex" data-tour="cta-login">
             Masuk
           </a>
-          <a href="/auth/register" class="btn-primary btn-sm">
+          <a href="/auth/register" class="btn-primary btn-sm" data-tour="cta-register">
             Coba Gratis
           </a>
         {/if}

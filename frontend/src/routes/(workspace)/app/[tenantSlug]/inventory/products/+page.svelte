@@ -151,7 +151,7 @@
 <PageHeader title="Produk" description="Manajemen produk dan SKU" breadcrumbs={[{ label: 'Inventaris' }, { label: 'Produk' }]}>
   {#snippet actions()}
     <Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>
-    <Button onclick={openCreate}>+ Produk Baru</Button>
+    <Button onclick={openCreate} tourHook="add-product">+ Produk Baru</Button>
   {/snippet}
 </PageHeader>
 
@@ -188,6 +188,7 @@
   total={total}
   page={pageNo}
   pageSize={PAGE_SIZE}
+  tourHook="products-table"
   onpagechange={(p) => { pageNo = p; void load(search, p); }}
 >
   {#snippet rowActions(item: any)}

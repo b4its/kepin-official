@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   KeyRound,
   CalendarDays,
+  HelpCircle,
   type Icon,
 } from '@lucide/svelte';
 
@@ -115,6 +116,13 @@ export const clientNavigation: NavigationGroup[] = [
       { key: 'notifications', label: 'Notifikasi', href: '/notifications', icon: Bell },
       { key: 'settings_org', label: 'Pengaturan', href: '/settings/organization', icon: Settings, pinned: true },
       { key: 'settings_security', label: 'Keamanan Akun', href: '/settings/security', icon: KeyRound, pinned: true },
+    ],
+  },
+  {
+    label: 'Bantuan',
+    key: 'group_bantuan',
+    items: [
+      { key: 'tutorial', label: 'Tutorial', href: '/tutorial', icon: HelpCircle, pinned: true },
     ],
   },
 ];

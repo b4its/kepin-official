@@ -67,7 +67,7 @@
     <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">Masukkan kode bergabung yang diberikan oleh pemilik perusahaan</p>
   </div>
 
-  <form onsubmit={handleJoin} class="space-y-4">
+  <form onsubmit={handleJoin} class="space-y-4" data-tour="auth-form">
     <div>
       <label class="label-text mb-1 block" for="join-code">Kode Bergabung</label>
       <div class="relative">

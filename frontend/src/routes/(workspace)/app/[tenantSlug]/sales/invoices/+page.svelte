@@ -49,7 +49,7 @@
 </script>
 
 <PageHeader title="Invoice" description="Draft dan posting faktur penjualan melalui backend" breadcrumbs={[{ label: 'Penjualan' }, { label: 'Invoice' }]}> 
-  {#snippet actions()}<Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>{#if isOwner}<Button onclick={openCreate}><Plus class="w-4 h-4" /> Invoice Baru</Button>{/if}{/snippet}
+  {#snippet actions()}<Button variant="secondary" onclick={() => showExport = true}><Download class="w-4 h-4" /> Ekspor</Button>{#if isOwner}<Button onclick={openCreate} tourHook="add-invoice"><Plus class="w-4 h-4" /> Invoice Baru</Button>{/if}{/snippet}
 </PageHeader>
 {#if !isOwner}<div class="card p-4 mb-6 text-sm text-[hsl(var(--muted-foreground))]">Invoice ditampilkan read-only. Hanya owner dapat membuat, posting, atau reverse invoice.</div>{/if}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"><MetricCard label="Total Piutang" value={totalPiutang} format="currency" /><MetricCard label="Outstanding" value={jatuhTempo} format="currency" /><MetricCard label="Invoice Bulan Ini" value={invoiceBulanIni} format="number" /><MetricCard label="Rata-rata" value={rataRata} format="currency" /></div>

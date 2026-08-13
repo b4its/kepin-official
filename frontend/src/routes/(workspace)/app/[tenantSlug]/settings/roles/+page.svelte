@@ -39,7 +39,7 @@
   <div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
 {/if}
 
-<div class="space-y-3 max-w-2xl">
+<div class="space-y-3 max-w-2xl" data-tour="roles-list">
   {#if loading}
     {#each Array(2) as _}
       <div class="card p-4"><div class="skeleton h-10 w-full"></div></div>

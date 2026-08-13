@@ -146,7 +146,7 @@
         </div>
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm" data-tour="fiscal-years-table">
           <thead>
             <tr class="border-b border-[hsl(var(--border))] text-left text-xs uppercase text-[hsl(var(--muted-foreground))]">
               <th class="py-2 pr-4">Periode</th>

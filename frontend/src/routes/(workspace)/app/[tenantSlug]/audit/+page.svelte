@@ -92,6 +92,7 @@
 {/if}
 
 <DataTable
+  tourHook="audit-table"
   columns={[
     { key: 'timestamp', label: 'Waktu', sortable: true },
     { key: 'actor', label: 'Pelaku', sortable: true },

@@ -29,6 +29,7 @@
 </PageHeader>
 
 <DataTable
+  tourHook="movements-table"
   columns={[
     { key: 'date', label: 'Tanggal', sortable: true },
     { key: 'productName', label: 'Produk', sortable: true },

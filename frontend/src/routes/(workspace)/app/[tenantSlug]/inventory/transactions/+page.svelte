@@ -104,6 +104,7 @@
 </div>
 
 <DataTable
+  tourHook="product-transactions-table"
   columns={[
     { key: 'checkoutNumber', label: 'No. Checkout', sortable: false },
     { key: 'transactionDate', label: 'Tanggal' },

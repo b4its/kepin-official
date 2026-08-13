@@ -26,6 +26,8 @@
     sortKey?: string;
     sortDir?: 'asc' | 'desc';
     class?: string;
+    /** Hook unik untuk panduan tur (driver.js) — dipasang pada wrapper tabel. */
+    tourHook?: string;
     rowLink?: (item: T) => string;
     rowActions?: Snippet<[item: T, index: number]>;
     searchable?: boolean;
@@ -45,6 +47,7 @@
     sortKey = '',
     sortDir = 'asc',
     class: className = '',
+    tourHook,
     rowLink,
     rowActions,
     searchable = false,
@@ -89,7 +92,7 @@
   }
 </script>
 
-<div class={cn('rounded-lg border border-[hsl(var(--border))]', className)}>
+<div class={cn('rounded-lg border border-[hsl(var(--border))]', className)} data-tour={tourHook}>
   {#if searchable}
     <div class="flex items-center gap-2 px-3 py-2 border-b border-[hsl(var(--border))]">
       <Search class="w-4 h-4 shrink-0 text-[hsl(var(--muted-foreground))]" />

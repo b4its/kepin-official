@@ -174,6 +174,7 @@
 </div>
 
 <DataTable
+  tourHook="orders-table"
   columns={[
     { key: 'number', label: 'No. PO', sortable: true },
     { key: 'supplierName', label: 'Pemasok', sortable: true },

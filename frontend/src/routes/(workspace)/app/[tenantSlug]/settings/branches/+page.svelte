@@ -59,6 +59,7 @@
 </PageHeader>
 
 <DataTable
+  tourHook="branches-table"
   columns={[
     { key: 'name', label: 'Nama Cabang', sortable: true },
     { key: 'code', label: 'Kode' },

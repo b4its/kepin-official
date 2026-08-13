@@ -78,7 +78,7 @@
       </div>
     </div>
   {:else}
-    <form onsubmit={handleCreate} class="space-y-4">
+    <form onsubmit={handleCreate} class="space-y-4" data-tour="auth-form">
       <div>
         <label class="label-text mb-1 block" for="co-name">Nama Perusahaan</label>
         <div class="relative">

@@ -237,7 +237,7 @@
         Tidak ada produk. Tambahkan produk di menu Inventaris → Produk.
       </div>
     {:else}
-      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" data-tour="pos-catalog">
         {#each catalog as p}
           <div class="card p-4 flex flex-col gap-3">
             <div class="flex items-start justify-between gap-2">
@@ -284,7 +284,7 @@
     {/if}
   </div>
 
-  <div class="lg:sticky lg:top-4 h-fit">
+  <div class="lg:sticky lg:top-4 h-fit" data-tour="pos-cart">
     <div class="card p-5">
       <h3 class="font-semibold mb-3">Keranjang ({cartCount})</h3>
       {#if cartEntries.length === 0}

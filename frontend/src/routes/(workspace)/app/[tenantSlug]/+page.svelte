@@ -158,7 +158,7 @@
   {/if}
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-tour="metric-cards">
   <MetricCard label="Pendapatan" value={income} previousValue={compareMode ? compareIncome : undefined} loading={loading} format="currency" />
   <MetricCard label="Pengeluaran" value={expense} previousValue={compareMode ? compareExpense : undefined} loading={loading} format="currency" />
   <MetricCard label="Laba Bersih" value={profit} previousValue={compareMode ? compareProfit : undefined} loading={loading} format="currency" />
@@ -210,7 +210,7 @@
   </div>
 </div>
 
-<div class="grid lg:grid-cols-3 gap-6 mb-6">
+<div class="grid lg:grid-cols-3 gap-6 mb-6" data-tour="dashboard-charts">
   <div class="card p-5 lg:col-span-2">
     <h3 class="font-semibold mb-4">Arus Kas Harian</h3>
     <BarChart labels={cashFlow.map((row) => row.date.slice(5))} datasets={[

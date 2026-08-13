@@ -9,6 +9,8 @@
     disabled?: boolean;
     class?: string;
     href?: string;
+    /** Hook unik untuk panduan tur (driver.js). */
+    tourHook?: string;
     children: Snippet;
     onclick?: (e: MouseEvent) => void;
     type?: 'button' | 'submit' | 'reset';
@@ -21,6 +23,7 @@
     disabled = false,
     class: className = '',
     href,
+    tourHook,
     children,
     onclick,
     type = 'button',
@@ -46,6 +49,7 @@
 {#if href}
   <a
     href={href}
+    data-tour={tourHook}
     class={cn(baseClass, variants[variant], sizes[size], className)}
     {...rest}
   >
@@ -58,6 +62,7 @@
   <button
       type={type}
       disabled={disabled || loading}
+      data-tour={tourHook}
     aria-busy={loading}
     class={cn(baseClass, variants[variant], sizes[size], className)}
     {onclick}

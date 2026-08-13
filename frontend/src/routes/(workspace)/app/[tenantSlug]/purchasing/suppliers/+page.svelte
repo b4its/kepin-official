@@ -76,6 +76,7 @@
 </PageHeader>
 
 <DataTable
+  tourHook="suppliers-table"
   columns={[
     { key: 'code', label: 'Kode', sortable: true },
     { key: 'name', label: 'Nama', sortable: true },
