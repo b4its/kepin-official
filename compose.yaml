@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: kepin
       POSTGRES_DB: kepin
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -37,9 +37,9 @@ services:
       SMTP_PORT: "1025"
       SMTP_TLS: "false"
       SMTP_FROM: noreply@kepin.io
-      PUBLIC_APP_URL: http://localhost:5173
+      PUBLIC_APP_URL: http://localhost:3001
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./backend/src:/app/src:ro
       - ./backend/alembic:/app/alembic:ro
@@ -74,9 +74,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        PUBLIC_API_URL: http://localhost:8000/api/v1
+        PUBLIC_API_URL: http://localhost:8001/api/v1
     ports:
-      - "5173:3000"
+      - "3001:3000"
     depends_on:
       - backend
 
