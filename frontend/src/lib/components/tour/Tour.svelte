@@ -16,6 +16,7 @@
     type TourStep,
   } from '$lib/stores/tour';
   import { showToast } from '$lib/stores/toast';
+  import { currentUser } from '$lib/stores/auth';
 
   let driverInstance: any = null;
   let handledNonce = 0;
@@ -32,6 +33,12 @@
   // berpindah (redirect /auth/onboarding) di tengah persiapan.
   let driveSession = 0;
   const slug = $derived($page.params.tenantSlug || getTenantSlug());
+  // Terautentikasi = ada sesi user + token di localStorage. Tur workspace
+  // TIDAK boleh berjalan saat akun belum/ tidak lagi terautentikasi.
+  const isAuthed = $derived(
+    Boolean($currentUser) &&
+      (typeof localStorage === 'undefined' || Boolean(localStorage.getItem('kepin_token')))
+  );
   const totalSteps = mainTour.steps.length;
 
   function destroyDriver() {
@@ -51,6 +58,16 @@
     tourRunning.set(false);
     clearTourState();
     destroyDriver();
+  }
+
+  // Hentikan sesi tur SEKETIKA: akun tidak terautentikasi sedangkan tur
+  // hendak/ sedang berjalan di halaman workspace. Mencegah loop navigasi
+  // login ↔ /app/{slug} yang berulang kali ditolak server (401).
+  function stopTourForAuth() {
+    tourRunning.set(false);
+    clearTourState();
+    destroyDriver();
+    showToast('Silakan masuk terlebih dahulu untuk melanjutkan tur workspace.', 'error');
   }
 
   // Navigasi apa pun (termasuk redirect halaman seperti /auth/onboarding)
@@ -90,6 +107,13 @@
     while (end < all.length - 1 && stepMatchesPath(all[end + 1], currentPath, slug)) end++;
     const run = all.slice(start, end + 1);
     const runStartLocal = fromGlobal - start;
+
+    // Jangan pernah menjalankan langkah workspace saat akun tidak
+    // terautentikasi — server akan menolak (401) dan layout me-redirect.
+    if (!isAuthed && run.some((s) => !s.page.startsWith('/'))) {
+      stopTourForAuth();
+      return false;
+    }
 
     try {
       const { driver } = await import('driver.js');
@@ -170,10 +194,8 @@
         const nextStep = mainTour.steps.slice(fromGlobal).find((s) => !stepMatchesPath(s, currentPath, slug));
         if (!nextStep) { finishTour(); return; }
         const target = stepUrl(nextStep, slug);
-        if (!slug && target.startsWith('/app/')) {
-          tourRunning.set(false);
-          clearTourState();
-          showToast('Silakan masuk terlebih dahulu untuk melanjutkan tur workspace.', 'error');
+        if (target.startsWith('/app/') && (!slug || !isAuthed)) {
+          stopTourForAuth();
           return;
         }
         navPending = true;
@@ -217,11 +239,16 @@
       driverInstance?.movePrevious();
     } else {
       // Langkah sebelumnya di halaman lain — navigasi langsung ke sana.
+      const target = stepUrl(prevStep, slug);
+      if (target.startsWith('/app/') && (!slug || !isAuthed)) {
+        stopTourForAuth();
+        return;
+      }
       navPending = true;
       destroyDriver();
       setTimeout(() => {
         navPending = false;
-        void goto(stepUrl(prevStep, slug));
+        void goto(target);
       }, 150);
     }
   }
@@ -247,6 +274,12 @@
     const state = loadTourState();
     if (!$tourRunning && !state) return;
     if (!state) { void startTour(); return; }
+    // Sesi tur tersimpan menunjuk ke halaman workspace, tetapi akun tidak
+    // terautentikasi (belum login / sesi kedaluwarsa) — hentikan seketika.
+    if (!isAuthed && !mainTour.steps[state.step]?.page.startsWith('/')) {
+      stopTourForAuth();
+      return;
+    }
     if (!$tourRunning) tourRunning.set(true);
     resumeTour(state.step, true);
   });
