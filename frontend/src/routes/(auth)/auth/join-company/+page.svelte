@@ -1,14 +1,19 @@
 <script lang="ts">
-  import { ArrowLeft, KeyRound, Building2 } from '@lucide/svelte';
+  import { ArrowLeft, KeyRound, Building2, AlertTriangle } from '@lucide/svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Logo from '$lib/components/ui/Logo.svelte';
   import { showToast } from '$lib/stores/toast';
   import { getApiUrl } from '$lib/config/api';
+  import { getTenants } from '$lib/stores/auth';
 
   let joinCode = $state('');
   let loading = $state(false);
   let error = $state('');
   let companyInfo: { name: string; slug: string } | null = $state(null);
+
+  // Satu pengguna = satu perusahaan. Bila sudah punya tenant, tidak bisa
+  // bergabung ke perusahaan lain sebelum keluar dari perusahaan saat ini.
+  const existingTenant = getTenants()[0] || null;
 
   async function lookupCode() {
     if (joinCode.length < 3) return;
@@ -67,7 +72,30 @@
     <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">Masukkan kode bergabung yang diberikan oleh pemilik perusahaan</p>
   </div>
 
-  <form onsubmit={handleJoin} class="space-y-4" data-tour="auth-form">
+  {#if existingTenant}
+    <!-- Sudah punya perusahaan: tidak bisa bergabung ke perusahaan lain -->
+    <div class="text-center py-4">
+      <div class="flex justify-center mb-3">
+        <AlertTriangle class="w-10 h-10 text-[var(--color-kepin-yellow)]" />
+      </div>
+      <p class="text-sm font-medium">Anda sudah menjadi anggota perusahaan ini:</p>
+      <p class="text-base font-bold mt-1">{existingTenant.name || existingTenant.slug}</p>
+      <p class="text-sm text-[hsl(var(--muted-foreground))] mt-2">
+        Satu akun hanya dapat bergabung ke satu perusahaan. Untuk bergabung ke perusahaan lain,
+        keluar terlebih dahulu dari perusahaan saat ini melalui menu profil di workspace
+        (<em>Keluar dari Perusahaan Ini</em>).
+      </p>
+      <div class="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
+        <a href="/app/{existingTenant.slug}" class="btn-primary btn-md inline-flex items-center justify-center">
+          <Building2 class="w-4 h-4" /> Kembali ke Workspace
+        </a>
+        <a href="/auth/onboarding" class="inline-flex items-center justify-center gap-1 text-sm text-[hsl(var(--primary))] hover:underline">
+          <ArrowLeft class="w-3 h-3" /> Kembali
+        </a>
+      </div>
+    </div>
+  {:else}
+    <form onsubmit={handleJoin} class="space-y-4" data-tour="auth-form">
     <div>
       <label class="label-text mb-1 block" for="join-code">Kode Bergabung</label>
       <div class="relative">
@@ -108,4 +136,5 @@
       <ArrowLeft class="w-3 h-3" /> Kembali
     </a>
   </p>
+  {/if}
 </div>

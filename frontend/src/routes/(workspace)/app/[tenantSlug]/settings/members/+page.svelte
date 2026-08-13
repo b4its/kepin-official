@@ -135,11 +135,11 @@
       <div class="flex-1 min-w-0">
         <h2 class="font-semibold">Kode Bergabung</h2>
         <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Bagikan kode ini kepada anggota tim. Mereka bisa bergabung di halaman
+          Bagikan kode ini kepada orang yang ingin bergabung. Mereka bisa bergabung di halaman
           <a href="/auth/join-company" class="text-[hsl(var(--primary))] hover:underline inline-flex items-center gap-0.5">
             Gabung Perusahaan <ExternalLink class="w-3 h-3" />
           </a>
-          menggunakan kode ini (bukan khusus owner — siapa pun dengan kode dapat bergabung sebagai karyawan).
+          — selama mereka belum menjadi anggota perusahaan lain (satu akun hanya untuk satu perusahaan).
         </p>
         <div class="flex flex-wrap items-center gap-3 mt-4">
           {#if codeLoading}

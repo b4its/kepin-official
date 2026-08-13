@@ -6,8 +6,9 @@
   import Modal from '$lib/components/ui/Modal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import { formatRelativeTime } from '$lib/utils/time';
-  import { currentUser, logout, updateProfile } from '$lib/stores/auth';
+  import { currentUser, logout, updateProfile, getTenants, leaveTenant } from '$lib/stores/auth';
   import { notifications, markAllNotifRead } from '$lib/stores/data';
+  import { showToast } from '$lib/stores/toast';
 
   type Props = {
     title: string;
@@ -26,6 +27,8 @@
   let profileOpen = $state(false);
   let showProfileModal = $state(false);
   let showLogoutConfirm = $state(false);
+  let showLeaveConfirm = $state(false);
+  let leaving = $state(false);
   let notifOpen = $state(false);
   let profileName = $derived($currentUser?.name || 'Pengguna');
   let profileEmail = $derived($currentUser?.email || '');
@@ -36,6 +39,11 @@
   let editPhone = $state('');
 
   let tenantSlug = $state('');
+
+  // Status keanggotaan: satu pengguna = satu perusahaan (single-company).
+  const myTenants = $derived(getTenants());
+  const myRole = $derived(myTenants.find((t) => t.slug === tenantSlug)?.role || myTenants[0]?.role || '');
+  const isOwner = $derived(myRole === 'tenant_owner');
 
   $effect(() => {
     if (typeof window !== 'undefined') {
@@ -98,6 +106,26 @@
     showLogoutConfirm = false;
     logout();
     window.location.href = '/';
+  }
+
+  function openLeave() {
+    closeProfile();
+    showLeaveConfirm = true;
+  }
+
+  async function confirmLeave() {
+    if (leaving || !tenantSlug) return;
+    leaving = true;
+    const res = await leaveTenant(tenantSlug);
+    leaving = false;
+    showLeaveConfirm = false;
+    if (res.success) {
+      showToast('Berhasil keluar dari perusahaan', 'success');
+      // Tanpa tenant lagi → arahkan ke onboarding (pilih Buat/Gabung Perusahaan).
+      window.location.href = '/auth/onboarding';
+    } else {
+      showToast(res.error || 'Gagal keluar dari perusahaan', 'error');
+    }
   }
 
   function goToLanding() {
@@ -218,13 +246,25 @@
                 <ArrowLeft class="w-4 h-4 shrink-0" />
                 Kembali ke Beranda
               </button>
-              <button
-                onclick={() => { window.location.href = '/auth/join-company'; }}
-                class="flex items-center gap-3 w-full px-4 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
-              >
-                <UserPlus class="w-4 h-4 shrink-0" />
-                Gabung Perusahaan Lain
-              </button>
+              {#if myTenants.length === 0}
+                <!-- Belum punya perusahaan → boleh bergabung -->
+                <button
+                  onclick={() => { window.location.href = '/auth/join-company'; }}
+                  class="flex items-center gap-3 w-full px-4 py-2 text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+                >
+                  <UserPlus class="w-4 h-4 shrink-0" />
+                  Gabung Perusahaan
+                </button>
+              {:else if !isOwner}
+                <!-- Karyawan: hanya bisa pindah setelah keluar dari perusahaan ini -->
+                <button
+                  onclick={openLeave}
+                  class="flex items-center gap-3 w-full px-4 py-2 text-sm text-[var(--color-kepin-danger)] hover:bg-[hsl(var(--accent))] transition-colors"
+                >
+                  <LogOut class="w-4 h-4 shrink-0" />
+                  Keluar dari Perusahaan Ini
+                </button>
+              {/if}
               <button
                 onclick={openLogout}
                 class="flex items-center gap-3 w-full px-4 py-2 text-sm text-[var(--color-kepin-danger)] hover:bg-[hsl(var(--accent))] transition-colors"
@@ -268,4 +308,14 @@
   title="Logout"
   message="Apakah Anda yakin ingin keluar?"
   confirmText="Logout"
+/>
+
+<ConfirmDialog
+  open={showLeaveConfirm}
+  onclose={() => showLeaveConfirm = false}
+  onconfirm={confirmLeave}
+  title="Keluar dari Perusahaan Ini"
+  message="Anda akan keluar dari perusahaan ini. Untuk bergabung ke perusahaan lain, Anda harus keluar terlebih dahulu dari perusahaan saat ini. Lanjutkan?"
+  confirmText="Ya, Keluar"
+  loading={leaving}
 />

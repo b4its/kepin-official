@@ -185,6 +185,40 @@ export function logout() {
   currentUser.set(null);
 }
 
+export type TenantInfo = { slug: string; role: string; name?: string; joinCode?: string; id?: string };
+
+/** Tenant milik user di sesi ini (dari localStorage kepin_tenants). */
+export function getTenants(): TenantInfo[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem('kepin_tenants') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+/** Keluar dari sebuah perusahaan (khusus karyawan/non-pemilik). */
+export async function leaveTenant(slug: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY) || '';
+    const res = await fetch(`${getApiUrl()}/tenants/${slug}/membership/leave`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: 'Gagal keluar dari perusahaan' }));
+      return { success: false, error: body.detail || 'Gagal keluar dari perusahaan' };
+    }
+    try {
+      const tenants = getTenants().filter((t) => t.slug !== slug);
+      localStorage.setItem('kepin_tenants', JSON.stringify(tenants));
+    } catch { /* noop */ }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Gagal terhubung ke server' };
+  }
+}
+
 export function updateProfile(data: { name?: string; email?: string; phone?: string }): AuthUser | null {
   const user = getSession();
   if (!user) return null;
