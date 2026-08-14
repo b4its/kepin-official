@@ -1,678 +1,674 @@
 # Panduan Fitur & Halaman KePin — Landing Page hingga Workspace Tenant
 
-Dokumen ini menjelaskan secara rinci dan lengkap **setiap halaman dan setiap fitur** pada aplikasi KePin, dimulai dari **landing page** (marketing), dilanjutkan ke **halaman autentikasi (auth)**, hingga ke **workspace tenant** (`/app/{tenantSlug}`). Dokumen ini disusun sebagai referensi fitur, bukan panduan teknis pengembangan.
+> **Baca dulu, ini yang paling penting** 🎯
+>
+> Dokumen ini menjelaskan **setiap halaman dan fitur** aplikasi KePin dengan dua cara sekaligus:
+> - **Dalam bahasa manusia** — memakai kata-kata sehari-hari dan perumpamaan agar mudah dipahami siapa saja, bahkan yang tidak terbiasa dengan istilah akuntansi atau komputer.
+> - **Detail teknis** — tabel dan istilah resmi untuk keperluan pengembang, penguji, dan dokumentasi.
+>
+> Jadi jika ada istilah yang membingungkan, cukup baca bagian **"Dalam bahasa sederhana"** di setiap bab.
 
-> **Konteks singkat**: KePin adalah ERP SaaS multi-tenant untuk manajemen keuangan dan operasional bisnis kecil-menengah. Backend FastAPI + SvelteKit 5 + PostgreSQL. Seluruh UI berbahasa Indonesia.
+---
+
+## 📌 KePin Itu Apa Sih?
+
+Bayangkan sebuah **toko atau usaha kecil** yang selama ini mencatat:
+
+- Uang masuk/keluar di **buku catatan**,
+- Stok barang di **aplikasi catatan ponsel**,
+- Tagihan pelanggan di **spreadsheet**,
+- Gaji dan utang pemasok **di kepala pemiliknya**.
+
+Lalu suatu hari pemiliknya ingin tahu: *"Sebenarnya bulan ini saya untung atau rugi?"* — dan tidak bisa menjawab karena datanya berceceran di mana-mana.
+
+**KePin adalah solusinya.** KePin menyatukan semua catatan itu dalam satu aplikasi yang bisa diakses lewat browser (Chrome, Firefox, dll). Semua angka otomatis terhubung: saat kasir menjual barang, stok berkurang dan uang masuk tercatat sendiri. Saat membeli barang dari pemasok, utang dan stok ikut ter-update. Di akhir bulan, laporan untung-rugi sudah jadi tanpa perlu hitung manual.
+
+**Dalam bahasa sederhana:** KePin seperti **"pembukuan digital semua-dalam-satu"** untuk usaha kecil-menengah (UMKM). Sekali input di satu tempat, semua bagian lain ikut terisi otomatis.
 
 ---
 
 ## Daftar Isi
 
-- [1. Landing Page (Marketing)](#1-landing-page-marketing)
-  - [1.1 Header (Marketing Header)](#11-header-marketing-header)
-  - [1.2 Hero Section](#12-hero-section)
-  - [1.3 Trust Strip](#13-trust-strip)
-  - [1.4 Seksi Masalah (`#solusi`)](#14-seksi-masalah-solusi)
-  - [1.5 Alur Solusi](#15-alur-solusi)
-  - [1.6 Seksi Fitur Unggulan (`#fitur`)](#16-seksi-fitur-unggulan-fitur)
-  - [1.7 Seksi Keamanan Zero Trust (`#keamanan`)](#17-seksi-keamanan-zero-trust-keamanan)
-  - [1.8 Seksi Cara Kerja (`#cara-kerja`)](#18-seksi-cara-kerja-cara-kerja)
-  - [1.9 Seksi Use Case](#19-seksi-use-case)
-  - [1.10 Seksi Pricing (`#harga`)](#110-seksi-pricing-harga)
-  - [1.11 Early Adopter](#111-early-adopter)
-  - [1.12 Seksi FAQ (`#faq`)](#112-seksi-faq-faq)
-  - [1.13 Final CTA](#113-final-cta)
-  - [1.14 Footer](#114-footer)
-  - [1.15 Halaman Legal (Privacy / Terms / Security)](#115-halaman-legal-privacy--terms--security)
-- [2. Halaman Autentikasi (Auth)](#2-halaman-autentikasi-auth)
-  - [2.1 Login (`/auth/login`)](#21-login-authlogin)
-  - [2.2 Register (`/auth/register`)](#22-register-authregister)
-  - [2.3 Create Company (`/auth/create-company`)](#23-create-company-authcreate-company)
-  - [2.4 Join Company (`/auth/join-company`)](#24-join-company-authjoin-company)
-  - [2.5 Forgot Password (`/auth/forgot-password`)](#25-forgot-password-authforgot-password)
-  - [2.6 Reset Password (`/auth/reset-password`)](#26-reset-password-authreset-password)
-  - [2.7 MFA (`/auth/mfa`)](#27-mfa-authmfa)
-  - [2.8 Onboarding (`/auth/onboarding`)](#28-onboarding-authonboarding)
-- [3. Workspace Tenant (`/app/{tenantSlug}`)](#3-workspace-tenant-apptenantslug)
-  - [3.0 Layout & Shell Workspace](#30-layout--shell-workspace)
-  - [3.1 Dashboard](#31-dashboard)
-  - [3.2 POS (Point of Sale)](#32-pos-point-of-sale)
-  - [3.3 Sales](#33-sales)
-  - [3.4 Purchasing](#34-purchasing)
-  - [3.5 Inventory](#35-inventory)
-  - [3.6 Accounting](#36-accounting)
-  - [3.7 Reports](#37-reports)
-  - [3.8 Insights](#38-insights)
-  - [3.9 Audit](#39-audit)
-  - [3.10 Notifications](#310-notifications)
-  - [3.11 Tutorial](#311-tutorial)
-  - [3.12 Transactions](#312-transactions)
-  - [3.13 Settings](#313-settings)
-- [4. Ringkasan Peran (Owner vs Employee)](#4-ringkasan-peran-owner-vs-employee)
+- [1. Landing Page (Halaman Depan)](#1-landing-page-halaman-depan)
+  - [1.1 Header (Bilah Atas)](#11-header-bilah-atas)
+  - [1.2 Hero (Kalimat Pembuka)](#12-hero-kalimat-pembuka)
+  - [1.3 Trust Strip (Rakitan Angka Kepercayaan)](#13-trust-strip-rakitan-angka-kepercayaan)
+  - [1.4 Masalah (`#solusi`)](#14-masalah-solusi)
+  - [1.5 Alur Solusi (Cara Kerja Berantai)](#15-alur-solusi-cara-kerja-berantai)
+  - [1.6 Fitur Unggulan (`#fitur`)](#16-fitur-unggulan-fitur)
+  - [1.7 Keamanan Zero Trust (`#keamanan`)](#17-keamanan-zero-trust-keamanan)
+  - [1.8 Cara Kerja (`#cara-kerja`)](#18-cara-kerja-cara-kerja)
+  - [1.9 Untuk Siapa KePin?](#19-untuk-siapa-kepin)
+  - [1.10 Harga (`#harga`)](#110-harga-harga)
+  - [1.11 Program Early Adopter](#111-program-early-adopter)
+  - [1.12 FAQ (`#faq`)](#112-faq-faq)
+  - [1.13 Penutup (Final CTA)](#113-penutup-final-cta)
+  - [1.14 Footer (Kaki Halaman)](#114-footer-kaki-halaman)
+  - [1.15 Halaman Legal (Privasi / Syarat / Keamanan)](#115-halaman-legal-privasi--syarat--keamanan)
+- [2. Halaman Masuk & Daftar (Auth)](#2-halaman-masuk--daftar-auth)
+  - [2.1 Login (Masuk)](#21-login-masuk)
+  - [2.2 Register (Daftar Akun)](#22-register-daftar-akun)
+  - [2.3 Buat Perusahaan Baru](#23-buat-perusahaan-baru)
+  - [2.4 Gabung Perusahaan](#24-gabung-perusahaan)
+  - [2.5 Lupa Password](#25-lupa-password)
+  - [2.6 Reset Password](#26-reset-password)
+  - [2.7 Verifikasi 2 Langkah (MFA)](#27-verifikasi-2-langkah-mfa)
+  - [2.8 Halaman Awal Setelah Login (Onboarding)](#28-halaman-awal-setelah-login-onboarding)
+- [3. Workspace Tenant (Ruang Kerja Perusahaan)](#3-workspace-tenant-ruang-kerja-perusahaan)
+  - [3.0 Kerangka & Navigasi Workspace](#30-kerangka--navigasi-workspace)
+  - [3.1 Dashboard (Papan Pemantau)](#31-dashboard-papan-pemantau)
+  - [3.2 POS (Mesin Kasir Digital)](#32-pos-mesin-kasir-digital)
+  - [3.3 Penjualan (Sales)](#33-penjualan-sales)
+  - [3.4 Pembelian (Purchasing)](#34-pembelian-purchasing)
+  - [3.5 Inventori / Stok Barang](#35-inventori--stok-barang)
+  - [3.6 Akuntansi / Pembukuan](#36-akuntansi--pembukuan)
+  - [3.7 Laporan Keuangan (Reports)](#37-laporan-keuangan-reports)
+  - [3.8 Insight (Wawasan Otomatis)](#38-insight-wawasan-otomatis)
+  - [3.9 Audit (Jejak Perubahan)](#39-audit-jejak-perubahan)
+  - [3.10 Notifikasi (Pemberitahuan)](#310-notifikasi-pemberitahuan)
+  - [3.11 Tutorial (Panduan Berjalan)](#311-tutorial-panduan-berjalan)
+  - [3.12 Transaksi Manual](#312-transaksi-manual)
+  - [3.13 Pengaturan (Settings)](#313-pengaturan-settings)
+- [4. Pemilik vs Karyawan (Dua Peran)](#4-pemilik-vs-karyawan-dua-peran)
 - [5. Lampiran: Temuan Analisis](#5-lampiran-temuan-analisis)
 
 ---
 
-# 1. Landing Page (Marketing)
+# 1. Landing Page (Halaman Depan)
 
-Landing page berada pada rute `/` (halaman utama) plus tiga halaman legal (`/privacy`, `/terms`, `/security`). Seluruh halaman marketing di-render secara client-side (tidak ada data server). Halaman ini terdiri dari **13 seksi** pada halaman utama, ditambah header dan footer.
+**Landing page** adalah halaman pertama yang dilihat orang ketika membuka situs KePin — alamatnya `/`. Fungsinya seperti **papan iklan dan etalase toko**: memperkenalkan produk, menjelaskan masalah yang dipecahkan, menampilkan harga, dan mengajak pengunjung untuk **daftar** atau **masuk**.
 
-## 1.1 Header (Marketing Header)
+Selain halaman utama, ada 3 halaman tambahan: Kebijakan Privasi (`/privacy`), Syarat & Ketentuan (`/terms`), dan Keamanan (`/security`).
 
-Header bersifat **sticky/fixed** di bagian atas:
-
-| Elemen | Perilaku / Fungsi |
-|---|---|
-| Latar belakang | Transparan saat di atas halaman (`scrollY <= 20`); berubah menjadi kartu ber-latar + bayangan setelah di-scroll lebih dari 20px. |
-| Logo KePin | Klik → kembali ke `/`. |
-| Menu navigasi tengah (desktop) | 6 link anchor ke seksi: **Solusi** (`#solusi`), **Fitur** (`#fitur`), **Keamanan** (`#keamanan`), **Cara Kerja** (`#cara-kerja`), **Harga** (`#harga`), **FAQ** (`#faq`). |
-| Tombol bantuan (ikon `?`) | Memulai **guided tour** (Driver.js) yang berjalan dari landing → auth → workspace. |
-| Theme menu | Ganti tema **Light / Dark / System**; preferensi disimpan di cookie `kepin_theme`. |
-| CTA auth-aware | Dihitung sekali saat halaman dimuat berdasarkan localStorage (`kepin_token`, `kepin_session`, `kepin_tenants`): |
-| — Belum login | Tombol **"Masuk"** (ghost → `/auth/login`) dan **"Coba Gratis"** (primary → `/auth/register`). |
-| — Login & superadmin | Tombol **"Panel"** → `/admin`. |
-| — Login & punya tenant | Tombol berisi **nama tenant** (ikon gedung) → `/app/{slug tenant pertama}`. |
-| — Login tanpa tenant | Tombol **"Lengkapi Profil"** → `/auth/onboarding`. |
-| Mobile | Hamburger menu menampilkan dropdown berisi link anchor yang sama + link login/register/dashboard sesuai status login. |
-
-> **Catatan**: status auth di header hanya dibaca **sekali saat mount**, tidak reaktif terhadap login/logout di tab yang sama (perlu reload).
-
-## 1.2 Hero Section
-
-Bagian pertama halaman (tinggi minimal 90vh), dengan latar dekoratif bentuk geometris (kotak, garis, lingkaran) bernuansa warna brand.
-
-- **Headline** (3 baris, font besar):
-  > Keuangan rapi. Operasional **terkendali**. Bisnis lebih **dipercaya**.
-- **Sub-copy**: "KePin menyatukan akuntansi, inventaris, audit trail, dan insight bisnis untuk membantu UMKM tumbuh dengan keputusan yang lebih aman."
-- **Dua CTA utama**:
-  - **"Coba Gratis 14 Hari"** (tombol primary) → `/auth/register`.
-  - **"Lihat Cara Kerja"** (tombol ghost) → scroll ke seksi `#solusi`.
-- **Microcopy**: "Tanpa kartu kredit. Batalkan kapan saja."
-- **Mock dashboard card** (hanya tampil di desktop, `lg:block`):
-  - "Pendapatan Bulan Ini" — **Rp 89,5 Jt** dengan indikator **+12.5%** (hijau).
-  - "Stok Kritis" — **3** dengan label **"Perlu restock"** (merah).
-  - Placeholder grafik batang (ikon BarChart).
-  - Footer kartu: ikon perisai "Audit trail aktif" + label "Live" (biru).
-
-## 1.3 Trust Strip
-
-Pita gelap (`#171714`) dengan 4 statistik statis (tanpa link):
-
-| Statistik | Label |
-|---|---|
-| **5.000+** | UMKM Terdaftar |
-| **50+** | Kota Tersebar |
-| **99.9%** | Uptime Platform |
-| **ISO 27001** | Sertifikasi Keamanan |
-
-## 1.4 Seksi Masalah (`#solusi`)
-
-Menampilkan 3 kartu masalah yang umum dialami UMKM, masing-masing dengan ikon kotak berwarna:
-
-1. **Fraud & Selisih Terlambat Diketahui** (ikon jam, kotak merah) — stok hilang/uang tidak sesuai baru diketahui saat tutup buku; KePin memberi notifikasi real-time.
-2. **Data Keuangan Tersebar** (ikon lapisan, kotak biru) — catatan di buku, stok di spreadsheet, pembayaran di aplikasi terpisah; sulit melihat gambaran utuh.
-3. **Keputusan Tanpa Data** (ikon target, kotak kuning) — pembelian tanpa melihat tren; akibatnya dead stock, cash flow terhambat.
-
-Kartu memakai gaya `card-hover` (efek hover). Tidak ada link keluar.
-
-## 1.5 Alur Solusi
-
-Flow horizontal 6 tahap yang dihubungkan panah (`ArrowRight`):
-
-**Penjualan → Stok → Jurnal → Laporan → Insight → Keputusan**
-
-- Setiap tahap berupa ikon lingkaran berwarna (merah, biru, hitam, kuning, hijau, merah) + label.
-- Panah hanya tampil di layar `sm:` ke atas (tersembunyi di mobile).
-- Murni informatif, tidak ada interaksi/link.
-
-## 1.6 Seksi Fitur Unggulan (`#fitur`)
-
-Grid 6 kartu fitur (3 kolom di desktop, 2 di tablet):
-
-| Fitur | Ikon | Deskripsi |
-|---|---|---|
-| **Akuntansi Dasar** | Buku | Transaksi, chart of accounts, jurnal, buku besar, dan laporan keuangan lengkap. |
-| **ERP Ringan** | Paket | Penjualan, pembelian, pemasok, pelanggan, produk, dan stok dalam satu platform. |
-| **Audit Trail** | Perisai | Setiap perubahan tercatat: siapa, apa, kapan, tenant, dan nilai sebelum-sesudah. |
-| **AI Insight** | Tren | Prediksi penjualan dan laba serta rekomendasi stok berdasarkan data bisnis. |
-| **Investor Report** | Dokumen | Laporan kustom siap due diligence dengan metrik kredibel dan terverifikasi. |
-| **Multi-Format Export** | Unduh | Ekspor laporan ke PDF, CSV, XLSX. Data tetap milik Anda. |
-
-## 1.7 Seksi Keamanan Zero Trust (`#keamanan`)
-
-Dua kolom:
-
-- **Kolom kiri** — judul "Keamanan **Zero Trust**" + 5 poin safeguard dengan ikon centang hijau:
-  1. Verifikasi identitas dan akses berdasarkan peran pengguna (RBAC).
-  2. Isolasi data ketat antarorganisasi.
-  3. Otentikasi multi-faktor (MFA) dan manajemen session.
-  4. Audit trail append-only yang tidak dapat dimanipulasi.
-  5. Enkripsi data dalam transit (TLS 1.3) dan penyimpanan.
-  - **CTA "Pelajari Lebih Lanjut"** (ghost) → `/security`.
-- **Kolom kanan** (desktop) — grid dekoratif 2×2: **ISO 27001** (merah), **Enkripsi** (hitam), **MFA** (biru), **Audit** (kuning).
-
-## 1.8 Seksi Cara Kerja (`#cara-kerja`)
-
-4 langkah bernomor besar (01–04) dengan gaya `card-hover`:
-
-| No | Judul | Deskripsi |
-|---|---|---|
-| 01 | **Buat Workspace** | Daftar dan buat workspace bisnis. Isi profil, atur cabang, pilih template akun. |
-| 02 | **Setup Bisnis** | Atur produk, pelanggan, pemasok, undang tim — semua dalam beberapa klik. |
-| 03 | **Catat Transaksi** | Input penjualan, pembelian, pengeluaran. Stok dan jurnal ter-update otomatis. |
-| 04 | **Pantau & Kembangkan** | Pantau dashboard, baca laporan, dapatkan insight AI, ambil keputusan lebih baik. |
-
-## 1.9 Seksi Use Case
-
-"Untuk Siapa KePin?" — 4 kartu segmen dengan ikon merah:
-
-| Segmen | Ikon | Deskripsi |
-|---|---|---|
-| **Ritel** | Keranjang | Kontrol selisih stok dan identifikasi produk lambat bergerak secara real-time. |
-| **F&B** | Pengguna | Kelola bahan baku, pembelian, biaya produksi, dan margin menu dalam satu tempat. |
-| **Manufaktur Kecil** | Paket | Pantau bahan baku, proses produksi, hasil, dan biaya dasar produksi. |
-| **Startup** | Tren | Transparansi arus kas dan laporan kredibel untuk investor dan dewan direksi. |
-
-## 1.10 Seksi Pricing (`#harga`)
-
-3 kartu paket; kartu Premium ditandai badge **"POPULER"** dan efek bayangan:
-
-| Paket | Harga | Fitur | CTA |
-|---|---|---|---|
-| **Basic** | Rp199.000/bulan | Akuntansi dasar; 50 transaksi/bulan; 1 pengguna; 1 cabang; laporan laba rugi & neraca; dukungan email | **"Mulai Trial Gratis"** → `/auth/register` |
-| **Premium** (POPULER) | Rp499.000/bulan | Semua fitur Basic; transaksi tak terbatas; 5 pengguna; 3 cabang; manajemen stok & produk; invoice & pelanggan; prediksi AI dasar; dukungan prioritas | **"Mulai Trial Gratis"** → `/auth/register?plan=premium` |
-| **Platinum** | Rp999.000/bulan | Semua fitur Premium; pengguna tak terbatas; cabang tak terbatas; laporan investor kustom; audit trail lengkap; AI insight lanjutan; rekonsiliasi bank; dukungan dedicated | **"Jadwalkan Demo"** → `/auth/register` |
-
-- Setiap fitur ditandai ikon centang hijau.
-- Kartu Premium juga menampilkan catatan: *"Promo Early Adopter: 50% untuk tahun pertama"*.
-- ⚠️ **Temuan**: parameter `?plan=premium` dikirim ke `/auth/register`, tetapi halaman register **tidak membaca** query parameter tersebut (param mati — lihat Lampiran).
-
-## 1.11 Early Adopter
-
-Banner merah penuh dengan CTA putih:
-
-- Judul: "Program Early Adopter".
-- Deskripsi: diskon 50% tahun pertama, kuota 50 klien pertama, imbalan testimoni & feedback.
-- **CTA "Ambil Diskon Early Adopter"** → `/auth/register`.
-
-## 1.12 Seksi FAQ (`#faq`)
-
-6 pertanyaan dalam bentuk **accordion single-open** (membuka satu item otomatis menutup item lain):
-
-| ID | Pertanyaan |
-|---|---|
-| `cocok` | Apakah KePin cocok untuk bisnis tanpa staf akuntansi? |
-| `pemisahan` | Bagaimana pemisahan data antar perusahaan? |
-| `cabang` | Apakah dapat mengelola banyak cabang? |
-| `trial` | Apa yang terjadi setelah masa trial? |
-| `ekspor` | Bagaimana cara ekspor data? |
-| `prediksi` | Bagaimana prediksi AI bekerja? |
-
-Perilaku interaktif:
-
-- Klik header pertanyaan → jawaban muncul di bawah (dengan garis pemisah atas) dan **chevron berputar 180°** (via class `rotate-180`).
-- Klik pertanyaan yang sama lagi → accordion tertutup (toggle).
-- Jawaban menyebutkan dukungan ekspor PDF/CSV/XLSX dan cara kerja AI (rentang kepercayaan, faktor utama, periode).
-
-## 1.13 Final CTA
-
-Seksi penutup (putih / gelap sesuai tema):
-
-- Headline: "Siap Mengelola Bisnis dengan Lebih Percaya Diri?"
-- Sub-copy: ajakan bergabung dengan ribuan UMKM.
-- Dua tombol:
-  - **"Coba Gratis 14 Hari"** → `/auth/register`.
-  - **"Jadwalkan Demo"** → `/auth/register?plan=platinum` (⚠️ param `plan=platinum` juga tidak dibaca register).
-- Microcopy: "Tanpa kartu kredit. Dukungan setup gratis."
-
-## 1.14 Footer
-
-Footer gelap dengan grid 4 kolom:
-
-| Kolom | Isi |
-|---|---|
-| **Brand** | Logo + tagline "Keuangan Pintar untuk UMKM Indonesia…" |
-| **Produk** | Fitur → `/#fitur`; Harga → `/#harga`; Keamanan → `/security` |
-| **Perusahaan** | Kebijakan Privasi → `/privacy`; Syarat & Ketentuan → `/terms` |
-| **Bantuan** | `mailto:hello@kepin.id`; FAQ → `/#faq` |
-
-Bar bawah: `© {tahun} KePin (Keuangan Pintar)` + menu tema.
-
-## 1.15 Halaman Legal (Privacy / Terms / Security)
-
-Ketiganya memakai header (PageHeader + breadcrumb) dan konten prosa statis:
-
-### Privacy (`/privacy`)
-5 bagian: Pengumpulan Data, Penggunaan Data, Keamanan Data, Hak Anda, Cookie.
-
-### Terms (`/terms`)
-5 bagian: Layanan, Akun & Tanggung Jawab, Pembayaran & Langganan, Batasan Tanggung Jawab, Penghentian Layanan.
-
-### Security (`/security`)
-- 6 kartu keamanan: **ISO 27001**, **Enkripsi End-to-End**, **Isolasi Tenant**, **Audit Trail Immutable**, **Multi-Factor Auth**, **Infrastruktur Aman**.
-- Daftar "Praktik Keamanan".
-- Link laporan kerentanan: `mailto:security@kepin.id`.
+**Dalam bahasa sederhana:** Landing page itu seperti **brosur toko yang bisa diklik** — orang yang belum kenal KePin membaca di sini, lalu memutuskan mau mencoba atau tidak.
 
 ---
 
-# 2. Halaman Autentikasi (Auth)
+## 1.1 Header (Bilah Atas)
 
-Semua halaman auth berada di grup `(auth)` dengan layout terpusat: header (logo → `/`, tombol tour `?`, theme menu) + kartu konten `max-w-md`. Tidak ada guard rute di level layout — halaman auth bisa diakses siapa saja.
+Bilah paling atas halaman yang **selalu ikut menggulir** (sticky).
 
-Konvensi umum:
+**Dalam bahasa sederhana:** Ini adalah **pintu masuk dan papan navigasi**. Di sini orang bisa:
+- Klik **logo KePin** untuk kembali ke halaman awal.
+- Klik menu **Solusi, Fitur, Keamanan, Cara Kerja, Harga, FAQ** — tiap klik langsung melompat ke bagian tertentu di halaman yang sama.
+- Klik tombol **"Masuk"** (kalau sudah punya akun) atau **"Coba Gratis"** (kalau belum).
 
-- Semua submit menggunakan `window.location.href` (reload penuh), bukan navigasi SvelteKit.
-- Error ditampilkan dua kali: kotak error inline + toast.
-- Session disimpan di **localStorage** dengan kunci: `kepin_session`, `kepin_token`, `kepin_tenants`, `kepin_mfa_token`.
+Perilaku pintar (auth-aware):
+- **Belum login** → terlihat tombol *Masuk* + *Coba Gratis*.
+- **Sudah login sebagai pemilik bisnis** → tombol berubah menjadi **nama perusahaannya**, klik langsung masuk ke ruang kerja.
+- **Sudah login sebagai admin platform** → tombol *Panel*.
+- **Sudah login tapi belum punya perusahaan** → tombol *Lengkapi Profil*.
 
-## 2.1 Login (`/auth/login`)
+Ada juga tombol **tanya (`?`)** untuk memulai tur panduan, dan menu **tema** (terang/gelap) agar mata nyaman.
 
-| Fitur | Detail |
-|---|---|
-| Field | Email (`type=email`, required), Password (required) dengan **toggle tampil/sembunyi** (ikon mata). |
-| Checkbox "Ingat saya" | ⚠️ Hanya visual — **tidak ada logika penyimpanan** (temuan, lihat Lampiran). |
-| Link | "Lupa password?" → `/auth/forgot-password`; "Daftar gratis" → `/auth/register`. |
-| Submit | `POST /auth/login` → |
-| — MFA aktif | Redirect ke `/auth/mfa` (token MFA disimpan sementara). |
-| — Sukses | Toast "Login berhasil"; **superadmin** → `/admin`; **punya tenant** → `/app/{slug}`; **tanpa tenant** → `/auth/onboarding`. |
-| — Gagal | Pesan error inline + toast "Login gagal". |
-
-## 2.2 Register (`/auth/register`)
-
-| Fitur | Detail |
-|---|---|
-| Field | Nama Lengkap, Email, Password (`minlength=8`). Tanpa konfirmasi password / strength meter. |
-| Submit | `POST /auth/register` → toast "Pendaftaran berhasil" → setelah ±1 detik redirect ke `/auth/login?onboarding=true` (harus login ulang; tidak auto-login). |
-| Param URL | ⚠️ `?plan=` dari landing **tidak dibaca**; `?onboarding=true` di login juga **tidak dikonsumsi** (keduanya param mati — lihat Lampiran). |
-
-## 2.3 Create Company (`/auth/create-company`)
-
-Halaman untuk pengguna yang sudah login dan ingin membuat organisasi baru.
-
-| Fitur | Detail |
-|---|---|
-| Field | **Nama Perusahaan** (auto-generate slug client-side: lowercase, spasi/karakter khusus → `-`), **Link Unik** (ditampilkan dengan prefix `/app/`), **Paket Langganan** (dropdown: Free Rp0 / Basic Rp99.000 / Premium Rp299.000 / Platinum Rp799.000 — default `free`). |
-| Submit | `POST /auth/create-organization` `{name, slug, plan}` → toast sukses. |
-| Setelah sukses | Form diganti layar **join code** ("Kode Bergabung Perusahaan" + kode mono). Slug & role disimpan ke `kepin_tenants`. Tombol **"Masuk ke Workspace"** → `/app/{slug}` atau **"Kembali"** → `/auth/onboarding`. |
-| Gagal | Pesan `data.detail` inline + toast. |
-
-> **Catatan**: paket pada halaman ini tidak terhubung dengan `?plan=` dari landing.
-
-## 2.4 Join Company (`/auth/join-company`)
-
-Halaman untuk bergabung ke organisasi lewat kode.
-
-| Fitur | Detail |
-|---|---|
-| Field | **Kode Bergabung** (petunjuk 16 karakter, monospace, tengah). |
-| Live lookup | Setiap input → `GET /auth/join-info?code=...` (tanpa auth). Jika valid, tampil kartu perusahaan (nama + `/app/{slug}`). Tombol submit hanya aktif saat info ditemukan. |
-| Guard 1-tenant | Jika akun sudah punya tenant → form diganti peringatan "Satu akun hanya dapat bergabung ke satu perusahaan… keluar terlebih dahulu via menu *Keluar dari Perusahaan Ini*" + tombol ke `/app/{slug}` dan `/auth/onboarding`. |
-| Submit | `POST /auth/join-by-code` `{join_code}` → simpan `{slug, role}` ke `kepin_tenants` → redirect `/app/{slug}`. |
-| Gagal | Pesan `data.detail` inline + toast. |
-
-## 2.5 Forgot Password (`/auth/forgot-password`)
-
-| Fitur | Detail |
-|---|---|
-| Field | Email. |
-| Submit | `POST /auth/forgot-password` → layar sukses "Jika email terdaftar, tautan reset akan dikirim…". |
-| Dev mode | Karena layanan email belum terhubung, backend mengembalikan `dev_reset_token` → kotak "Mode pengembangan — layanan email belum terhubung" dengan tombol **"Salin Token"** (clipboard + toast) dan **"Lanjutkan Reset"** → `/auth/reset-password?token=...`. |
-| Link | "Kembali ke Login" (bawah + layar sukses). |
-
-## 2.6 Reset Password (`/auth/reset-password`)
-
-| Fitur | Detail |
-|---|---|
-| Sumber token | Dibaca dari URL `?token=`; jika tidak ada, tampil field manual "Token Reset". |
-| Field | Token (kondisional), Password Baru (`minlength=8`), Konfirmasi Password. |
-| Validasi client | Password ≠ konfirmasi → "Konfirmasi password tidak sama."; token kosong → "Token reset tidak ditemukan." |
-| Submit | `POST /auth/reset-password` `{token, new_password}` → layar sukses (ikon kunci) + tombol "Kembali ke Login" + toast. |
-
-## 2.7 MFA (`/auth/mfa`)
-
-Halaman verifikasi dua faktor setelah login (jika MFA aktif di akun).
-
-| Fitur | Detail |
-|---|---|
-| Guard | Butuh `kepin_mfa_token` di localStorage; jika tidak ada → "Sesi verifikasi MFA tidak ditemukan atau telah kedaluwarsa." + "Kembali ke Login". |
-| Tab Kode | 6 input digit (`maxlength=1`), **auto-advance** fokus ke input berikutnya, dukung **paste** string 6 karakter. |
-| Tab Recovery | Input teks tunggal placeholder `XXXX-XXXX` (kode cadangan). |
-| Submit | `POST /auth/mfa/verify` dengan token tersimpan → superadmin `/admin`; tenant `/app/{slug}`; tanpa tenant `/auth/onboarding`. |
-| Gagal | Pesan inline + toast. |
-
-## 2.8 Onboarding (`/auth/onboarding`)
-
-| Fitur | Detail |
-|---|---|
-| Auto-redirect | Saat mount: superadmin → `/admin`; punya tenant → `/app/{slug tenant pertama}`; tanpa tenant → tampil layar pilihan. |
-| Pilihan | **"Buat Perusahaan Baru"** → `/auth/create-company`; **"Gabung Perusahaan"** → `/auth/join-company`. |
-| Logout | Tombol Logout → `logout()` lalu redirect ke `/`. |
+> **Catatan kecil**: status login di bilah ini hanya dibaca sekali saat halaman dimuat. Kalau pengguna login/logout di tab yang sama, perlu me-refresh halaman agar tombolnya berubah.
 
 ---
 
-# 3. Workspace Tenant (`/app/{tenantSlug}`)
+## 1.2 Hero (Kalimat Pembuka)
 
-Workspace adalah area utama aplikasi setelah login, di-scope per tenant (organisasi). Terdapat 28+ halaman dengan dua peran: `tenant_owner` dan `employee`.
+Bagian paling atas dan paling mencolok (90% tinggi layar).
 
-## 3.0 Layout & Shell Workspace
+**Dalam bahasa sederhana:** Ini **kalimat sapaan pertama**. Isinya:
+- Judul besar: *"Keuangan rapi. Operasional terkendali. Bisnis lebih dipercaya."* — maksudnya: uang tercatat rapi, barang terkontrol, dan laporan bisa dipercaya (misalnya saat bicara dengan bank atau investor).
+- Penjelasan singkat apa itu KePin.
+- Dua tombol ajakan:
+  - **"Coba Gratis 14 Hari"** → langsung ke halaman pendaftaran.
+  - **"Lihat Cara Kerja"** → melompat ke bagian penjelasan.
+- Catatan kecil: *"Tanpa kartu kredit. Batalkan kapan saja."* — artinya mencoba tidak dikenai biaya dan tidak mengikat.
 
-### Guard & Preload (`(workspace)/+layout.svelte`)
-- Pada setiap load memanggil `GET /tenants/{slug}/context`:
-  - `401` → logout + redirect `/auth/login`.
-  - `403` → layar "Akses Ditolak" (bukan anggota organisasi).
-  - `404` → "Tenant Tidak Ditemukan".
-  - Error lain → "Gagal Memuat Workspace" + tombol "Coba lagi".
-  - Loading → skeleton "Memverifikasi akses workspace…".
-- **Preload data** seluruh modul secara paralel (toleran gagal): sidebar settings, customers, suppliers, products, purchase orders, transactions, accounts, journals, invoices, branches, members, notifications, stock movements, audit events, inventory locations, supplier payments.
-- Menentukan `currentRole` → menggerakkan UI owner vs employee.
-
-### WorkspaceShell
-- **Sidebar desktop** (collapsible `w-64 ⇄ w-16` dengan transisi), **drawer mobile** (overlay), **TopBar**, dan area konten `max-w-7xl`.
-- **Branch banner**: "Cabang: Toko Pusat" + tombol "Ganti" — ⚠️ **stub**: tombol hanya menutup banner, belum ada switcher cabang (temuan, lihat Lampiran).
-
-### WorkspaceSidebar
-- Menu navigasi berbahasa Indonesia (dari `config/navigation.ts`), dikelompokkan dan bisa di-expand/collapse.
-- **Filter visibilitas** via `isNavEnabled` (dari `TenantSidebarSetting`) — owner bisa menyembunyikan menu; item **pinned** (Dashboard, Pengaturan, Keamanan Akun, Tutorial) selalu tampil.
-- Link **"Kustomisasi Sidebar"** hanya untuk owner.
-- Deteksi halaman aktif (termasuk sub-halaman `/notifications`).
-
-### TopBar
-- **Kiri**: tombol hamburger (toggle drawer/collapse) + judul tenant.
-- **Kanan**:
-  - Tombol **Tutorial** (`?`) → `/app/{slug}/tutorial`.
-  - **ThemeMenu** — light/dark/system, persist cookie `kepin_theme`.
-  - **Bell Notifikasi** — badge jumlah belum dibaca (cap "9+"); dropdown 5 notifikasi teratas (titik unread, waktu relatif); klik → halaman detail; footer "Lihat Semua Notifikasi".
-  - **Menu Profil** (nama + email):
-    - **Edit Profil** → modal (nama/email/telepon) → simpan ke localStorage.
-    - **Kembali ke Beranda** → `/`.
-    - **Gabung Perusahaan** (hanya jika tanpa tenant) → `/auth/join-company`.
-    - **Keluar dari Perusahaan Ini** (khusus employee) → konfirmasi → `leaveTenant` → `/auth/onboarding`.
-    - **Logout** → konfirmasi → `/`.
-
-## 3.1 Dashboard
-
-Halaman utama workspace (`/app/{tenantSlug}/`).
-
-| Fitur | Detail |
-|---|---|
-| Refresh | Muat ulang seluruh data (spinner). |
-| Filter tanggal | Preset: 1 minggu / 2 minggu / 3 minggu / 1 bulan / custom (input tanggal + Terapkan). Default 7 hari terakhir. |
-| Compare mode | Checkbox "Bandingkan dengan periode sebelumnya" → otomatis hitung periode sebelumnya (bisa diedit) → MetricCard menampilkan selisih +/- %. |
-| Metrik (4) | **Pendapatan**, **Pengeluaran**, **Laba Bersih**, **Kas & Bank** (format IDR, delta di compare mode). |
-| Aging AR/AP | Dua kartu: **Piutang Usaha** & **Hutang Usaha** — total + 5 bucket (Lancar, 1-30, 31-60, 61-90, >90); link → `/reports?tab=aging`. |
-| Charts | **BarChart** arus kas harian (pemasukan hijau / pengeluaran merah); **PieChart** (donut) komposisi pengeluaran. |
-| Alerts | Kartu "Perhatian" berisi daftar `dashboard.alerts` (mis. invoice jatuh tempo, stok rendah). |
-| Tabel | Transaksi terbaru: Tanggal/Deskripsi/Tipe/Jumlah/Status, searchable. |
-
-**API**: `GET /tenants/{slug}/dashboard?startDate&endDate`, `.../reports/receivable-aging`, `.../reports/payable-aging`.
-
-## 3.2 POS (Point of Sale)
-
-Layar kasir (`/app/{tenantSlug}/pos`).
-
-| Fitur | Detail |
-|---|---|
-| Katalog produk (kiri) | Search debounce 250ms (nama/SKU/kategori); grid kartu (nama, SKU, harga, **badge stok live**: "Habis" / "Stok N" berwarna vs minStock); tombol "+ Keranjang" dan "Stok"; pagination 24/halaman (server-side). |
-| Keranjang (kanan, sticky) | Line item dengan stepper qty (+/-), hapus (Trash), jumlah item & total live. |
-| Pembayaran | `CurrencyInput` jumlah dibayar; shortcut **"Uang Pas"**; kembalian dihitung real-time (hijau cukup / merah "kurang Rp X"); tombol **Bayar** nonaktif jika keranjang kosong atau (jika jumlah > 0) jumlah < total. |
-| Modal Stok | Per produk: toggle "Tambah stok / Kurangi stok", qty (min 1), alasan opsional, preview sebelum→sesudah. Membutuhkan lokasi inventory aktif. |
-| Checkout | `POST /tenants/{slug}/pos/checkout` `{items, amount_paid}` → toast nomor checkout, keranjang dikosongkan, stok & stock movements di-refresh. |
-
-## 3.3 Sales
-
-### Customers (`/sales/customers`)
-- **Search server-side** (debounce) + tabel: Kode/Nama/Email/Telepon/Bergabung (sortable).
-- **CRUD**: "+ Pelanggan Baru" / Edit / Hapus (ConfirmDialog). Modal: kode, nama, email, telepon, alamat.
-- **Statement** (aksi per baris) → `StatementModal` **"Kartu Piutang"**: range tanggal + Terapkan, saldo awal/akhir, tabel debet/kredit/saldo (sticky header, scroll), **export PDF/Excel**.
-- **Export** 6 kolom, nama file `pelanggan`.
-
-### Invoices (`/sales/invoices`)
-- **Metrik**: Total Piutang (non-paid/cancelled), Outstanding (sent/partial/posted), Invoice Bulan Ini, Rata-rata.
-- Tabel: No./Pelanggan/Tanggal/Jatuh Tempo/Total/Status (badge: Konsep/Terkirim/Sebagian/Dibayar/Lewat Jatuh Tempo/Dibatalkan), sortable, searchable.
-- **Owner-only**: draft → **Post** (idempotent) / **Hapus**; posted → **Reverse** (konfirmasi native).
-- **Modal buat invoice**: pelanggan, tanggal, catatan, **baris dinamis** (nama item, qty, harga satuan, PPN %, diskon), estimasi total live (termasuk pajak dikurangi diskon); tombol "Simpan Draft".
-- **Export** 7 kolom, nama file `invoice`.
-
-## 3.4 Purchasing
-
-### Suppliers (`/purchasing/suppliers`)
-- Tabel: Kode/Nama/Email/Telepon/Kota/Bergabung (sortable, searchable).
-- **CRUD** penuh (modal: kode, nama, email `type=email`, telepon, kota).
-- **Statement** → `StatementModal` **"Kartu Hutang"** (export PDF/Excel).
-- **Export** 6 kolom, nama file `pemasok`. Tanpa gating role.
-
-### Purchase Orders (`/purchasing/orders`)
-- **Metrik**: Total PO Terbuka (draft/sent/partial), PO Bulan Ini, PO Diterima, Rata-rata Nilai PO.
-- Tabel: No. PO/Pemasok/Tanggal/Jatuh Tempo/Item/Total/Status (Konsep/Terkirim/Sebagian/Diterima/Dibatalkan), sortable, searchable.
-- **Owner-only per status**:
-  - `draft` → **Kirim**, **Edit**, **Hapus**.
-  - `sent` / `partial` → **Terima** (modal Receive).
-  - `draft` / `sent` / `partial` → **Batal** (modal khusus).
-- **Modal buat/edit PO**: pemasok, tanggal, catatan, baris dinamis (produk auto-isi nama + harga modal, qty, harga satuan, hapus), total berjalan live.
-- **Modal Receive**: butuh lokasi inventory aktif (blokir jika tidak ada); qty per baris di-prefill dengan sisa belum diterima; catatan.
-- **Export** 6 kolom, nama file `purchase-order`.
-
-### Supplier Payments (`/purchasing/payments`)
-- **Metrik**: Total Terbayar (posted), Dibayar Bulan Ini, Draft Menunggu Posting, Rata-rata.
-- Tabel: No./Pemasok/Tanggal/Metode (Kas/Transfer Bank)/Jumlah/Status.
-- **Owner-only**: draft → **Post**; posted → **Void** (membalik GL).
-- **Modal buat**: pemasok, tanggal, metode (kas → akun Kas; bank → catatan akun bank), jumlah, referensi. Validasi client: pemasok + jumlah wajib.
-- **Export** 6 kolom, nama file `supplier-payments`.
-
-## 3.5 Inventory
-
-### Products (`/inventory/products`)
-- **Metrik**: Total Produk, Stok Kritis (0 < stok ≤ min), Nilai Stok (stok × harga modal), Dead Stock (stok ≤ min/2).
-- **Search server-side** (debounce) + tabel: SKU/Nama/Kategori/Stok/Min/Harga Jual/Harga Modal/Status; pagination 20/halaman; kolom stok dari stock balances.
-- **CRUD**: modal (SKU, kategori, nama, satuan, min stok, harga jual `CurrencyInput`, harga modal; status hanya saat edit).
-- **Export** 8 kolom, nama file `produk`.
-
-### Movements (`/inventory/movements`)
-- Tabel **read-only**: Tanggal/Produk/Tipe (badge in/out/adjustment/transfer)/Qty/Stok Awal/Stok Akhir/Alasan; sortable, searchable, pageSize 5.
-- **Export** 7 kolom, nama file `pergerakan-stok`.
-- Reload otomatis saat mount; data diperbarui oleh POS/operasi stok lain.
-
-### Transactions (`/inventory/transactions`)
-- **Metrik**: Total Transaksi, Total Penjualan (halaman ini), Total Kembalian (halaman ini).
-- **Search server-side** + tabel: No. Checkout/Tanggal/Ringkasan Produk (2 pertama + "+N lagi")/Qty/Total/Dibayar/Kembalian; pagination 20.
-- **Detail modal**: ringkasan + tabel line-item (Produk/Qty/Harga Satuan/Subtotal + baris total).
-- **Export** 7 kolom, nama file `transaksi-produk`. Read-only.
-
-## 3.6 Accounting
-
-### Chart of Accounts (`/accounting/chart-of-accounts`)
-- Tabel: Kode/Nama Akun/Tipe (Asset/Liability/Equity/Income/Expense)/Saldo/Status; saldo diambil **per akun** (paralel); sortable (Kode/Nama), searchable.
-- **CRUD**: modal (kode, tipe 5 pilihan, nama; status saat edit); `normalBalance` diturunkan otomatis (asset/expense → debit, lainnya kredit).
-- **Export** 4 kolom, nama file `chart-of-accounts`.
-
-### Fiscal Years (`/accounting/fiscal-years`)
-- **Owner-only** (employee mendapat banner read-only; aksi tersembunyi).
-- Kartu per tahun buku: nama, rentang tanggal, status (Terbuka/Ditutup/Soft Closed/Terkunci) + **tabel periode** (12 bulan) dengan aksi **Tutup / Buka** per periode (terkunci tidak bisa dibuka).
-- Aksi: Refresh; owner **"+ Buat Tahun Buku"** (nama opsional + tanggal mulai/selesai); per tahun **"Tutup Tahun Buku" / "Buka Kembali"**.
-- Pagination 10 tahun/halaman.
-
-### Journals (`/accounting/journals`)
-- **Filter akun** (select akun aktif) → reload jurnal (`?accountId=`); tombol "Reset".
-- **Buku Besar**: checkbox "Lihat buku besar (saldo berjalan)" → kartu ledger dengan rentang tanggal + Terapkan, tabel (Tanggal/No. Jurnal/Deskripsi/Debit/Kredit/Saldo + baris saldo awal/akhir), pagination 25.
-- Tabel jurnal: Tanggal/Referensi/Deskripsi/Status/Dibuat; sortable, searchable.
-- **Owner-only**: draft → **Post** (idempotent); posted → **Reverse** (konfirmasi).
-- **Modal buat jurnal**: tanggal, referensi, deskripsi, **editor baris dinamis** (akun, deskripsi, debet, kredit; min 2 baris), **indikator balance live** (debit = kredit dan ≥1 baris > 0 → "Simpan Draft" aktif).
-- **Export** 5 kolom, nama file `jurnal`.
-
-### Reconciliation (`/accounting/reconciliation`)
-- **Kartu rekening bank**: nama bank, status (Aktif/Nonaktif), nomor ter-mask, saldo GL, jumlah & total statement, jumlah & total unmatched (amber). Owner: tombol edit & hapus.
-- **Tabel transaksi bank**: filter per bank account; Tanggal/External ID/Deskripsi/Jumlah/Status (pill "Terkait" / "Belum dicocokkan"); aksi baris "Saran" (unmatched) + hapus (owner).
-- **Tabel kandidat match**: ID/Bank Txn/Transaksi/Confidence/Status/Matched At/Catatan; owner **"Konfirmasi"**.
-- **Owner-only (top bar)**: "+ Rekening Bank", "+ Impor Bank Txn", "+ Impor CSV", "Cocokkan Semua Saran" (bulk), "+ Buat Match".
-- **6 modal**:
-  1. Rekening bank — akun GL aset (saat buat), nama bank, nomor ter-mask, status (edit).
-  2. Impor transaksi bank manual — akun, externalId, tanggal, jumlah, deskripsi.
-  3. **Impor CSV** — akun + textarea (format `tanggal;deskripsi;jumlah`, negatif diperbolehkan, dedupe) → ringkasan dibuat/dilewati/error.
-  4. Buat match manual — transaksi bank + transaksi internal posted + catatan.
-  5. Saran — per transaksi bank: kandidat dengan skor + "Cocokkan".
-  6. Hasil bulk — jumlah match + daftar dilewati + alasan.
-- Employee: banner read-only, tanpa tombol (tetap bisa lihat saran).
-
-## 3.7 Reports
-
-Halaman terbesar dengan **7 tab** (didukung parameter URL `?tab=`): Ringkasan, Neraca Saldo, Laba Rugi, Neraca, Arus Kas, Aging, Valuasi Stok.
-
-| Fitur global | Detail |
-|---|---|
-| Export | Pilih jenis export (`<select>`) + tombol **Ekspor** → `ExportModal` (PDF/Excel). |
-| Refresh | Muat ulang. |
-| Filter tanggal | `DateRangeFilter` (default 30 hari). |
-| Kartu periode akuntansi | Nama periode + status (open/closed/locked) diturunkan dari fiscal years; **owner-only** tombol **"Tutup Periode" / "Buka Kembali"** (konfirmasi native); employee melihat "Read-only". |
-| Compare mode | Checkbox + tanggal periode sebelumnya (mempengaruhi metrik ringkasan). |
-| Metrik | Pendapatan/Beban/Laba/Piutang Outstanding + Total Aset/Kewajiban+Ekuitas/Selisih Neraca/Delta Stok vs GL. |
-
-**Per tab:**
-
-| Tab | Isi |
-|---|---|
-| **Ringkasan** | BarChart pendapatan vs beban harian + daftar "Beban Terbesar" (top 8). |
-| **Neraca Saldo** | Checkbox "Sertakan jurnal penutup CLS/REV-CLS" (reload); indikator balance Dr/Cr; tabel (Saldo Awal / Debit&Kredit Periode / Debit&Kredit Akhir), sortable, pageSize 12, searchable. |
-| **Laba Rugi** | Tabel P/L bulanan (Pendapatan/Beban/Laba + Δ vs bulan sebelumnya dengan kode warna +/-) + tabel akun. |
-| **Neraca** | Tabel bulanan (Aset/Kewajiban/Ekuitas/Total + Δ Aset) + tabel akun. |
-| **Arus Kas** | 4 metrik (Operasi/Investasi/Pendanaan/Net), legenda kategori, tabel bulanan dengan delta, tabel transaksi (Masuk/Keluar ditampilkan `-` bila nol). |
-| **Aging** | Total AR/AP, per-bucket (jumlah invoice/GRN), ringkasan pemasok (Diterima/Dibayar/Outstanding/Bucket), tabel per pelanggan & pemasok dengan aksi **"Kartu piutang" / "Kartu hutang"** → `StatementModal`. |
-| **Valuasi Stok** | SKU/Produk/Qty/Avg Cost/Nilai. |
-
-**Export**: 8 jenis termasuk **Aging Detail** — yang menghasilkan **XLSX multi-sheet** (sheet "Piutang (Aging)" & "Hutang (Aging)") dengan total agregat. Nama file `laporan-{kind}`.
-
-**Loading**: 12 request paralel (summary, P&L, balance sheet, trial balance ± closing, aging AR/AP asOf, stock valuation asOf, cash flow, versi bulanan ×3, fiscal years) dengan guard urutan request.
-
-### Investor Report (`/reports/investor`)
-- **Executive summary** naratif: pendapatan 6 bulan, gross margin %, posisi kas, runway (bulan).
-- **5 MetricCard**: Pendapatan 6B, Gross Margin, Margin %, Cash Position, Runway (unit "bulan").
-- **Charts**: BarChart pendapatan vs beban bulanan + donut komposisi pengeluaran.
-- **Aksi**: **Bagikan** (`navigator.share`, fallback clipboard + toast), **Refresh**, **Ekspor** (baris label/nilai termasuk rincian per kategori beban).
-- Banner error API. Tanpa tabel/CRUD.
-
-## 3.8 Insights
-
-- Filter rentang tanggal (default 30 hari) + compare mode + 4 metrik + BarChart (serupa dashboard).
-- **Feed insight**: kartu `{judul, deskripsi, dampak (positif/negatif/netral), horizon, faktor[]}` dengan ikon hijau/kuning; tampil 6 pertama + toggle "Tampilkan semua (N)".
-- Data insight berasal dari payload `GET /tenants/{slug}/dashboard` (tidak ada endpoint khusus).
-
-## 3.9 Audit
-
-- **Filter pill tipe objek**: dari `GET /tenants/{slug}/audit-events/types`; pill "Semua" + satu per tipe; reload saat dipilih.
-- Tabel: Waktu/Pelaku/Aksi/Modul/Tipe/Objek; sortable (Waktu, Pelaku), searchable, pageSize 20.
-- Aksi baris **"Detail"** → modal: grid metadata + JSON `before`/`after` yang di-format rapi (pretty-print).
-- **Export** 7 kolom, nama file `audit-trail`.
-
-## 3.10 Notifications
-
-### List (`/notifications`)
-- Aksi **"Tandai Dibaca"** (muncul hanya jika ada unread) → `markAllNotifRead` + toast sukses.
-- List custom (bukan DataTable): titik unread, judul + pesan, waktu relatif; klik baris → halaman detail.
-- **Pagination** 20/halaman: "Sebelumnya/Berikutnya" + "Halaman X / Y".
-- Empty state (ikon Inbox). Data dari store (preload layout).
-
-### Detail (`/notifications/[id]`)
-- Load via `GET /tenants/{slug}/notifications/{id}`; **auto-mark-read** jika belum dibaca.
-- Menampilkan: judul/pesan, waktu absolut, status baca, tautan terkait (jika ada) — "Buka tautan terkait".
-- Aksi: **Kembali**, **Hapus** (confirm native) → kembali ke list.
-
-## 3.11 Tutorial
-
-- Kartu hero: statistik tour (N langkah, N halaman, N bab) + tombol **"Mulai Tur dari Awal"**.
-- **Daftar langkah per fase** (dari `config/tour.ts`): nomor, judul, badge halaman, badge "menyorot elemen" (jika menarget elemen), deskripsi, tombol **"Mulai dari sini"** → `startTourFrom(index)` + navigasi ke halaman tujuan.
-- CTA card di bagian bawah. Murni client-side, tanpa API.
-
-## 3.12 Transactions
-
-- **Metrik**: Total Pemasukan, Total Pengeluaran, Rata-rata Harian, Transaksi Bulan Ini (dihitung client-side).
-- Tabel: Tanggal/Deskripsi/Akun (nama dari store)/Tipe/Jumlah (negatif dalam kurung)/Status (badge); sortable, searchable, pageSize 5.
-- **Owner-only**: draft → **Edit** (modal), **Post** (`/transactions/{id}/post`), **Hapus**; posted → **Void** (konfirmasi native).
-- **Modal buat/edit**: tanggal, deskripsi, akun (income/expense sesuai tipe), akun lawan (asset/cash), tipe, `CurrencyInput` jumlah. Validasi HTML `required`.
-- Tanpa export.
-
-## 3.13 Settings
-
-### Organization (`/settings/organization`)
-- Kartu profil **read-only**: Nama Tampilan, Nama Legal, NPWP, Telepon, Email, Website, Alamat, Zona Waktu, Currency.
-- **Edit Profil modal**: semua field; timezone (WIB/WITA/WIT); currency (hanya IDR); `email`/`url` input type.
-- **API**: `GET /tenants/{slug}/organization`, `PATCH .../organization`. Tombol Refresh + Edit. Tanpa gating role.
-
-### Members (`/settings/members`)
-- **Owner-gated** (employee: tabel read-only + banner, tanpa tombol).
-- **Kartu join code**: tampilkan kode; **Salin** (clipboard → "Tersalin"); **"Perbarui Kode"** (`regenerateJoinCode`); link ke `/auth/join-company`; catatan batasan satu perusahaan per akun.
-- Tabel: Nama/Email/Peran/Status (sortable, searchable).
-- **Owner**: "+ Undang Anggota" (auto-create user bila email belum terdaftar), **Edit**, **Hapus**. Modal: nama, email, role (`tenant_owner`/`employee`), status.
-
-### Branches (`/settings/branches`)
-- **CRUD**: "+ Cabang Baru" / Edit / Hapus (ConfirmDialog). Modal: nama, kode, alamat, status (edit); kolom Pusat (isMain Ya/Tidak).
-- Tabel: Nama Cabang/Kode/Alamat/Pusat/Status (sortable, searchable). Tanpa export, tanpa gating role.
-
-### Roles (`/settings/roles`)
-- **Read-only**: kartu per role — `tenant_owner` (ikon UserCog) & `employee` (ikon Shield) + deskripsi statis. Tanpa aksi/CRUD/export. Skeleton loading + empty fallback.
-
-### Security (`/settings/security`)
-- **MFA (TOTP)** — level akun:
-  - Status check → `GET /auth/mfa/status`.
-  - Jika **nonaktif**: "Aktifkan MFA" → `POST /auth/mfa/setup` → modal menampilkan **base32 secret** (tombol salin), URI otpauth collapsible, input **6 digit** (auto-advance + paste) → `POST /auth/mfa/enable` → **modal recovery codes** (salin semua, konfirmasi tersimpan).
-  - Jika **aktif**: "Nonaktifkan MFA" → konfirmasi 6 digit → `POST /auth/mfa/disable`.
-- **Ganti password**: password lama, baru (min 8), konfirmasi; validasi client "konfirmasi tidak sama" dengan error inline; `changePassword`.
-
-### Sidebar (`/settings/sidebar`) — owner-only
-- **Guard**: non-owner di-redirect ke `/app/{slug}` (via `$effect`) + kartu fallback "Hanya tenant_owner".
-- **Toggle per grup**: header grup dengan hitungan X/Y aktif; per item ikon + label + badge gembok (pinned); switch untuk non-pinned.
-- **Bar simpan sticky**: "Aktifkan Semua" / "Nonaktifkan Semua" / **"Simpan Perubahan"** → `PUT /tenants/{slug}/sidebar-settings`; indikator "✓ Tersimpan"; penghitung "N/M menu aktif".
-- Banner info: perubahan berlaku real-time untuk semua anggota; item pinned selalu tampil.
-
-### Billing (`/settings/billing`)
-- **Read-only**: 3 MetricCard — **Paket** (⚠️ value hardcoded `0` — lihat Lampiran), **Fitur Aktif**, **Status**; kartu paket aktif (nama, planCode, status, periode, daftar fitur); **tabel riwayat langganan** (Paket/Status/Periode/Biaya format IDR/Mulai). Hanya tombol Refresh.
-
-### Integrations (`/settings/integrations`)
-- List kartu integrasi: provider/displayName, "Sinkron terakhir", baris error sinkron, status pill; **owner-only toggle Aktifkan/Putuskan** (`updateIntegration`).
-- Owner **"+ Tambah Integrasi"** modal: provider + displayName (secret sengaja TIDAK diisi di browser).
-- Jika backend kosong → pesan "Backend belum mengembalikan integrasi aktif. Tidak menampilkan daftar integrasi dummy."
+Di sisi kanan (hanya di layar komputer) ada **gambar contoh dashboard** yang menunjukkan angka "Pendapatan Bulan Ini Rp 89,5 Jt" dan "Stok Kritis 3" — supaya calon pengguna membayangkan seperti apa tampilan aplikasinya.
 
 ---
 
-# 4. Ringkasan Peran (Owner vs Employee)
+## 1.3 Trust Strip (Rakitan Angka Kepercayaan)
 
-| Area | tenant_owner | employee |
+Pita gelap berisi 4 angka besar.
+
+**Dalam bahasa sederhana:** Ini **papan nilai jual** untuk meyakinkan pengunjung bahwa KePin sudah dipakai banyak orang dan aman:
+- **5.000+ UMKM Terdaftar** — sudah banyak yang memakai.
+- **50+ Kota Tersebar** — dipakai di banyak kota.
+- **99.9% Uptime Platform** — hampir tidak pernah mati.
+- **ISO 27001** — standar keamanan data internasional.
+
+Angka-angka ini statis (tidak bisa diklik) — murni alat pemasaran.
+
+---
+
+## 1.4 Masalah (`#solusi`)
+
+Tiga kartu yang menggambarkan **keluhan umum pemilik usaha kecil**.
+
+**Dalam bahasa sederhana:** Sebelum menawarkan solusi, KePin "menyentuh luka" dulu — supaya pengunjung merasa *"ih, itu masalah saya!"* Tiga masalah itu:
+1. **Fraud & selisih terlambat diketahui** — barang hilang atau uang tidak cocok baru ketahuan saat tutup buku. (Di KePin, ada peringatan real-time.)
+2. **Data keuangan tersebar** — catatan di buku, stok di spreadsheet, bayaran di aplikasi lain, jadi sulit melihat gambaran utuh. (Di KePin, semua jadi satu.)
+3. **Keputusan tanpa data** — beli stok asal-asalan tanpa lihat tren, akhirnya barang menumpuk dan uang macet. (Di KePin, ada laporan dan prediksi.)
+
+---
+
+## 1.5 Alur Solusi (Cara Kerja Berantai)
+
+Rangkaian 6 langkah dengan panah: **Penjualan → Stok → Jurnal → Laporan → Insight → Keputusan**.
+
+**Dalam bahasa sederhana:** Ini menjelaskan **efek bola salju** KePin. Sekali data penjualan masuk, otomatis:
+1. **Penjualan** tercatat,
+2. **Stok** barang berkurang,
+3. **Jurnal** (catatan akuntansi) terisi,
+4. **Laporan** keuangan jadi,
+5. **Insight** (wawasan) muncul,
+6. Pemilik bisa ambil **keputusan** — misalnya barang apa yang harus dibeli ulang.
+
+Semua terjadi otomatis tanpa input ulang.  ini murni penjelasan visual, tidak ada tombol.
+
+---
+
+## 1.6 Fitur Unggulan (`#fitur`)
+
+Enam kartu berisi kemampuan utama KePin.
+
+**Dalam bahasa sederhana:** Ini **daftar menu andalan** — seperti daftar menu di restoran:
+
+| Fitur | Artinya buat pengguna awam |
+|---|---|
+| **Akuntansi Dasar** | Mencatat pemasukan/pengeluaran, punya daftar akun, jurnal, dan laporan keuangan lengkap. |
+| **ERP Ringan** | Semua urusan operasional (jual, beli, pemasok, pelanggan, produk, stok) ada di satu tempat. |
+| **Audit Trail** | Setiap perubahan tercatat: siapa, kapan, mengubah apa. Seperti CCTV untuk data. |
+| **AI Insight** | Komputer menganalisis data dan memberi prediksi penjualan + saran stok. |
+| **Investor Report** | Laporan khusus yang rapi dan kredibel untuk investor / calon pendana. |
+| **Multi-Format Export** | Data bisa diunduh dalam format PDF, CSV, XLSX — data milik pengguna, bisa dibawa kapan saja. |
+
+---
+
+## 1.7 Keamanan Zero Trust (`#keamanan`)
+
+ dua kolom yang menjelaskan **seberapa aman data pengguna**.
+
+**Dalam bahasa sederhana:** "Zero Trust" artinya **jangan percaya siapa pun secara otomatis** — setiap akses diperiksa. Diibaratkan gedung dengan banyak pintu keamanan berlapis:
+- Setiap orang hanya bisa masuk sesuai **perannya** (pemilik vs karyawan beda akses).
+- Data satu perusahaan **terisolasi** — perusahaan lain tidak bisa melihatnya.
+- Ada **verifikasi 2 langkah (MFA)** — bukan cuma password.
+- Ada **jejak audit** yang tidak bisa diubah-ubah.
+- Data **dienkripsi** (disandikan) saat dikirim dan disimpan.
+
+Tombol **"Pelajari Lebih Lanjut"** membawa ke halaman `/security` yang menjelaskan lebih detail.
+
+---
+
+## 1.8 Cara Kerja (`#cara-kerja`)
+
+Empat langkah bernomor besar: 01–04.
+
+**Dalam bahasa sederhana:** Ini **resep memulai KePin** dari nol:
+1. **Buat Workspace** — daftar dan buat "kantor digital" bisnis.
+2. **Setup Bisnis** — masukkan produk, pelanggan, pemasok, dan undang tim.
+3. **Catat Transaksi** — input penjualan/pembelian/pengeluaran; stok dan jurnal otomatis ter-update.
+4. **Pantau & Kembangkan** — lihat dashboard, laporan, dan insight untuk mengambil keputusan.
+
+---
+
+## 1.9 Untuk Siapa KePin?
+
+Empat kartu segmen pengguna.
+
+**Dalam bahasa sederhana:** **Siapa yang cocok memakai KePin?**
+- **Ritel** (toko) → memantau selisih stok dan barang yang jarang laku.
+- **F&B** (makanan/minuman) → mengelola bahan baku, pembelian, dan margin menu.
+- **Manufaktur Kecil** → memantau bahan baku, proses produksi, dan biaya.
+- **Startup** → laporan arus kas yang kredibel untuk investor.
+
+---
+
+## 1.10 Harga (`#harga`)
+
+Tiga paket berlangganan.
+
+**Dalam bahasa sederhana:** **Pilihan langganan bulanan** — seperti paket internet:
+- **Basic Rp199.000/bulan** — untuk yang baru mulai; 50 transaksi/bulan, 1 pengguna, 1 cabang.
+- **Premium Rp499.000/bulan** (diberi tanda **POPULER**) — paling seimbang; transaksi tak terbatas, 5 pengguna, 3 cabang, kelola stok & invoice, prediksi AI dasar.
+- **Platinum Rp999.000/bulan** — untuk yang siap cari dana; pengguna & cabang tak terbatas, laporan investor, audit lengkap, rekonsiliasi bank, dukungan khusus.
+
+Setiap paket punya tombol ajakan. Tombol paket Premium mengirim parameter `?plan=premium` ke halaman daftar.
+
+> ⚠️ **Catatan temuan**: parameter `?plan=` sebenarnya **tidak dibaca** oleh halaman pendaftaran (lihat Lampiran #1). Jadi tombolnya tetap membuka halaman daftar biasa, tanpa paket terpilih otomatis.
+
+---
+
+## 1.11 Program Early Adopter
+
+Banner merah mencolok.
+
+**Dalam bahasa sederhana:** **Promo untuk pengguna pertama.** Diskon 50% untuk tahun pertama, tapi kuotanya terbatas 50 klien pertama, dan sebagai gantinya pengguna bersedia memberi testimoni & masukan. Ada tombol **"Ambil Diskon Early Adopter"** yang mengarah ke pendaftaran.
+
+---
+
+## 1.12 FAQ (`#faq`)
+
+Enam pertanyaan yang bisa dibuka-tutup (accordion).
+
+**Dalam bahasa sederhana:** Ini **tempat jawaban pertanyaan yang paling sering ditanyakan** — seperti "tanya jawab" di situs. Klik pertanyaan → jawaban muncul di bawahnya, ikon panah berputar. Klik lagi → tertutup. Hanya satu pertanyaan yang bisa terbuka dalam satu waktu.
+
+Pertanyaannya antara lain: cocok untuk yang tidak punya staf akuntansi? bagaimana pemisahan data antar perusahaan? bisa kelola banyak cabang? apa yang terjadi setelah masa trial? bagaimana cara ekspor data? bagaimana cara kerja prediksi AI?
+
+---
+
+## 1.13 Penutup (Final CTA)
+
+Bagian paling bawah sebelum footer.
+
+**Dalam bahasa sederhana:** Ini **ajakan pamungkas** — "Siap Mengelola Bisnis dengan Lebih Percaya Diri?" dengan dua tombol: **"Coba Gratis 14 Hari"** dan **"Jadwalkan Demo"**. Sama seperti hero, ada catatan *"Tanpa kartu kredit. Dukungan setup gratis."*
+
+---
+
+## 1.14 Footer (Kaki Halaman)
+
+Bagian paling bawah, berlatar gelap, berisi 4 kolom.
+
+**Dalam bahasa sederhana:** Ini **papan petunjuk lengkap** di dasar halaman:
+- **Brand** — logo + tagline.
+- **Produk** — link cepat ke Fitur, Harga, Keamanan.
+- **Perusahaan** — Kebijakan Privasi & Syarat Ketentuan.
+- **Bantuan** — alamat email `hello@kepin.id` dan link FAQ.
+
+Di bar paling bawah ada hak cipta tahun berjalan dan menu tema.
+
+---
+
+## 1.15 Halaman Legal (Privasi / Syarat / Keamanan)
+
+Tiga halaman teks panjang dengan header dan breadcrumb (jejak lokasi).
+
+**Dalam bahasa sederhana:**
+- **Kebijakan Privasi** — janji KePin soal data pengguna: data apa yang dikumpulkan, dipakai untuk apa, bagaimana dijaga, hak pengguna, dan soal cookie.
+- **Syarat & Ketentuan** — aturan main pemakaian layanan: layanan apa yang disediakan, tanggung jawab akun, pembayaran & langganan, batasan tanggung jawab, dan penghentian layanan.
+- **Halaman Keamanan** — rincian cara KePin menjaga keamanan: 6 kartu (ISO 27001, Enkripsi, Isolasi Tenant, Audit Trail, MFA, Infrastruktur Aman) + praktik keamanan + alamat email untuk melaporkan celah keamanan (`security@kepin.id`).
+
+Halaman-halaman ini statis — hanya dibaca, tidak ada tombol interaktif selain link email.
+
+---
+
+# 2. Halaman Masuk & Daftar (Auth)
+
+Kelompok halaman ini adalah **gerbang masuk aplikasi**. Semua halaman di sini berbentuk kartu di tengah layar dengan logo di atas.
+
+**Dalam bahasa sederhana:** Bayangkan pintu masuk gedung:
+- **Belum punya kartu** → daftar dulu (Register).
+- **Punya kartu** → tunjukkan kartunya (Login).
+- **Lupa PIN** → minta kartu baru (Forgot/Reset Password).
+- **Verifikasi 2 langkah** → tunjukkan kode dari aplikasi ponsel (MFA).
+- **Pertama kali masuk** → dipandu memilih: buat perusahaan baru atau gabung perusahaan (Onboarding).
+
+Catatan penting: semua data sesi disimpan di **localStorage browser** (penyimpanan lokal per perangkat). Artinya, kalau ganti perangkat atau hapus data browser, harus login ulang.
+
+---
+
+## 2.1 Login (Masuk)
+
+Halaman untuk masuk dengan akun yang sudah ada.
+
+**Dalam bahasa sederhana:** Form sederhana dua kolom — **email** dan **password** (ada ikon mata untuk melihat/menyembunyikan password). Lalu:
+- Klik **"Lupa password?"** jika lupa kata sandi.
+- Klik **"Daftar gratis"** jika belum punya akun.
+- Setelah masuk berhasil, KePin mengarahkan otomatis:
+  - Akun punya perusahaan → langsung ke **ruang kerja** perusahaan.
+  - Akun belum punya perusahaan → ke halaman **pilihan buat/gabung**.
+  - Akun admin platform → ke **panel admin**.
+  - Akun dengan verifikasi 2 langkah aktif → ke halaman **verifikasi kode** dulu.
+
+> ⚠️ **Catatan temuan**: kotak centang **"Ingat saya"** di halaman ini hanya hiasan — tidak menyimpan apa-apa (Lampiran #3).
+
+---
+
+## 2.2 Register (Daftar Akun)
+
+Halaman untuk membuat akun baru.
+
+**Dalam bahasa sederhana:** Isi 3 kolom: **nama lengkap, email, password** (minimal 8 karakter). Klik daftar → muncul pemberitahuan "Pendaftaran berhasil" → otomatis diarahkan ke **halaman login** untuk masuk dengan akun baru. (KePin sengaja tidak langsung login — pengguna diminta masuk manual sekali.)
+
+> ⚠️ **Catatan temuan**: kalau datang dari tombol paket di landing (dengan `?plan=premium`), paket itu **tidak terbawa** — pengguna tetap harus memilih paket nanti di halaman buat perusahaan (Lampiran #1).
+
+---
+
+## 2.3 Buat Perusahaan Baru
+
+Halaman untuk pengguna yang sudah login dan ingin **mendirikan perusahaan/workspace baru**.
+
+**Dalam bahasa sederhana:** Ini seperti **mengisi formulir pendirian "kantor digital"**:
+1. Tulis **Nama Perusahaan** — KePin otomatis membuat **tautan unik** (slug) dari nama tersebut, misal nama "Toko Maju" → tautan `/app/toko-maju`.
+2. Pilih **Paket Langganan** (Free Rp0, Basic, Premium, Platinum).
+3. Klik buat → muncul **Kode Bergabung** (kode khusus untuk mengundang orang lain bergabung ke perusahaan ini).
+4. Klik **"Masuk ke Workspace"** → langsung dibawa ke ruang kerja perusahaan yang baru dibuat.
+
+---
+
+## 2.4 Gabung Perusahaan
+
+Halaman untuk bergabung ke perusahaan orang lain memakai **kode bergabung**.
+
+**Dalam bahasa sederhana:** Seperti **memasuki grup dengan kode undangan**. Ketik kode 16 karakter → KePin langsung memeriksa (tanpa perlu tombol) apakah kodenya valid → jika ya, muncul kartu nama perusahaannya → klik tombol gabung → langsung masuk ke workspace perusahaan tersebut.
+
+Aturan penting: **satu akun hanya boleh bergabung ke satu perusahaan.** Kalau sudah punya perusahaan, halaman ini menampilkan peringatan dan menyarankan keluar dari perusahaan lama dulu (melalui menu profil).
+
+---
+
+## 2.5 Lupa Password
+
+Halaman untuk meminta **tautan reset kata sandi**.
+
+**Dalam bahasa sederhana:** Masukkan email → klik kirim → muncul pesan "Jika email terdaftar, tautan reset akan dikirim…" (pesan dibuat netral agar orang tidak bisa menebak email mana yang terdaftar).
+
+**Khusus mode pengembangan:** karena layanan email belum tersambung, KePin menampilkan **token reset langsung di layar** dengan tombol **"Salin Token"** dan **"Lanjutkan Reset"** — ini jalan pintas untuk keperluan demo/pengujian.
+
+---
+
+## 2.6 Reset Password
+
+Halaman untuk **membuat password baru** setelah mendapat token.
+
+**Dalam bahasa sederhana:** Isi **token** (otomatis terisi jika datang dari tautan email, atau ketik manual), lalu **password baru** dan **ulangi password**. KePin memeriksa: dua password harus sama, dan password minimal 8 karakter. Jika cocok → password diganti → kembali ke halaman login.
+
+---
+
+## 2.7 Verifikasi 2 Langkah (MFA)
+
+Halaman **lapisan keamanan tambahan** setelah login.
+
+**Dalam bahasa sederhana:** Bayangkan selain password, ada **kunci kedua** yang berubah setiap 30 detik (dari aplikasi seperti Google Authenticator di ponsel). Ada dua cara memasukkan:
+- **Tab Kode** — 6 kotak angka; saat mengetik, kursor otomatis pindah ke kotak berikutnya (dan mendukung tempel/paste).
+- **Tab Recovery** — kode cadangan berbentuk `XXXX-XXXX` untuk keadaan darurat (misal ponsel hilang).
+
+Kalau kode benar → lanjut ke ruang kerja. Kalau sesi verifikasinya sudah kedaluwarsa → diminta login ulang.
+
+---
+
+## 2.8 Halaman Awal Setelah Login (Onboarding)
+
+Halaman **penentu arah** untuk pengguna yang baru login.
+
+**Dalam bahasa sederhana:** Begitu masuk, KePin otomatis mengantar ke tempat yang tepat:
+- Sudah punya perusahaan → langsung ke **ruang kerja**.
+- Admin platform → ke **panel admin**.
+- Belum punya perusahaan → ditanya mau **"Buat Perusahaan Baru"** atau **"Gabung Perusahaan"**, plus tombol **keluar (logout)**.
+
+---
+
+# 3. Workspace Tenant (Ruang Kerja Perusahaan)
+
+Ini **inti aplikasi** — tempat pengguna bekerja setiap hari setelah login. Alamatnya `/app/{nama-perusahaan}` (misal `/app/toko-maju`). Setiap perusahaan punya ruang kerjanya sendiri yang **terpisah dari perusahaan lain** (isolasi data).
+
+**Dalam bahasa sederhana:** Workspace itu seperti **kantor + gudang + ruang kasir dalam satu gedung digital**. Semua orang di perusahaan yang sama bisa masuk, tapi dengan **kunci akses berbeda** (lihat Bab 4: pemilik vs karyawan).
+
+---
+
+## 3.0 Kerangka & Navigasi Workspace
+
+### Pintu masuk & pemeriksaan akses
+Setiap kali membuka ruang kerja, KePin **memeriksa dulu** siapa penggunanya:
+- Belum login → dilempar ke halaman login.
+- Bukan anggota perusahaan → layar "Akses Ditolak".
+- Nama perusahaan salah/tidak ada → "Tenant Tidak Ditemukan".
+- Sudah sesuai → data seluruh modul (pelanggan, produk, stok, jurnal, dll) **dimuat sekaligus** agar halaman terasa cepat.
+
+### Bilah samping (Sidebar)
+Menu utama di sisi kiri, bisa **diciutkan** (jadi ikon saja) di komputer, atau jadi **laci geser** di layar ponsel. Isinya kelompok menu: Dashboard, Penjualan, Pembelian, Inventori, Akuntansi, Laporan, Pengaturan, dll.
+
+**Khusus pemilik:** bisa **menyembunyikan/menampilkan menu** lewat Pengaturan → Sidebar, dan menu yang disembunyikan berlaku untuk semua anggota. Menu penting (Dashboard, Pengaturan, Keamanan Akun, Tutorial) selalu tampil dan tidak bisa disembunyikan.
+
+### Bilah atas (TopBar)
+Di sisi kanan ada:
+- Tombol **?** → membuka halaman tutorial.
+- Menu **tema** (terang/gelap).
+- **Lonceng notifikasi** dengan angka merah (jumlah belum dibaca). Klik → daftar 5 notifikasi terbaru; klik satu → halaman detail; ada tombol "Lihat Semua Notifikasi".
+- **Menu profil** (foto/nama) → berisi: edit profil, kembali ke beranda, gabung perusahaan (jika belum punya), **keluar dari perusahaan ini** (khusus karyawan), dan **keluar/logout**.
+
+> ⚠️ **Catatan temuan**: ada banner "Cabang: Toko Pusat" dengan tombol "Ganti", tapi tombol itu **belum berfungsi penuh** — hanya menutup banner (Lampiran #4).
+
+---
+
+## 3.1 Dashboard (Papan Pemantau)
+
+Halaman pertama saat masuk workspace.
+
+**Dalam bahasa sederhana:** Dashboard itu seperti **dasbor mobil** — semua angka penting terlihat sekilas tanpa perlu buka banyak halaman:
+- **4 kartu angka utama**: Pendapatan, Pengeluaran, Laba Bersih, dan Kas & Bank.
+- **Grafik**: batang arus kas harian (hijau = uang masuk, merah = uang keluar) dan lingkaran komposisi pengeluaran (uang banyak habis untuk apa).
+- **Piutang & Hutang**: kartu "Piutang Usaha" (uang yang harusnya diterima dari pelanggan) dan "Hutang Usaha" (uang yang harus dibayar ke pemasok), dipecah per umur (Lancar, 1-30 hari, 31-60, 61-90, >90 hari).
+- **Kartu "Perhatian"**: daftar hal yang perlu ditindaklanjuti (misal tagihan lewat jatuh tempo, stok menipis).
+- **Tabel transaksi terbaru** + tombol refresh.
+
+Fitur pembanding:
+- **Filter rentang waktu**: 1 minggu / 2 minggu / 3 minggu / 1 bulan / tanggal bebas.
+- **Mode bandingkan**: centang "Bandingkan dengan periode sebelumnya" → angka metrik otomatis menampilkan selisih naik/turun dalam persen.
+
+---
+
+## 3.2 POS (Mesin Kasir Digital)
+
+Halaman khusus untuk **melayani penjualan di kasir**, seperti mesin kasir di toko.
+
+**Dalam bahasa sederhana:** Bayangkan **kasir toko kelontong**:
+- **Kiri** — rak barang (katalog): cari produk dengan kotak pencarian, pilih lewat kartu produk yang menampilkan harga dan sisa stok (badge merah "Habis" atau "Stok N"). Tombol **"+ Keranjang"** memasukkan barang.
+- **Kanan** — keranjang belanja: atur jumlah (tombol +/−), hapus barang, total otomatis terhitung.
+- **Pembayaran**: masukkan jumlah uang yang diterima, ada tombol **"Uang Pas"** (uang pas tanpa kembalian), dan **kembalian dihitung otomatis**. Kalau uang kurang, muncul peringatan merah "kurang Rp X" dan tombol bayar terkunci.
+- **Kelola stok cepat**: tombol "Stok" di tiap produk untuk menambah/mengurangi stok langsung dari kasir.
+- Setelah bayar → transaksi tercatat otomatis, stok berkurang, dan muncul **nomor transaksi** sebagai bukti.
+
+---
+
+## 3.3 Penjualan (Sales)
+
+### Daftar Pelanggan (`/sales/customers`)
+**Dalam bahasa sederhana:** Ini **buku alamat pelanggan** — kode, nama, email, telepon, alamat. Bisa tambah/edit/hapus pelanggan, mencari dengan kotak pencarian, dan mengekspor daftarnya ke file. Ada tombol **"Kartu Piutang"** untuk melihat riwayat tagihan & pembayaran satu pelanggan (lengkap dengan saldo akhir, bisa diunduh PDF/Excel).
+
+### Tagihan/Invoice (`/sales/invoices`)
+**Dalam bahasa sederhana:** Ini **daftar tagihan** yang dikirim ke pelanggan. Membuat tagihan = memilih pelanggan, menambahkan baris barang/jasa (jumlah, harga, pajak PPN %, potongan), total dihitung otomatis. Status tagihan berjenjang: **Konsep → Terkirim → Sebagian → Dibayar** (atau **Dibatalkan**).
+- Pemilik bisa **memposting** tagihan (konsep → diakui di pembukuan), **membatalkan**, atau **membalik** tagihan yang sudah diposting (jika salah).
+- Ada kartu metrik: total piutang, tagihan bulan ini, dll. Bisa diekspor ke file.
+
+---
+
+## 3.4 Pembelian (Purchasing)
+
+### Daftar Pemasok (`/purchasing/suppliers`)
+**Dalam bahasa sederhana:** Ini **buku alamat pemasok** (yang menjual barang ke kita): kode, nama, kontak, kota. Bisa tambah/edit/hapus, cari, ekspor, dan lihat **"Kartu Hutang"** (riwayat utang ke pemasok tertentu).
+
+### Purchase Order (`/purchasing/orders`)
+**Dalam bahasa sederhana:** Ini **surat pesanan barang** ke pemasok — "tolong kirim 10 dus mie, 5 kg gula". Alurnya: **Konsep → Kirim → Sebagian diterima → Diterima** (atau **Dibatalkan**).
+- Pemilik bisa **mengirim** pesanan (status jadi Terkirim), **menerima barang** (modal khusus: isi jumlah yang benar-benar diterima, stok otomatis bertambah), mengedit, membatalkan.
+- Ada kartu metrik (PO terbuka, PO bulan ini, dll) dan ekspor.
+
+### Pembayaran ke Pemasok (`/purchasing/payments`)
+**Dalam bahasa sederhana:** Ini **catatan pembayaran utang** ke pemasok. Buat pembayaran (pilih pemasok, tanggal, metode: kas atau transfer, jumlah) → status **Konsep → Diposting** (diakui di pembukuan) → bisa **dibatalkan/void** jika salah. Ada kartu metrik dan ekspor.
+
+---
+
+## 3.5 Inventori / Stok Barang
+
+### Produk (`/inventory/products`)
+**Dalam bahasa sederhana:** Ini **daftar semua barang dagangan** — kode SKU, nama, kategori, stok, stok minimum, harga jual, harga modal. Dilengkapi kartu metrik penting:
+- **Total Produk**, **Stok Kritis** (tinggal sedikit, ≤ batas minimum), **Nilai Stok** (harga semua barang), **Dead Stock** (barang yang nyaris tidak laku).
+- Bisa tambah/edit/hapus produk, cari, dan ekspor.
+
+### Pergerakan Stok (`/inventory/movements`)
+**Dalam bahasa sederhana:** Ini **buku harian stok** — mencatat setiap barang masuk (in), keluar (out), penyesuaian (adjustment), atau pindah (transfer), lengkap dengan stok sebelum & sesudah serta alasannya. Hanya bisa dibaca & diekspor.
+
+### Transaksi Produk (`/inventory/transactions`)
+**Dalam bahasa sederhana:** Ini **daftar struk penjualan dari kasir (POS)** — nomor checkout, tanggal, ringkasan barang yang dibeli, total, uang dibayar, kembalian. Klik satu transaksi → detail barang per baris. Bisa dicari & diekspor.
+
+---
+
+## 3.6 Akuntansi / Pembukuan
+
+> **Untuk orang awam:** bagian ini terdengar menakutkan, tapi intinya sederhana — **semua uang yang masuk & keluar dicatat rapi dalam aturan pembukuan standar**, sehingga laporan keuangan otomatis benar. Pemilik tidak perlu hafal istilah akuntansi karena KePin yang menghitung.
+
+### Daftar Akun (Chart of Accounts, `/accounting/chart-of-accounts`)
+**Dalam bahasa sederhana:** Ini **map-map pengelompokan uang**: Aset (harta), Kewajiban (utang), Ekuitas (modal), Pendapatan (pemasukan), Beban (pengeluaran). Setiap transaksi "dimasukkan ke map" yang tepat. Bisa tambah/edit/hapus akun, lihat saldonya, dan ekspor.
+
+### Tahun Buku (`/accounting/fiscal-years`)
+**Dalam bahasa sederhana:** Ini **kalender pembukuan** — dibagi per tahun dan per bulan (periode). Setiap akhir periode, pemilik bisa **menutup periode** (mengunci angka bulan itu) atau membukanya kembali. Hanya pemilik yang bisa menutup/membuka.
+
+### Jurnal (`/accounting/journals`)
+**Dalam bahasa sederhana:** Ini **catatan transaksi berpasangan** — setiap uang masuk/keluar dicatat dua sisi (debit & kredit) yang harus selalu seimbang. Formulir pembuatannya membantu: jika debit ≠ kredit, tombol simpan terkunci. Ada fitur **Buku Besar** (lihat riwayat satu akun dengan saldo berjalan) — seperti melihat mutasi satu map uang dari waktu ke waktu.
+
+### Rekonsiliasi Bank (`/accounting/reconciliation`)
+**Dalam bahasa sederhana:** Ini **mencocokkan catatan uang di aplikasi dengan mutasi bank sungguhan** — seperti mencocokkan struk di dompet dengan salinan dari bank. Fiturnya canggih:
+- Daftar **rekening bank** (BCA, Mandiri, dll) beserta saldonya.
+- Impor **mutasi bank** (satu per satu atau lewat **file CSV**).
+- **Saran otomatis**: KePin menebak transaksi mana yang cocok dengan mutasi bank (dengan nilai skor keyakinan). Pemilik tinggal **"Cocokkan"** atau **"Cocokkan Semua Saran"** sekaligus.
+- Transaksi yang sudah cocok ditandai "Terkait"; yang belum "Belum dicocokkan".
+
+---
+
+## 3.7 Laporan Keuangan (Reports)
+
+Halaman terbesar dengan **7 tab** laporan.
+
+**Dalam bahasa sederhana:** Ini **ruang cetak laporan** — semua laporan penting untuk tahu kondisi usaha:
+- **Ringkasan** — gambaran cepat: pendapatan vs beban harian + daftar beban terbesar.
+- **Neraca Saldo** — daftar semua akun dan saldonya, untuk memastikan pembukuan seimbang (debit = kredit).
+- **Laba Rugi** — **yang paling penting**: untung atau rugi? Ditampilkan per bulan, lengkap dengan perbandingan naik/turun vs bulan sebelumnya.
+- **Neraca** — harta, utang, dan modal pada satu waktu (foto kondisi keuangan).
+- **Arus Kas** — uang masuk & keluar dari aktivitas operasi, investasi, dan pendanaan.
+- **Aging** — rincian piutang (yang belum dibayar pelanggan) & hutang (yang belum dibayar ke pemasok) per umur; bisa digali per pelanggan/pemasok ("Kartu piutang/hutang").
+- **Valuasi Stok** — nilai seluruh barang di gudang.
+
+Semua laporan bisa **diunduh** sebagai PDF atau Excel (untuk aging, file Excel-nya punya 2 lembar: piutang & hutang). Ada juga tombol **"Tutup Periode"** (mengunci angka satu bulan) yang khusus pemilik.
+
+### Laporan Investor (`/reports/investor`)
+**Dalam bahasa sederhana:** Ini **laporan "grooming" untuk investor** — ringkasan eksekutif: pendapatan 6 bulan, margin kotor, posisi kas, dan berapa lama uang bertahan (runway). Bisa **dibagikan** (share) atau diekspor.
+
+---
+
+## 3.8 Insight (Wawasan Otomatis)
+
+**Dalam bahasa sederhana:** Ini **asisten analis** — KePin membaca data lalu menampilkan kartu-kartu wawasan, misalnya *"Penjualan naik 15% minggu ini, kemungkinan karena promo"* atau *"Produk X mulai jarang laku, pertimbangkan stok ulang"*. Setiap wawasan punya **dampak** (positif/negatif) dan faktor pendukung. Mirip dashboard: ada metrik, grafik, dan filter waktu.
+
+---
+
+## 3.9 Audit (Jejak Perubahan)
+
+**Dalam bahasa sederhana:** Ini **CCTV data** — mencatat siapa mengubah apa dan kapan (misal: "Budi menghapus pelanggan A jam 10:23"). Berguna untuk keamanan dan menyelesaikan sengketa. Bisa:
+- **Filter** berdasarkan jenis objek (pelanggan, produk, dll) lewat tombol pil.
+- Klik **"Detail"** → melihat nilai data **sebelum** dan **sesudah** diubah.
+- **Ekspor** riwayat ke file.
+
+---
+
+## 3.10 Notifikasi (Pemberitahuan)
+
+**Dalam bahasa sederhana:** Ini **kotak masuk pengingat** — misal "tagihan pelanggan jatuh tempo", "stok menipis", atau "ada anggota baru". Fiturnya:
+- List notifikasi dengan **titik merah** untuk yang belum dibaca, waktu relatif ("2 jam lalu").
+- Tombol **"Tandai Dibaca"** untuk menandai semua.
+- Klik notifikasi → halaman detail (otomatis ditandai terbaca), bisa dihapus.
+- Ada pagination 20 per halaman.
+
+---
+
+## 3.11 Tutorial (Panduan Berjalan)
+
+**Dalam bahasa sederhana:** Ini **pemandu wisata aplikasi** — tur interaktif yang menyorot elemen layar satu per satu sambil menjelaskan. Dari halaman ini bisa melihat daftar semua langkah tur (di halaman mana, menjelaskan apa), **"Mulai Tur dari Awal"**, atau **"Mulai dari sini"** di langkah tertentu. Murni bantuan, tidak mengubah data apa pun.
+
+---
+
+## 3.12 Transaksi Manual
+
+**Dalam bahasa sederhana:** Ini **kolom untuk mencatat transaksi sendiri** yang tidak lewat kasir — misal bayar listrik, beli alat tulis, atau uang masuk dari investor. Fitur:
+- 4 kartu metrik: total pemasukan, pengeluaran, rata-rata harian, transaksi bulan ini.
+- Tabel transaksi (tanggal, deskripsi, akun, tipe, jumlah, status).
+- **Khusus pemilik**: membuat konsep → **Posting** (diakui di pembukuan), edit, hapus, atau **Void** (membatalkan yang sudah diposting). Karyawan hanya bisa melihat.
+
+---
+
+## 3.13 Pengaturan (Settings)
+
+Ada 8 halaman pengaturan:
+
+### Profil Perusahaan (`/settings/organization`)
+**Dalam bahasa sederhana:** **Kartu identitas perusahaan** — nama tampilan, nama legal, NPWP, telepon, email, website, alamat, zona waktu, mata uang. Bisa diedit lewat tombol **Edit Profil** (zona waktu pilihan WIB/WITA/WIT; mata uang IDR).
+
+### Anggota (`/settings/members`) — khusus pemilik
+**Dalam bahasa sederhana:** **Daftar karyawan** yang punya akses ke workspace. Pemilik bisa:
+- Melihat & menyalin **Kode Bergabung** (kode undangan untuk anggota baru), atau membuat kode baru.
+- **Mengundang anggota** (kalau emailnya belum terdaftar, KePin otomatis membuatkan akun), mengubah perannya (pemilik/karyawan), atau menghapus.
+- Karyawan hanya melihat daftar tanpa tombol.
+
+### Cabang (`/settings/branches`)
+**Dalam bahasa sederhana:** **Daftar toko/cabang** — misal "Toko Pusat" dan "Cabang Bandung". Bisa tambah/edit/hapus (nama, kode, alamat, status). Satu cabang ditandai sebagai pusat (utama).
+
+### Peran (`/settings/roles`)
+**Dalam bahasa sederhana:** Halaman **penjelasan dua peran**: `tenant_owner` (pemilik — bisa kelola semua) dan `employee` (karyawan — akses sesuai yang diizinkan). Hanya baca, tidak bisa diubah di sini.
+
+### Keamanan Akun (`/settings/security`)
+**Dalam bahasa sederhana:** **Tempat mengunci akun pribadi**:
+- **Aktifkan MFA** — verifikasi 2 langkah. KePin menampilkan kode rahasia (secret) dan kode pemulihan (recovery codes) yang harus disimpan; lalu diminta memasukkan kode 6 digit untuk mengaktifkan.
+- **Nonaktifkan MFA** — jika ingin mematikan (perlu konfirmasi kode).
+- **Ganti Password** — masukkan password lama, password baru (min 8 karakter), dan ulangi.
+
+### Tampilan Sidebar (`/settings/sidebar`) — khusus pemilik
+**Dalam bahasa sederhana:** **Atur menu mana yang muncul** untuk semua anggota. Ada saklar on/off per menu; menu penting (Dashboard, Pengaturan, Keamanan, Tutorial) terkunci. Tombol **"Simpan Perubahan"** di bagian bawah; ada juga "Aktifkan Semua" / "Nonaktifkan Semua".
+
+### Tagihan (`/settings/billing`)
+**Dalam bahasa sederhana:** **Tempat melihat paket & riwayat bayar** — paket yang sedang aktif (nama, status, periode, daftar fitur) dan tabel riwayat langganan (paket, status, periode, biaya, tanggal mulai). Hanya baca.
+
+> ⚠️ **Catatan temuan**: kartu metrik "Paket" di halaman ini selalu menampilkan angka **0** (belum dihubungkan ke data) — Lampiran #5.
+
+### Integrasi (`/settings/integrations`)
+**Dalam bahasa sederhana:** **Tempat menyambungkan aplikasi lain** (misal bank untuk sinkronisasi mutasi otomatis). Pemilik bisa menambah integrasi (memilih provider & nama tampilan), mengaktifkan/memutuskan koneksi, dan melihat status sinkronisasi terakhir. Jika tidak ada integrasi aktif, halaman menampilkan pesan kosong (sengaja tidak menampilkan data contoh/dummy).
+
+---
+
+# 4. Pemilik vs Karyawan (Dua Peran)
+
+**Dalam bahasa sederhana:** Setiap workspace punya dua jenis kunci akses — seperti **pemilik kunci gudang** vs **karyawan dengan akses terbatas**.
+
+| Hal yang bisa dilakukan | **Pemilik** (tenant_owner) | **Karyawan** (employee) |
 |---|---|---|
-| Semua halaman view | ✅ | ✅ (baca) |
-| Dashboard, POS, Reports, Insights, Audit, Notifications, Tutorial | ✅ penuh | ✅ penuh (POS: bisa tambah stok + checkout) |
-| Transactions, Journals, Fiscal Years, Reconciliation, PO, Supplier Payments, Invoices | Post / Edit / Hapus / Void / Reverse / Tutup Periode | Read-only (banner) |
-| Members, Sidebar Settings | ✅ kelola | Read-only / redirect |
-| Integrations | ✅ tambah + toggle | Lihat saja |
-| Profile menu | Tanpa "Keluar dari Perusahaan Ini" | "Keluar dari Perusahaan Ini" (tanpa "Gabung Perusahaan" bila sudah 1 tenant) |
-| Settings Security / Organization / Billing / Roles / Branches | ✅ | ✅ (security = level akun) |
-| Customers, Suppliers, Branches, COA, Organization | CRUD | CRUD juga di UI (tanpa gating UI) |
+| Melihat semua halaman & laporan | ✅ | ✅ (sebagian hanya baca) |
+| Kasir (POS) | ✅ | ✅ (bisa jual & kelola stok) |
+| **Memposting** transaksi, jurnal, tagihan, pembayaran, PO | ✅ | ❌ hanya lihat |
+| **Membatalkan/void/reverse** transaksi yang sudah diposting | ✅ | ❌ |
+| Menutup/membuka periode & tahun buku | ✅ | ❌ |
+| Kelola anggota (undang, ubah peran, hapus) | ✅ | ❌ (lihat daftar saja) |
+| Atur tampilan sidebar untuk semua anggota | ✅ | ❌ |
+| Kelola integrasi | ✅ | hanya lihat |
+| "Keluar dari Perusahaan Ini" | ❌ (pemilik tidak bisa keluar) | ✅ |
+| Keamanan akun (MFA, ganti password) | ✅ | ✅ (untuk akun sendiri) |
+
+> Catatan: meskipun di beberapa halaman (pelanggan, pemasok, cabang, daftar akun, profil perusahaan) karyawan tetap melihat tombol tambah/edit di layar, **keamanan sebenarnya dijaga di server (backend)** — aksi yang tidak diizinkan akan ditolak. Ini temuan yang perlu diperhatikan (Lampiran #9).
 
 ---
 
 # 5. Lampiran: Temuan Analisis
 
-Temuan berikut hasil analisis statis kode (belum diverifikasi lewat testing interaktif):
+Temuan berikut adalah hasil pemeriksaan kode (belum diverifikasi lewat pengujian interaktif). Ditulis dengan dua gaya: **intinya** (untuk orang awam) dan **detail teknis** (untuk pengembang).
 
-| # | Temuan | Lokasi | Keterangan |
+| # | Intinya (bahasa awam) | Detail teknis | Lokasi |
 |---|---|---|---|
-| 1 | Parameter `?plan=premium` & `?plan=platinum` dikirim tapi **tidak dibaca** oleh halaman register | Landing pricing & final CTA → `/auth/register` | Flow "register dengan paket terpilih" tidak terhubung; param mati. |
-| 2 | `?onboarding=true` di URL login **tidak dikonsumsi** | Register → `/auth/login?onboarding=true` | Param mati. |
-| 3 | Checkbox "Ingat saya" **non-fungsional** | `/auth/login` | Hanya visual, tanpa logika persistensi. |
-| 4 | Branch banner "Ganti" hanya **menutup banner** (stub) | `WorkspaceShell.svelte` | Belum ada switcher cabang sungguhan. |
-| 5 | MetricCard "Paket" di Billing **hardcoded 0** | `/settings/billing` | Nama paket tampil di kartu bawah, tapi metrik atas selalu 0. |
-| 6 | `logout()` **tidak membersihkan** `kepin_tenants` & `kepin_mfa_token` | `stores/auth.ts` | Berpotensi menyisakan state basi. |
-| 7 | `lib/api/auth.ts` adalah **kode legacy mati** (endpoint `/dev-auth/*`) | `frontend/src/lib/api/auth.ts` | Tidak dipakai oleh alur auth mana pun. |
-| 8 | Halaman tanpa export | Dashboard, Insights, Transactions, Notifications, Tutorial, Fiscal Years, Reconciliation, Roles, Security, Sidebar, Organization, Branches, Members, Billing, Integrations | Export terbatas pada halaman dengan data tabel utama. |
-| 9 | Tanpa gating role di UI | Customers, Suppliers, Branches, COA, Organization | CRUD tampak terbuka untuk employee di UI (backend tetap menerapkan otorisasi). |
-| 10 | `GET /invoices/{id}/pdf` masih **stub "not_available"** | Backend sales | Fitur PDF invoice belum diimplementasikan. |
-| 11 | Header marketing membaca status auth **sekali saat mount** | `MarketingHeader.svelte` | Tidak reaktif terhadap login/logout di tab yang sama. |
-| 12 | Halaman admin tanpa UI lengkap | `/admin/users`, `/admin/incidents` | Backend punya create/update, UI hanya list (di luar scope utama dokumen ini). |
+| 1 | Tombol paket di landing membawa "kode paket", tapi halaman daftar **tidak membacanya** — paket tidak terpilih otomatis. | Query param `?plan=premium` / `?plan=platinum` dikirim ke `/auth/register` tetapi halaman register tidak membaca `searchParams`; juga `?onboarding=true` di login tidak dikonsumsi. | Landing pricing & final CTA, `/auth/register`, `/auth/login` |
+| 2 | *(lanjutan #1)* | `?onboarding=true` (dari register) tidak dipakai di halaman login — param mati. | `/auth/register` → `/auth/login` |
+| 3 | Kotak centang "Ingat saya" **tidak menyimpan apa pun** — hanya hiasan. | Checkbox tanpa state/logika persistensi. | `/auth/login` |
+| 4 | Banner "Cabang: Toko Pusat" dengan tombol "Ganti" **belum berfungsi** — hanya menutup banner. | `WorkspaceShell.svelte` — tombol "Ganti" hanya menutup banner; belum ada switcher cabang. | WorkspaceShell |
+| 5 | Kartu angka "Paket" di halaman Tagihan **selalu 0**. | MetricCard "Paket" hardcoded `0`; nama paket hanya tampil di kartu bawah. | `/settings/billing` |
+| 6 | Saat logout, sisa data akun **tidak dibersihkan total**. | `logout()` tidak menghapus `kepin_tenants` & `kepin_mfa_token` dari localStorage. | `stores/auth.ts` |
+| 7 | Ada file kode lama yang **tidak dipakai** (bisa membingungkan pengembang). | `lib/api/auth.ts` menunjuk endpoint `/dev-auth/*` dan tidak dipakai alur auth mana pun. | `frontend/src/lib/api/auth.ts` |
+| 8 | Sebagian halaman **belum punya tombol unduh/ekspor**. | Halaman tanpa export: Dashboard, Insights, Transactions, Notifications, Tutorial, Fiscal Years, Reconciliation, Roles, Security, Sidebar, Organization, Branches, Members, Billing, Integrations. | Berbagai halaman |
+| 9 | Di beberapa halaman, karyawan **masih melihat tombol ubah/hapus** di layar (walaupun server tetap menolak). | Tanpa gating role di UI: Customers, Suppliers, Branches, COA, Organization — CRUD tampak terbuka untuk employee; backend tetap menerapkan otorisasi. | Berbagai halaman |
+| 10 | Unduhan PDF untuk invoice **belum jadi** (masih placeholder). | `GET /invoices/{id}/pdf` mengembalikan `not_available` (stub). | Backend sales |
+| 11 | Menu di bilah atas landing **tidak berubah otomatis** setelah login/logout di tab yang sama. | `MarketingHeader.svelte` membaca status auth sekali saat mount (tidak reaktif). | MarketingHeader |
+| 12 | Beberapa halaman admin platform **hanya tampil daftar**, belum ada form buat/ubah (di luar cakupan utama dokumen). | `/admin/users`, `/admin/incidents` — backend punya create/update, UI hanya list. | Platform admin |
 
 ---
 
-## Catatan
+## Penutup
 
-- Seluruh jalur URL mengikuti pola: `/` (landing), `/auth/*` (autentikasi), `/app/{tenantSlug}/*` (workspace tenant), `/admin/*` (platform admin — di luar cakupan dokumen ini).
-- Akun demo yang disediakan seed:
-  - `budi@tokomaju.com` / `budi123` — owner `toko-maju`
-  - `ani@tokomaju.com` / `ani12345` — employee `toko-maju`
-  - `siti@warungsegar.com` / `siti123` — employee `warung-segar`
-  - `admin@kepin.io` / `admin123` — superadmin platform
+Dokumen ini menjelaskan alur lengkap aplikasi KePin dari **halaman depan** (landing), **gerbang masuk** (auth), hingga **ruang kerja** (workspace tenant) — dengan dua gaya bahasa: manusiawi dan teknis.
+
+**Akun demo** yang disediakan oleh seed data untuk mencoba langsung:
+
+| Peran | Email | Password | Perusahaan |
+|---|---|---|---|
+| Pemilik | `budi@tokomaju.com` | `budi123` | toko-maju |
+| Karyawan | `ani@tokomaju.com` | `ani12345` | toko-maju |
+| Karyawan (lain) | `siti@warungsegar.com` | `siti123` | warung-segar |
+| Admin platform | `admin@kepin.io` | `admin123` | — |
+
+Cara mencoba: buka `http://localhost:3001` (jika stack berjalan), pilih **"Masuk"**, lalu gunakan akun di atas.
