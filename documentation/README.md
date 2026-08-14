@@ -7,6 +7,7 @@ Dokumen ini adalah pintu masuk utama untuk seluruh aktivitas pengujian sistem Ke
 | Dokumen | Isi |
 |---------|-----|
 | [README.md](./README.md) | **Halaman ini** — navigasi utama, prasyarat, cara menjalankan semua pengujian satu per satu |
+| [feature-guide.md](./feature-guide.md) | Penjelasan rinci & lengkap setiap halaman dan fitur — dari landing page hingga workspace tenant |
 | [testing.md](./testing.md) | Strategi, filosofi, jenis testing, dan siklus hidup pengujian |
 | [playwright-e2e.md](./playwright-e2e.md) | Panduan implementasi teknis Playwright: konfigurasi, fixture, lokator, isolasi tenant, CI |
 | [api_setup.md](./api_setup.md) | Setup environment dan koneksi API untuk pengujian |
