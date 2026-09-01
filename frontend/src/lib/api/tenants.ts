@@ -14,8 +14,7 @@ export async function getTenantDashboard(slug: string, params?: { preset?: strin
   return api(`/tenants/${slug}/dashboard${query}`);
 }
 export async function getOrganization(slug: string) { return api(`/tenants/${slug}/organization`); }
-export async function updateOrganization(slug: string, data: any) { return api(`/tenants/${slug}/organization`, { method: 'PATCH', body: JSON.stringify(data) }); }
-export async function getBranches(slug: string) { return api(`/tenants/${slug}/branches`); }
+export async function updateOrganization(slug: string, data: any) { return api(`/tenants/${slug}/organization`, { method: 'PATCH', body: JSON.stringify(data) }); }export async function getBranches(slug: string) { return api(`/tenants/${slug}/branches`); }
 export async function createBranch(slug: string, data: any) { return api(`/tenants/${slug}/branches`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateBranch(slug: string, id: string, data: any) { return api(`/tenants/${slug}/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
 export async function deleteBranch(slug: string, id: string) { return api(`/tenants/${slug}/branches/${id}`, { method: 'DELETE' }); }
@@ -54,11 +53,11 @@ export async function createTransaction(slug: string, data: any) { return api(`/
 export async function postTransaction(slug: string, id: string) { return api(`/tenants/${slug}/transactions/${id}/post`, { method: 'POST' }); }
 export async function voidTransaction(slug: string, id: string) { return api(`/tenants/${slug}/transactions/${id}/void`, { method: 'POST' }); }
 export async function getJournals(slug: string, params?: string) { return api(`/tenants/${slug}/journals${params || ''}${params?.includes('pageSize') ? '' : (params ? '&' : '?')}pageSize=100`); }
-export async function getLedger(slug: string, params?: string) { return api(`/tenants/${slug}/journals/ledger${params || ''}`); }
-export async function createJournal(slug: string, data: { journalDate: string; reference?: string; description?: string; lines: { accountId: string; description?: string; debit: string; credit: string }[] }) { return api(`/tenants/${slug}/journals`, { method: 'POST', body: JSON.stringify(data) }); }
+export async function getLedger(slug: string, params?: string) { return api(`/tenants/${slug}/journals/ledger${params || ''}`); }export async function createJournal(slug: string, data: { journalDate: string; reference?: string; description?: string; lines: { accountId: string; description?: string; debit: string; credit: string }[] }) { return api(`/tenants/${slug}/journals`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function postJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/post`, { method: 'POST', headers: { 'X-Idempotency-Key': createId() } }); }
 export async function reverseJournal(slug: string, id: string) { return api(`/tenants/${slug}/journals/${id}/reverse`, { method: 'POST' }); }
-export async function getBankAccounts(slug: string) { return api(`/tenants/${slug}/bank-accounts`); }
+export async function getInitialCapital(slug: string) { return api(`/tenants/${slug}/initial-capital`); }
+export async function setInitialCapital(slug: string, initialCapital: string) { return api(`/tenants/${slug}/initial-capital`, { method: 'PUT', body: JSON.stringify({ initialCapital }) }); }export async function getBankAccounts(slug: string) { return api(`/tenants/${slug}/bank-accounts`); }
 export async function createBankAccount(slug: string, data: { accountId: string; bankName: string; maskedNumber?: string }) { return api(`/tenants/${slug}/bank-accounts`, { method: 'POST', body: JSON.stringify(data) }); }
 export async function updateBankAccount(slug: string, id: string, data: { bankName?: string; maskedNumber?: string; status?: string }) { return api(`/tenants/${slug}/bank-accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); }
 export async function deleteBankAccount(slug: string, id: string) { return api(`/tenants/${slug}/bank-accounts/${id}`, { method: 'DELETE' }); }

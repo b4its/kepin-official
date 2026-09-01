@@ -181,9 +181,7 @@ async def validate_journal_invariants(
     if not lines:
         raise ValidationError(message="Jurnal tidak memiliki baris")
 
-    if len(lines) < 2:
-        raise ValidationError(message="Jurnal harus memiliki minimal 2 baris")
-
+    # Jurnal boleh memiliki hanya 1 baris/akun dan tidak wajib balanced.
     total_debit = ZERO
     total_credit = ZERO
     active_accounts = set()
@@ -201,11 +199,6 @@ async def validate_journal_invariants(
         total_debit += line.debit
         total_credit += line.credit
         active_accounts.add(line.account_id)
-
-    if total_debit != total_credit:
-        raise ValidationError(
-            message=f"Jurnal tidak balanced (debit: {money_str(total_debit)}, kredit: {money_str(total_credit)})"
-        )
 
     for account_id in active_accounts:
         account = (

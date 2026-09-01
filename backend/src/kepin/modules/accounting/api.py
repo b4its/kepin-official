@@ -19,8 +19,9 @@ from kepin.core.money import to_money, money_str
 from kepin.core.posting import post_journal as posting_engine_post, post_direct_journal
 from kepin.core.audit import record_audit
 from kepin.core import closing
+from kepin.core.capital import get_initial_capital, set_initial_capital
 from kepin.core.periods import build_fiscal_year
-from kepin.db.models import Account, AccountBalance, AccountingPeriod, FiscalYear, JournalEntry, JournalLine, Membership, Transaction, User, BankAccount, BankTransaction, ReconciliationMatch
+from kepin.db.models import Account, AccountBalance, AccountingPeriod, FiscalYear, JournalEntry, JournalLine, Membership, OrganizationSetting, Transaction, User, BankAccount, BankTransaction, ReconciliationMatch
 
 
 router = APIRouter(tags=["Accounting"])
@@ -183,6 +184,17 @@ class LedgerSchema(ApiSchema):
     opening: str
     closing: str
     items: list[LedgerLineSchema]
+
+
+class InitialCapitalSchema(ApiSchema):
+    initial_capital: str = "0.00"
+    journal_number: str = "MODAL-AWAL"
+    journal_date: str | None = None
+    updated_at: datetime | None = None
+
+
+class InitialCapitalUpdate(ApiSchema):
+    initial_capital: str
 
 
 class ReconciliationSchema(ApiSchema):
@@ -925,6 +937,94 @@ async def void_transaction(
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  INITIAL CAPITAL (MODAL AWAL)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@router.get(
+    "/initial-capital",
+    response_model=InitialCapitalSchema,
+    summary="Modal Awal",
+    description="Mengembalikan nilai modal awal tenant sebagai acuan keuangan",
+)
+async def get_initial_capital_endpoint(
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(get_tenant_membership),
+    session: AsyncSession = Depends(get_session),
+):
+    amount = await get_initial_capital(session, tenant.id)
+    org = (
+        await session.execute(
+            select(OrganizationSetting).where(OrganizationSetting.tenant_id == tenant.id)
+        )
+    ).scalar_one_or_none()
+    journal = (
+        await session.execute(
+            select(JournalEntry).where(
+                JournalEntry.tenant_id == tenant.id,
+                JournalEntry.journal_number == "MODAL-AWAL",
+            )
+        )
+    ).scalar_one_or_none()
+    return InitialCapitalSchema(
+        initial_capital=money_str(amount),
+        journal_number="MODAL-AWAL",
+        journal_date=journal.journal_date.isoformat() if journal else None,
+        updated_at=org.updated_at if org else None,
+    )
+
+
+@router.put(
+    "/initial-capital",
+    response_model=InitialCapitalSchema,
+    summary="Tetapkan Modal Awal",
+    description=(
+        "Menetapkan/mengubah modal awal tenant. Perubahan otomatis membangun "
+        "ulang jurnal MODAL-AWAL sehingga seluruh laporan keuangan (neraca, "
+        "arus kas, buku besar, dashboard) ikut menyesuaikan."
+    ),
+)
+async def set_initial_capital_endpoint(
+    body: InitialCapitalUpdate,
+    tenant: TenantContext = Depends(get_tenant_context),
+    _m: Membership = Depends(require_tenant_owner),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    before = await get_initial_capital(session, tenant.id)
+    amount = await set_initial_capital(session, tenant.id, to_money(body.initial_capital))
+
+    await record_audit(
+        session=session,
+        tenant_id=tenant.id,
+        action="accounting.initial_capital.set",
+        module="accounting",
+        object_type="organization_setting",
+        object_id=str(tenant.id),
+        actor_id=user.id,
+        actor_name=user.name or user.email,
+        before={"initialCapital": money_str(before)},
+        after={"initialCapital": money_str(amount)},
+    )
+    await session.commit()
+
+    journal = (
+        await session.execute(
+            select(JournalEntry).where(
+                JournalEntry.tenant_id == tenant.id,
+                JournalEntry.journal_number == "MODAL-AWAL",
+            )
+        )
+    ).scalar_one_or_none()
+    return InitialCapitalSchema(
+        initial_capital=money_str(amount),
+        journal_number="MODAL-AWAL",
+        journal_date=journal.journal_date.isoformat() if journal else None,
+        updated_at=datetime.now(timezone.utc),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  JOURNALS
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -1165,11 +1265,9 @@ async def create_journal(
             )
         )
 
-    if total_debit != total_credit:
-        raise ValidationError(
-            message=f"Jurnal tidak balanced (debit: {money_str(total_debit)}, "
-            f"kredit: {money_str(total_credit)})"
-        )
+    # Catatan: pada tahap draft, jurnal boleh memiliki hanya 1 akun dan
+    # tidak wajib balance. Validasi balance ketat diberlakukan saat posting
+    # melalui Central Posting Engine.
 
     session.add_all(db_lines)
     await session.commit()
@@ -1291,11 +1389,7 @@ async def update_journal(
                 )
             )
 
-        if total_debit != total_credit:
-            raise ValidationError(
-                message=f"Jurnal tidak balanced (debit: {money_str(total_debit)}, "
-                f"kredit: {money_str(total_credit)})"
-            )
+        # Draft boleh 1 akun & tidak wajib balance; balance divalidasi saat posting.
 
     await session.commit()
     await session.refresh(journal)

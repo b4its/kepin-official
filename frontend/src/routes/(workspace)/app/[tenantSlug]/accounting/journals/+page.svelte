@@ -35,7 +35,13 @@
 
   const totalDebit = $derived(form.lines.reduce((sum, line) => sum + amount(line.debit), 0));
   const totalCredit = $derived(form.lines.reduce((sum, line) => sum + amount(line.credit), 0));
-  const balanced = $derived(form.lines.length >= 2 && totalDebit > 0 && totalDebit === totalCredit);
+  const balanced = $derived(totalDebit > 0 && totalDebit === totalCredit);
+  // Draft valid: minimal 1 baris berisi akun + nilai. Balance tidak wajib.
+  const canSave = $derived(
+    form.lines.length >= 1 &&
+    form.lines.every((line) => line.accountId && (amount(line.debit) > 0 || amount(line.credit) > 0)) &&
+    (totalDebit > 0 || totalCredit > 0)
+  );
 
   const exportColumns = [
     { key: 'date', label: 'Tanggal' },
@@ -62,7 +68,6 @@
       description: '',
       lines: [
         { accountId: '', description: '', debit: '', credit: '' },
-        { accountId: '', description: '', debit: '', credit: '' },
       ],
     };
     showModal = true;
@@ -73,7 +78,7 @@
   }
 
   function removeLine(index: number) {
-    if (form.lines.length <= 2) return;
+    if (form.lines.length <= 1) return;
     form.lines = form.lines.filter((_, current) => current !== index);
   }
 
@@ -119,7 +124,7 @@
   }
 
   async function saveDraft() {
-    if (!slug || !isOwner || !balanced) return;
+    if (!slug || !isOwner || !canSave) return;
     saving = true;
     try {
       await tenantApi.createJournal(slug, {
@@ -291,9 +296,9 @@
   <form onsubmit={saveDraft} class="space-y-4">
     <div class="grid sm:grid-cols-2 gap-4"><div><label class="label-text" for="journal-date">Tanggal</label><input id="journal-date" type="date" bind:value={form.journalDate} class="input-field mt-1" required /></div><div><label class="label-text" for="journal-reference">Referensi</label><input id="journal-reference" bind:value={form.reference} class="input-field mt-1" /></div></div>
     <div><label class="label-text" for="journal-description">Deskripsi</label><input id="journal-description" bind:value={form.description} class="input-field mt-1" required /></div>
-    <div class="space-y-2"><div class="flex items-center justify-between"><h3 class="text-sm font-semibold">Baris Jurnal</h3><Button size="sm" variant="secondary" type="button" onclick={addLine}>+ Baris</Button></div>{#each form.lines as line, index}<div class="grid grid-cols-12 gap-2 rounded border border-[hsl(var(--border))] p-2"><select class="input-field col-span-5" bind:value={line.accountId} required><option value="">Pilih akun</option>{#each $accounts.filter((account) => account.status === 'active') as account}<option value={account.id}>{account.code} · {account.name}</option>{/each}</select><input class="input-field col-span-3" bind:value={line.description} placeholder="Deskripsi" /><input class="input-field col-span-2" type="number" min="0" step="0.01" bind:value={line.debit} placeholder="Debit" /><input class="input-field col-span-2" type="number" min="0" step="0.01" bind:value={line.credit} placeholder="Kredit" />{#if form.lines.length > 2}<button type="button" class="col-span-12 text-right text-xs text-[var(--color-kepin-danger)]" onclick={() => removeLine(index)}>Hapus baris</button>{/if}</div>{/each}</div>
-    <div class="rounded bg-[hsl(var(--muted))] p-3 text-sm flex justify-between"><span>Debit {format(totalDebit)} · Kredit {format(totalCredit)}</span><span class={balanced ? 'text-[var(--color-kepin-green)]' : 'text-[var(--color-kepin-danger)]'}>{balanced ? 'Balanced' : 'Belum balanced'}</span></div>
-    <div class="flex justify-end gap-2"><Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button><Button type="submit" loading={saving} disabled={!balanced}>Simpan Draft</Button></div>
+    <div class="space-y-2"><div class="flex items-center justify-between"><h3 class="text-sm font-semibold">Baris Jurnal</h3><Button size="sm" variant="secondary" type="button" onclick={addLine}>+ Baris</Button></div>{#each form.lines as line, index}<div class="grid grid-cols-12 gap-2 rounded border border-[hsl(var(--border))] p-2"><select class="input-field col-span-5" bind:value={line.accountId} required><option value="">Pilih akun</option>{#each $accounts.filter((account) => account.status === 'active') as account}<option value={account.id}>{account.code} · {account.name}</option>{/each}</select><input class="input-field col-span-3" bind:value={line.description} placeholder="Deskripsi" /><input class="input-field col-span-2" type="number" min="0" step="0.01" bind:value={line.debit} placeholder="Debit" /><input class="input-field col-span-2" type="number" min="0" step="0.01" bind:value={line.credit} placeholder="Kredit" />{#if form.lines.length > 1}<button type="button" class="col-span-12 text-right text-xs text-[var(--color-kepin-danger)]" onclick={() => removeLine(index)}>Hapus baris</button>{/if}</div>{/each}</div>
+    <div class="rounded bg-[hsl(var(--muted))] p-3 text-sm flex justify-between"><span>Debit {format(totalDebit)} · Kredit {format(totalCredit)}</span><span class={balanced ? 'text-[var(--color-kepin-green)]' : 'text-[hsl(var(--muted-foreground))]'}>{balanced ? 'Balanced' : 'Belum balanced (opsional untuk draft)'}</span></div>
+    <div class="flex justify-end gap-2"><Button variant="secondary" type="button" onclick={() => showModal = false}>Batal</Button><Button type="submit" loading={saving} disabled={!canSave}>Simpan Draft</Button></div>
   </form>
 </Modal>
 

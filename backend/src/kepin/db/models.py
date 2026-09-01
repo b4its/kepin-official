@@ -259,6 +259,7 @@ class OrganizationSetting(Base):
     fiscal_year_start_month: Mapped[int] = mapped_column(Integer, default=1)
     invoice_prefix: Mapped[str] = mapped_column(String(16), default="INV")
     po_prefix: Mapped[str] = mapped_column(String(16), default="PO")
+    initial_capital: Mapped[Decimal] = mapped_column(Numeric(20, 2), default=0, server_default="0")
     org_meta: Mapped[dict] = mapped_column("metadata", JSONB, default={})
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=datetime.now

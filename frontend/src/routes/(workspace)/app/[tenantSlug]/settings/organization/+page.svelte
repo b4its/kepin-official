@@ -4,7 +4,9 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import { tenantApi } from '$lib/stores/data';
+  import { currentRole } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
+  import { formatIDR } from '$lib/utils/currency';
   import { RefreshCw } from '@lucide/svelte';
 
   type Organization = {
@@ -21,12 +23,19 @@
     fiscalYearStart?: string | null;
   };
 
+  type InitialCapital = { initialCapital: string; journalNumber: string; journalDate?: string | null; updatedAt?: string | null };
+
   const slug = $derived($page.params.tenantSlug || '');
+  const isOwner = $derived($currentRole === 'tenant_owner');
   let org = $state<Organization | null>(null);
+  let capital = $state<InitialCapital | null>(null);
   let loading = $state(false);
   let saving = $state(false);
+  let savingCapital = $state(false);
   let error = $state('');
   let showModal = $state(false);
+  let showCapitalModal = $state(false);
+  let capitalInput = $state('');
   let editForm = $state({ tenantName: '', legalName: '', taxId: '', address: '', phone: '', email: '', website: '', timezone: 'Asia/Jakarta', currency: 'IDR' });
 
   async function loadOrganization() {
@@ -35,6 +44,7 @@
     error = '';
     try {
       org = await tenantApi.getOrganization(slug) as Organization;
+      capital = await tenantApi.getInitialCapital(slug) as InitialCapital;
     } catch (err: any) {
       error = err?.message || 'Gagal memuat organisasi';
     } finally {
@@ -57,6 +67,11 @@
     showModal = true;
   }
 
+  function openCapital() {
+    capitalInput = capital?.initialCapital ? String(Number(capital.initialCapital)) : '';
+    showCapitalModal = true;
+  }
+
   async function save() {
     saving = true;
     try {
@@ -67,6 +82,21 @@
       showToast(err?.message || 'Gagal memperbarui organisasi', 'error');
     } finally {
       saving = false;
+    }
+  }
+
+  async function saveCapital() {
+    if (!slug || !isOwner) return;
+    savingCapital = true;
+    try {
+      const value = capitalInput === '' ? '0' : String(capitalInput);
+      capital = await tenantApi.setInitialCapital(slug, value) as InitialCapital;
+      showCapitalModal = false;
+      showToast('Modal awal berhasil diperbarui. Laporan keuangan ikut menyesuaikan.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal memperbarui modal awal', 'error');
+    } finally {
+      savingCapital = false;
     }
   }
 
@@ -125,6 +155,29 @@
   </div>
 </div>
 
+<div class="card p-6 max-w-2xl mt-6">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h2 class="text-sm font-semibold">Modal Awal</h2>
+      <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+        Nilai modal awal menjadi acuan/dasar keuangan. Mengubahnya akan otomatis
+        memperbarui jurnal <span class="font-mono">MODAL-AWAL</span> sehingga
+        neraca, arus kas, buku besar, dan dashboard ikut menyesuaikan.
+      </p>
+      <p class="mt-3 text-2xl font-semibold tabular-nums">{formatIDR(Number(capital?.initialCapital ?? 0))}</p>
+      {#if capital?.journalDate}
+        <p class="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Tanggal jurnal: {capital.journalDate}</p>
+      {/if}
+    </div>
+    {#if isOwner}
+      <Button variant="secondary" onclick={openCapital} disabled={loading}>Atur Modal Awal</Button>
+    {/if}
+  </div>
+  {#if !isOwner}
+    <p class="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Hanya pemilik yang dapat mengubah modal awal.</p>
+  {/if}
+</div>
+
 <div class="card p-6 max-w-2xl mt-6 text-sm text-[hsl(var(--muted-foreground))]">
   Kode bergabung tidak lagi dibaca dari localStorage. Fitur tampil/regenerate kode perlu endpoint tenant-scoped yang eksplisit agar tidak membocorkan join code.
 </div>
@@ -181,3 +234,21 @@
     </div>
   </form>
 </Modal>
+
+<Modal title="Atur Modal Awal" open={showCapitalModal} onclose={() => showCapitalModal = false}>
+  <form onsubmit={saveCapital} class="space-y-4">
+    <div>
+      <label class="label-text" for="capital-amount">Nilai Modal Awal (Rp)</label>
+      <input id="capital-amount" type="number" min="0" step="0.01" bind:value={capitalInput} class="input-field mt-1" placeholder="0" />
+      <p class="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+        Nilai ini menjadi dasar keuangan. Jurnal modal awal (Debit Kas / Kredit Modal)
+        akan dibangun ulang otomatis dan seluruh laporan keuangan menyesuaikan.
+      </p>
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <Button variant="secondary" type="button" onclick={() => showCapitalModal = false}>Batal</Button>
+      <Button type="submit" loading={savingCapital}>Simpan Modal Awal</Button>
+    </div>
+  </form>
+</Modal>
+
