@@ -1,4 +1,4 @@
-allowBuilds:
-  # core-js postinstall hanya menampilkan pesan donasi — tidak diperlukan.
-  core-js: false
-  esbuild: true
+# Daftar dependency yang diizinkan menjalankan build script (pnpm 10+).
+# Key lama `allowBuilds` tidak dikenali pnpm sehingga esbuild justru di-ignore.
+onlyBuiltDependencies:
+  - esbuild

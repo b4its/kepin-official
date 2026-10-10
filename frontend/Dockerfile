@@ -5,10 +5,14 @@ ENV PUBLIC_API_URL=$PUBLIC_API_URL
 
 WORKDIR /app
 
-RUN npm install -g pnpm
+# Pin versi pnpm via corepack agar build reproducible. `npm install -g pnpm`
+# menarik versi terbaru (floating) yang rentan SIGSEGV (exit 139) pada
+# node:*-alpine (musl) saat dijalankan di dalam BuildKit.
+ARG PNPM_VERSION=10.15.1
+RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 
-COPY package.json pnpm-lock.yaml .npmrc ./
-RUN pnpm install --ignore-scripts
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN pnpm install --ignore-scripts --frozen-lockfile
 
 COPY . .
 RUN pnpm build

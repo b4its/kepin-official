@@ -33,6 +33,13 @@ FRONTEND_PORT ?= 3001
 BACKEND_PORT  ?= 8001
 DB_PORT       ?= 5434
 
+# Port di atas dipakai oleh compose.yaml lewat interpolasi env (${...:-default}),
+# sehingga harus di-export agar override `make ... BACKEND_PORT=xxxx` benar-benar
+# berlaku dan tidak bertabrakan dengan service lain di host.
+export FRONTEND_PORT
+export BACKEND_PORT
+export DB_PORT
+
 APP_URL       ?= http://$(DOMAIN)
 API_URL       ?= http://$(API_DOMAIN)/api/v1
 
