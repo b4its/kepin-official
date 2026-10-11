@@ -8,7 +8,7 @@
   import ExportModal from '$lib/components/ui/ExportModal.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
-  import { createProduct, updateProduct, deleteProduct, tenantApi } from '$lib/stores/data';
+  import { createProduct, updateProduct, deleteProduct, tenantApi, inventoryLocations, loadInventoryLocations } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
   import { Download, Search } from '@lucide/svelte';
 
@@ -27,28 +27,37 @@
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   const PAGE_SIZE = 20;
 
-  let form = $state({ sku: '', name: '', category: '', unit: 'pcs', minStock: 0, price: 0, cost: 0, status: 'active' });
+  let form = $state({ sku: '', name: '', category: '', unit: 'pcs', minStock: 0, price: 0, cost: 0, initialStock: 0, status: 'active' });
   let stockMap = $state<Record<string, number>>({});
 
-  $effect(() => {
+  async function loadStockBalances() {
     if (!slug) return;
-    void (async () => {
-      try {
-        const res: any = await tenantApi.getStockBalances(slug);
-        const map: Record<string, number> = {};
-        for (const sb of (Array.isArray(res) ? res : [])) {
-          map[sb.productId || sb.product_id] = (map[sb.productId || sb.product_id] || 0) + parseFloat(sb.quantity || '0');
-        }
-        stockMap = map;
-      } catch { stockMap = {}; }
-    });
-  });
+    try {
+      const res: any = await tenantApi.getStockBalances(slug);
+      const map: Record<string, number> = {};
+      for (const sb of (Array.isArray(res) ? res : [])) {
+        const pid = sb.productId || sb.product_id;
+        if (!pid) continue;
+        map[pid] = (map[pid] || 0) + parseFloat(sb.quantity || '0');
+      }
+      stockMap = map;
+    } catch { stockMap = {}; }
+  }
+
+  async function activeLocationId(): Promise<string | null> {
+    await loadInventoryLocations(slug);
+    const active = $inventoryLocations.find((l) => l.status === 'active') || $inventoryLocations[0];
+    return active?.id ?? null;
+  }
 
   async function load(q = search, p = pageNo) {
     loading = true;
     try {
-      const res: any = await tenantApi.getProducts(slug, q || undefined, PAGE_SIZE, p);
-      const items = Array.isArray(res.items) ? res.items : [];
+      const [res] = await Promise.all([
+        tenantApi.getProducts(slug, q || undefined, PAGE_SIZE, p),
+        loadStockBalances(),
+      ]);
+      const items = Array.isArray((res as any).items) ? (res as any).items : [];
       rows = items.map((prod: any) => ({
         id: prod.id,
         sku: prod.sku || '',
@@ -61,7 +70,7 @@
         status: prod.status || 'active',
         stock: stockMap[prod.id] ?? 0,
       }));
-      total = res.total ?? 0;
+      total = (res as any).total ?? 0;
     } catch {
       /* biarkan data lama */
     } finally {
@@ -71,7 +80,6 @@
 
   $effect(() => {
     if (!slug) return;
-    void stockMap;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       pageNo = 1;
@@ -81,9 +89,9 @@
   });
 
   const totalProduk = $derived(total);
-  const stokKritis = $derived(rows.filter(p => p.stock > 0 && p.stock <= p.minStock).length);
+  const stokKritis = $derived(rows.filter(p => p.minStock > 0 && p.stock <= p.minStock).length);
   const nilaiStok = $derived(rows.reduce((s, p) => s + p.stock * p.cost, 0));
-  const deadStock = $derived(rows.filter(p => p.stock > 0 && p.stock <= p.minStock / 2).length);
+  const deadStock = $derived(rows.filter(p => p.stock <= 0).length);
 
   const exportColumns = [
     { key: 'sku', label: 'SKU' },
@@ -97,13 +105,13 @@
   ];
 
   function openCreate() {
-    form = { sku: '', name: '', category: '', unit: 'pcs', minStock: 0, price: 0, cost: 0, status: 'active' };
+    form = { sku: '', name: '', category: '', unit: 'pcs', minStock: 0, price: 0, cost: 0, initialStock: 0, status: 'active' };
     editingId = null;
     showModal = true;
   }
 
   function openEdit(row: any) {
-    form = { sku: row.sku, name: row.name, category: row.category || '', unit: row.unit || 'pcs', minStock: row.minStock, price: row.price, cost: row.cost, status: row.status || 'active' };
+    form = { sku: row.sku, name: row.name, category: row.category || '', unit: row.unit || 'pcs', minStock: row.minStock, price: row.price, cost: row.cost, initialStock: 0, status: row.status || 'active' };
     editingId = row.id;
     showModal = true;
   }
@@ -127,7 +135,24 @@
       } catch (err: any) { showToast(err?.message || 'Gagal memperbarui produk', 'error'); }
     } else {
       try {
-        await createProduct(data);
+        const created: any = await createProduct(data);
+        const initialStock = Number(form.initialStock) || 0;
+        if (initialStock > 0) {
+          const locationId = await activeLocationId();
+          if (!locationId) {
+            showToast('Produk tersimpan, tetapi stok awal gagal: tidak ada lokasi inventaris aktif', 'error');
+            showModal = false;
+            void load(search, pageNo);
+            return;
+          }
+          await tenantApi.createStockReceipt(slug, {
+            productId: created?.id,
+            locationId,
+            quantity: String(initialStock),
+            unitCost: String(form.cost || '0'),
+            reason: 'Stok awal saat pembuatan produk',
+          });
+        }
         showToast('Produk berhasil ditambahkan', 'success');
         showModal = false;
         void load(search, pageNo);
@@ -221,8 +246,18 @@
       <div>
         <label class="label-text">Min. Stok</label>
         <input type="number" min="0" bind:value={form.minStock} class="input-field mt-1" />
+        <p class="text-[11px] text-[hsl(var(--muted-foreground))] mt-1">Batas peringatan stok menipis.</p>
       </div>
     </div>
+    {#if editingId === null}
+      <div>
+        <label class="label-text">Stok Awal</label>
+        <input type="number" min="0" bind:value={form.initialStock} class="input-field mt-1" />
+        <p class="text-[11px] text-[hsl(var(--muted-foreground))] mt-1">
+          Jumlah stok yang langsung tersedia (dicatat sebagai penerimaan stok ke lokasi inventaris aktif).
+        </p>
+      </div>
+    {/if}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
         <label class="label-text">Harga Jual (Rp)</label>

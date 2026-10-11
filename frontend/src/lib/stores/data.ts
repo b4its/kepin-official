@@ -155,7 +155,7 @@ export async function loadProducts(slug?: string) {
     location: p.location || '', status: p.status,
   })) || []);
 }
-export async function createProduct(data: any) { const s = _slug; if (!s) return; await api(`/tenants/${s}/products`, { method: 'POST', body: JSON.stringify(data) }); await loadProducts(s); }
+export async function createProduct(data: any) { const s = _slug; if (!s) return; const created = await api(`/tenants/${s}/products`, { method: 'POST', body: JSON.stringify(data) }); await loadProducts(s); return created; }
 export async function updateProduct(id: string, data: any) { const s = _slug; if (!s) return; await api(`/tenants/${s}/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }); await loadProducts(s); }
 export async function deleteProduct(id: string) { const s = _slug; if (!s) return; await api(`/tenants/${s}/products/${id}`, { method: 'DELETE' }); await loadProducts(s); }
 
