@@ -53,6 +53,7 @@ class TenantContextResponse(ApiSchema):
 class DashboardResponse(ApiSchema):
     period: dict
     metrics: dict
+    inventory: dict = {}
     cash_flow: list[dict] = []
     expense_composition: list[dict] = []
     alerts: list[dict] = []
@@ -166,6 +167,56 @@ async def get_dashboard(
         "cashBalance": money_str(cash_balance),
     }
 
+    # ── Ringkasan inventori: agar penambahan produk/stok langsung terlihat ──
+    product_count = (
+        await session.execute(
+            select(func.count(Product.id)).where(Product.tenant_id == tid)
+        )
+    ).scalar() or 0
+
+    stock_value = (
+        await session.execute(
+            select(
+                func.coalesce(
+                    func.sum(StockBalance.quantity * StockBalance.average_cost), 0
+                )
+            ).where(StockBalance.tenant_id == tid)
+        )
+    ).scalar() or Decimal("0")
+
+    total_stock_qty = (
+        await session.execute(
+            select(func.coalesce(func.sum(StockBalance.quantity), 0)).where(
+                StockBalance.tenant_id == tid
+            )
+        )
+    ).scalar() or Decimal("0")
+
+    low_stock_count = (
+        await session.execute(
+            select(func.count(StockBalance.product_id))
+            .join(
+                Product,
+                and_(
+                    Product.id == StockBalance.product_id,
+                    Product.tenant_id == tid,
+                ),
+            )
+            .where(
+                StockBalance.tenant_id == tid,
+                Product.minimum_stock > 0,
+                StockBalance.quantity <= Product.minimum_stock,
+            )
+        )
+    ).scalar() or 0
+
+    inventory = {
+        "productCount": int(product_count),
+        "totalStock": money_str(total_stock_qty),
+        "stockValue": money_str(stock_value),
+        "lowStockCount": int(low_stock_count),
+    }
+
     cash_flow = []
     cf_stmt = text("""
         SELECT d::date AS dt,
@@ -220,15 +271,10 @@ async def get_dashboard(
             "message": f"{overdue_count} faktur telah melewati jatuh tempo",
         })
 
-    low_stock_stmt = select(func.count(StockBalance.tenant_id)).where(
-        StockBalance.tenant_id == tid,
-        StockBalance.quantity <= 10,
-    )
-    low_stock_count = (await session.execute(low_stock_stmt)).scalar() or 0
     if low_stock_count > 0:
         alerts.append({
             "type": "warning",
-            "message": f"{low_stock_count} produk memiliki stok menipis",
+            "message": f"{low_stock_count} produk memiliki stok di bawah/atau sama dengan batas minimum",
         })
 
     insights = []
@@ -290,6 +336,7 @@ async def get_dashboard(
     return DashboardResponse(
         period={"startDate": start.isoformat(), "endDate": end.isoformat(), "timezone": "UTC"},
         metrics=metrics,
+        inventory=inventory,
         cash_flow=cash_flow,
         expense_composition=expense_composition,
         alerts=alerts,

@@ -15,6 +15,7 @@
 
   type Dashboard = {
     metrics: { income: string; expense: string; grossProfit: string; cashBalance: string };
+    inventory?: { productCount: number; totalStock: string; stockValue: string; lowStockCount: number };
     cashFlow: { date: string; income: string; expense: string }[];
     cash_flow?: { date: string; income: string; expense: string }[];
     expenseComposition: { accountName: string; amount: string }[];
@@ -61,6 +62,7 @@
   const cashFlow = $derived(dashboard?.cashFlow ?? dashboard?.cash_flow ?? []);
   const composition = $derived(dashboard?.expenseComposition ?? dashboard?.expense_composition ?? []);
   const recent = $derived(dashboard?.recentTransactions ?? dashboard?.recent_transactions ?? []);
+  const inventory = $derived(dashboard?.inventory);
 
   function number(value: string | number | undefined) {
     const parsed = Number(value ?? 0);
@@ -163,6 +165,13 @@
   <MetricCard label="Pengeluaran" value={expense} previousValue={compareMode ? compareExpense : undefined} loading={loading} format="currency" />
   <MetricCard label="Laba Bersih" value={profit} previousValue={compareMode ? compareProfit : undefined} loading={loading} format="currency" />
   <MetricCard label="Kas & Bank" value={cash} loading={loading} format="currency" />
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-tour="inventory-cards">
+  <MetricCard label="Total Produk" value={number(inventory?.productCount)} loading={loading} format="number" />
+  <MetricCard label="Total Stok" value={number(inventory?.totalStock)} loading={loading} format="number" />
+  <MetricCard label="Nilai Stok" value={number(inventory?.stockValue)} loading={loading} format="currency" />
+  <MetricCard label="Stok Menipis" value={number(inventory?.lowStockCount)} loading={loading} format="number" />
 </div>
 
 <div class="grid lg:grid-cols-2 gap-6 mb-6">
