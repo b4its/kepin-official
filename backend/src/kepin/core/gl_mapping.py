@@ -24,9 +24,18 @@ DEFAULT_ACCOUNT_CODES = {
 }
 
 DEFAULT_ACCOUNT_DEFS = {
-    "6-1001": ("Harga Pokok Penjualan", "expense", "debit"),
+    # name, type, normal_balance
+    "1-1002": ("Kas", "asset", "debit"),
+    "1-1003": ("Bank", "asset", "debit"),
+    "1-2001": ("Piutang Usaha", "asset", "debit"),
+    "1-3001": ("Persediaan Barang Dagang", "asset", "debit"),
+    "1-4006": ("PPN Masukan", "asset", "debit"),
+    "2-1001": ("Hutang Usaha", "liability", "credit"),
+    "2-2005": ("PPN Keluaran", "liability", "credit"),
     "3-4001": ("Selisih Persediaan", "equity", "credit"),
     "3-4002": ("Laba Ditahan", "equity", "credit"),
+    "4-1001": ("Pendapatan Penjualan", "income", "credit"),
+    "6-1001": ("Harga Pokok Penjualan", "expense", "debit"),
 }
 
 

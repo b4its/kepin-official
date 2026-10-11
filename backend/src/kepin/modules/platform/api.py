@@ -14,6 +14,8 @@ from kepin.api.errors import NotFoundError, ConflictError, ValidationError
 from kepin.core.pagination import ApiSchema, PaginatedResponse, make_paginated
 from kepin.core.ids import new_uuid
 from kepin.core.money import to_money, money_str
+from kepin.core.gl_mapping import ensure_gl_defaults
+from kepin.core.provisioning import ensure_default_location
 from kepin.core.time import resolve_period
 from kepin.db.models import (
     Tenant,
@@ -333,6 +335,12 @@ async def create_tenant(
         updated_at=now,
     )
     session.add(branch)
+
+    # Lokasi inventaris default agar alur inventori langsung dapat dipakai.
+    await ensure_default_location(session, str(tenant.id), str(branch.id))
+
+    # Akun GL default agar posting jurnal subledger langsung berfungsi.
+    await ensure_gl_defaults(session, str(tenant.id))
 
     sub = Subscription(
         id=new_uuid(),

@@ -14,7 +14,9 @@ from kepin.api.dependencies import get_current_user, get_session
 from kepin.api.errors import ConflictError, NotFoundError
 from kepin.core.auth import create_token, decode_token, generate_join_code, hash_password, verify_password
 from kepin.core.email import send_reset_email
+from kepin.core.gl_mapping import ensure_gl_defaults
 from kepin.core.periods import ensure_fiscal_year
+from kepin.core.provisioning import ensure_tenant_inventory_defaults
 from kepin.core.totp import (
     generate_base32_secret,
     generate_recovery_codes,
@@ -514,6 +516,14 @@ async def create_organization(
     session.add(subscription)
 
     await ensure_fiscal_year(session, str(tenant.id), ref_date=datetime.now(timezone.utc).date())
+
+    # Provision cabang utama + lokasi inventaris default agar menu inventori
+    # (POS, penerimaan/pengeluaran stok, pembelian) langsung bisa dipakai.
+    await ensure_tenant_inventory_defaults(session, str(tenant.id))
+
+    # Provision akun GL default agar posting jurnal (inventori, penjualan,
+    # pembelian) langsung berfungsi pada tenant baru.
+    await ensure_gl_defaults(session, str(tenant.id))
 
     await session.flush()
     await session.commit()
