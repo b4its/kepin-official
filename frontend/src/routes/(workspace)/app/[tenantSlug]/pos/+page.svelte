@@ -3,7 +3,7 @@
   import PageHeader from '$lib/components/layout/PageHeader.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
-  import { inventoryLocations, loadStockMovements, tenantApi } from '$lib/stores/data';
+  import { inventoryLocations, loadInventoryLocations, loadStockMovements, tenantApi } from '$lib/stores/data';
   import { showToast } from '$lib/stores/toast';
   import { formatIDR } from '$lib/utils/currency';
   import CurrencyInput from '$lib/components/ui/CurrencyInput.svelte';
@@ -156,8 +156,21 @@
   }
 
   async function saveStock() {
-    if (!stockProduct || !locationId) {
-      showToast('Tidak ada lokasi inventaris aktif', 'error');
+    if (!stockProduct) return;
+    let locId = locationId;
+    if (!locId) {
+      // Muat ulang lokasi (mungkin baru diprovision) sebelum menyerah.
+      await loadInventoryLocations(slug);
+      locId =
+        $inventoryLocations.find((l) => l.status === 'active')?.id ||
+        $inventoryLocations[0]?.id ||
+        '';
+    }
+    if (!locId) {
+      showToast(
+        'Tidak ada lokasi inventaris aktif. Buka menu Pengaturan → Cabang untuk membuat cabang/lokasi terlebih dahulu.',
+        'error'
+      );
       return;
     }
     const qty = Number(stockQty);
@@ -170,7 +183,7 @@
       if (stockMode === 'in') {
         await tenantApi.createStockReceipt(slug, {
           productId: stockProduct.id,
-          locationId,
+          locationId: locId,
           quantity: String(qty),
           unitCost: String(stockProduct.cost || '0'),
           reason: stockReason || 'Penambahan stok manual (POS)',
@@ -178,7 +191,7 @@
       } else {
         await tenantApi.createStockIssue(slug, {
           productId: stockProduct.id,
-          locationId,
+          locationId: locId,
           quantity: String(qty),
           reason: stockReason || 'Pengurangan stok manual (POS)',
         });
